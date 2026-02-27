@@ -105,10 +105,13 @@ class TransactionController extends Controller
         $transaction = Transaction::create([
             'user_id' => $data['user_id'],
             'reference' => 'SYS-' . Str::upper(Str::random(8)),
+            'kind' => $data['type'],
+            'type' => 'Manual Entry',
             'amount' => $data['amount'],
-            'type' => $data['type'],
             'status' => $data['type'] === 'payment' ? 'paid' : 'pending',
             'payment_channel' => $data['payment_channel'] ?? null,
+            'year' => now()->year,
+            'semester' => $this->getCurrentTerm(),
         ]);
 
         // Recalculate balance

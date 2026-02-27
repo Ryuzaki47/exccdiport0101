@@ -25,7 +25,7 @@ class AccountService
             ->where('status', 'paid')
             ->sum('amount');
 
-        $balance = $charges - $payments;
+        $balance = round((float)$charges - (float)$payments, 2);
 
         // Ensure account exists
         $account = $user->account ?? $user->account()->create(['balance' => 0]);
@@ -37,7 +37,7 @@ class AccountService
 
             // Auto-promote only when balance is fully paid (< 0 includes credit balance)
             // Only promote if there were charges that have been paid in full
-            if ($balance < 0 || ($balance == 0 && $charges > 0)) {
+            if ($balance < 0 || ($balance <= 0 && (float)$charges > 0)) {
                 self::promoteStudent($user);
             }
         }

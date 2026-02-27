@@ -40,7 +40,8 @@ const props = defineProps<Props>();
 
 // Calculate remaining balance
 const remainingBalance = computed(() => {
-    return Math.abs(props.student.account?.balance || 0);
+    const balance = props.student.account?.balance || 0
+    return Math.max(0, parseFloat(String(balance)))
 });
 
 // Get available payment terms for payment (only unpaid terms)

@@ -140,8 +140,9 @@ class Student extends Model
      */
     public function getRemainingBalanceAttribute()
     {
-        $totalPaid = $this->payments()->sum('amount');
-        return $this->total_balance - $totalPaid;
+        $charges = $this->transactions()->where('kind', 'charge')->sum('amount');
+        $payments = $this->transactions()->where('kind', 'payment')->where('status', 'paid')->sum('amount');
+        return round(max(0, (float)$charges - (float)$payments), 2);
     }
 
     // ============================================

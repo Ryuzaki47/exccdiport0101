@@ -26,10 +26,12 @@ class PaymentCarryoverService
 
         foreach ($terms as $index => $term) {
             $previousTermUnpaid = $carryoverBalance;
-            $currentTermBalance = (float) $term->amount;
+            $currentTermAmount = (float) $term->amount;
             
-            // Total balance = unpaid from previous terms + current term
-            $totalBalance = $previousTermUnpaid + $currentTermBalance;
+            // Total balance = unpaid from previous terms + current term's own amount
+            // For fresh assessments (no payments yet), carryover is 0, so balance = amount
+            // For post-payment assessments, carryover is the remaining unpaid from previous term
+            $totalBalance = $previousTermUnpaid + $currentTermAmount;
 
             // Update this term's balance
             $remarks = null;
@@ -38,13 +40,15 @@ class PaymentCarryoverService
             }
 
             $term->update([
-                'balance' => $totalBalance,
+                'balance' => round($totalBalance, 2),
                 'remarks' => $remarks,
                 'status' => $totalBalance > 0 ? 'pending' : 'paid',
             ]);
 
-            // Carryover to next term (all unpaid balance carries)
-            $carryoverBalance = $totalBalance;
+            // ✅ Only carry over what remains UNPAID after any payments made to this term
+            // On fresh assessments with no payments yet, balance = amount, so carryover = amount for next term
+            // After a payment is processed, balance is reduced from amount, so carryover = remaining balance
+            $carryoverBalance = round((float) $term->balance, 2);
         }
 
         // Mark the last term for carryover information

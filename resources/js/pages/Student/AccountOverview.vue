@@ -360,6 +360,14 @@ const availableTermsForPayment = computed(() => {
   })
 })
 
+// Get the first unpaid term ID (for "Pay Now" button visibility)
+const firstUnpaidTermId = computed(() => {
+  const unpaid = props.paymentTerms
+    ?.filter(t => t.balance > 0)
+    .sort((a, b) => a.term_order - b.term_order)
+  return unpaid?.[0]?.id ?? null
+})
+
 const paymentHistory = computed(() => {
   return props.transactions
     .filter(t => t.kind === 'payment')
@@ -393,14 +401,29 @@ const submitButtonMessage = computed(() => {
 })
 
 const isPaymentDisabledReason = computed(() => {
-  if (!paymentForm.selected_term_id) {
-    return 'Select a term to proceed'
+  if (remainingBalance.value <= 0) {
+    return 'This account has no outstanding balance.'
   }
   
-  const selectedTermHasPending = getPendingAmountForTerm(paymentForm.selected_term_id) > 0
-  if (selectedTermHasPending) {
-    const pending = getPendingAmountForTerm(paymentForm.selected_term_id)
-    return `A payment of ₱${formatCurrency(pending)} for this term is awaiting accounting approval. Please wait before submitting another payment.`
+  if (effectiveBalance.value <= 0 && hasPendingPayments.value) {
+    return 'Your full outstanding balance is currently awaiting accounting approval.'
+  }
+  
+  if (!paymentForm.selected_term_id) {
+    return 'Select a term to proceed.'
+  }
+  
+  const pending = getPendingAmountForTerm(paymentForm.selected_term_id)
+  if (pending > 0) {
+    return `₱${formatCurrency(pending)} for this term is awaiting accounting approval. Wait for approval before submitting another payment.`
+  }
+  
+  if (paymentForm.amount <= 0) {
+    return 'Enter a payment amount.'
+  }
+  
+  if (paymentForm.amount > effectiveBalance.value) {
+    return 'Amount exceeds your available balance.'
   }
   
   return ''
@@ -707,12 +730,20 @@ const submitPayment = () => {
                             View
                           </button>
                           <button 
-                            v-if="term.balance > 0"
+                            v-if="term.balance > 0 && term.id === firstUnpaidTermId"
                             @click="() => { paymentForm.selected_term_id = term.id; activeTab = 'payment' }"
                             class="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                            title="Make payment"
+                            title="Make payment for this term"
                           >
                             Pay Now
+                          </button>
+                          <button 
+                            v-else-if="term.balance > 0"
+                            class="text-xs px-2 py-1 bg-gray-200 text-gray-500 rounded cursor-not-allowed" 
+                            disabled
+                            title="Pay earlier terms first"
+                          >
+                            Locked
                           </button>
                           <button v-else class="text-xs px-2 py-1 bg-gray-100 text-gray-400 rounded cursor-not-allowed" disabled>
                             Paid
@@ -920,8 +951,11 @@ const submitPayment = () => {
                     :title="isPaymentDisabledReason"
                   >
                     <span v-if="paymentForm.processing">Processing...</span>
-                    <span v-else-if="effectiveBalance <= 0 && remainingBalance > 0">Payment Awaiting Approval</span>
                     <span v-else-if="remainingBalance <= 0">No Balance to Pay</span>
+                    <span v-else-if="effectiveBalance <= 0 && hasPendingPayments">Payment Awaiting Approval</span>
+                    <span v-else-if="paymentForm.selected_term_id && getPendingAmountForTerm(paymentForm.selected_term_id) > 0">
+                      ⏳ Awaiting Approval for {{ selectedTermInfo?.term_name }}
+                    </span>
                     <span v-else>{{ submitButtonMessage }}</span>
                   </button>
                   <p v-if="isPaymentDisabledReason" class="text-xs text-amber-700 mt-2">
