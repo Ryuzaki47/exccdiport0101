@@ -10,7 +10,7 @@ import { LoaderCircle } from 'lucide-vue-next';
 const form = useForm({
     password: '',
 });
-
+</script>
 
 <template>
     <AuthLayout title="Confirm your password" description="This is a secure area of the application. Please confirm your password before continuing.">
