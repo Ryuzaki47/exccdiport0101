@@ -12,7 +12,12 @@ return new class extends Migration
         // Add 'awaiting_approval' to the status enum in transactions table
         Schema::table('transactions', function (Blueprint $table) {
             // For MySQL, we need to change the enum to include the new value
-            DB::statement("ALTER TABLE transactions MODIFY COLUMN status ENUM('pending','paid','failed','cancelled','awaiting_approval') DEFAULT 'pending'");
+            // SQLite doesn't support MODIFY, but the status column is already text
+            // so it can store any of the enum values
+            if (DB::getDriverName() === 'mysql') {
+                DB::statement("ALTER TABLE transactions MODIFY COLUMN status ENUM('pending','paid','failed','cancelled','awaiting_approval') DEFAULT 'pending'");
+            }
+            // SQLite stores the status as TEXT, so no change needed
         });
     }
 
@@ -20,7 +25,11 @@ return new class extends Migration
     {
         // Remove 'awaiting_approval' from the status enum
         Schema::table('transactions', function (Blueprint $table) {
-            DB::statement("ALTER TABLE transactions MODIFY COLUMN status ENUM('pending','paid','failed','cancelled') DEFAULT 'pending'");
+            // For MySQL, revert the enum
+            if (DB::getDriverName() === 'mysql') {
+                DB::statement("ALTER TABLE transactions MODIFY COLUMN status ENUM('pending','paid','failed','cancelled') DEFAULT 'pending'");
+            }
+            // SQLite stores the status as TEXT, so no change needed
         });
     }
 };
