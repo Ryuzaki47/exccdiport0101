@@ -199,7 +199,7 @@ const canMakePayment = computed(() => {
     return overallRemainingBalance.value > 0;
 });
 
-const payNow = (transaction: Transaction) => {
+const payNow = () => {
     if (!canMakePayment.value) {
         alert('No outstanding balance to pay');
         return;

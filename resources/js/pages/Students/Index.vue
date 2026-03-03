@@ -15,7 +15,7 @@ const statusFilter = ref(props.filters.status || '');
 
 // Debounced search
 let timeout: number;
-watch([search, statusFilter], (values) => {
+watch([search, statusFilter], () => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
         router.get(route('students.index'), { search: search.value, status: statusFilter.value }, { preserveState: true, replace: true });
@@ -132,8 +132,9 @@ const formatCurrency = (amount: number) => {
                         'text-gray-600 hover:bg-gray-100': !link.active,
                         'cursor-not-allowed opacity-50': !link.url,
                     }"
-                    v-html="link.label"
-                />
+                >
+                    {{ link.label }}
+                </Link>
             </div>
         </div>
     </AppLayout>

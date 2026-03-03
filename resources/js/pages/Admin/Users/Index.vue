@@ -135,8 +135,9 @@ const getAdminTypeLabel = (type: string) => {
                             :key="link.label"
                             :href="link.url || '#'"
                             :class="['rounded px-3 py-2', link.active ? 'bg-blue-600 text-white' : 'border bg-white text-gray-700']"
-                            v-html="link.label"
-                        />
+                        >
+                            {{ link.label }}
+                        </Link>
                     </div>
                 </div>
             </div>

@@ -3,7 +3,7 @@ import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
-const props = defineProps<{
+defineProps<{
     yearLevels: string[];
     semesters: string[];
     categories: string[];

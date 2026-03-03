@@ -224,14 +224,15 @@ const formatCurrency = (amount: number) => {
                                     v-for="(link, index) in fees.links"
                                     :key="index"
                                     :href="link.url || '#'"
-                                    v-html="link.label"
                                     :class="[
                                         'rounded border px-3 py-1',
                                         link.active ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-50',
                                         !link.url ? 'cursor-not-allowed opacity-50' : '',
                                     ]"
                                     :disabled="!link.url"
-                                />
+                                >
+                                    {{ link.label }}
+                                </Link>
                             </div>
                         </div>
                     </div>

@@ -197,11 +197,6 @@ const remainingBalance = computed(() => {
     return totalBalance.value;
 });
 
-const paymentPercentage = computed(() => {
-    if (props.totalAssessment === 0) return 0;
-    return Math.round((totalPaid.value / props.totalAssessment) * 100);
-});
-
 const hasCarryover = computed(() => {
     return props.terms.some((term) => term.remarks && term.remarks.includes('carryover'));
 });

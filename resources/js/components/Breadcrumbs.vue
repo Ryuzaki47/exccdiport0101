@@ -6,7 +6,7 @@ export interface BreadcrumbItemType {
     href?: string;
 }
 
-const props = defineProps<{
+defineProps<{
     items: BreadcrumbItemType[];
 }>();
 </script>

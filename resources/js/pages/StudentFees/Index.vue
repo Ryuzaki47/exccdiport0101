@@ -377,13 +377,15 @@ const behindCount = computed(() => props.students.data.filter((s) => getBalanceT
                                         ? 'border-blue-600 bg-blue-600 text-white'
                                         : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50',
                                 ]"
-                                v-html="link.label"
-                            />
+                            >
+                                {{ link.label }}
+                            </Link>
                             <span
                                 v-else
                                 class="cursor-not-allowed rounded border border-gray-300 bg-gray-100 px-3 py-1 text-sm text-gray-400 opacity-60"
-                                v-html="link.label"
-                            />
+                            >
+                                {{ link.label }}
+                            </span>
                         </template>
                     </div>
                 </div>

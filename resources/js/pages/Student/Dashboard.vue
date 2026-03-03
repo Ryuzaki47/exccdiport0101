@@ -129,16 +129,6 @@ const normalizedStats = computed(() => {
  * Calculate payment percentage with safe division
  * Result is capped at 100% and protected from division errors
  */
-const getPaymentPercentage = computed(() => {
-    // Guard against division by zero
-    if (normalizedStats.value.total_fees === 0) return 0;
-
-    const percentage = (normalizedStats.value.total_paid / normalizedStats.value.total_fees) * 100;
-
-    // Round to nearest integer and cap at 100%
-    return Math.min(100, Math.round(percentage));
-});
-
 /**
  * Validate financial consistency
  * Checks if data makes mathematical sense
@@ -158,19 +148,6 @@ const financialDataIsConsistent = computed(() => {
     const tolerance = 0.01; // Allow 1 cent difference for rounding
 
     return Math.abs(remaining_balance - expectedRemaining) < tolerance;
-});
-
-/**
- * Determine financial state for messaging and styling
- */
-const paymentState = computed<'fully_paid' | 'in_progress' | 'nearly_due' | 'attention_needed'>(() => {
-    const balance = normalizedStats.value.remaining_balance;
-    const percentage = getPaymentPercentage.value;
-
-    if (balance === 0) return 'fully_paid';
-    if (percentage >= 75) return 'nearly_due';
-    if (percentage >= 50) return 'in_progress';
-    return 'attention_needed';
 });
 
 /**
@@ -260,17 +237,6 @@ const nextPaymentDue = computed(() => {
 /**
  * Get remaining unpaid terms (for pending charges display)
  */
-const remainingUnpaidTerms = computed(() => {
-    if (unpaidTerms.value.length <= 1) {
-        return [];
-    }
-
-    return unpaidTerms.value.slice(1).map((term) => ({
-        ...term,
-        formattedDueDate: formatDate(term.due_date),
-    }));
-});
-
 const activeNotifications = computed(() => {
     const now = new Date();
     return props.notifications.filter((n) => {

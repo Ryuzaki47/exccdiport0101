@@ -130,11 +130,9 @@ interface Workflow {
     updated_at: string;
 }
 
-interface Props {
+defineProps<{
     workflow: Workflow;
-}
-
-const props = defineProps<Props>();
+}>();
 
 const breadcrumbs = [
     { title: 'Dashboard', href: route('admin.dashboard') },

@@ -6,8 +6,7 @@ import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertCircle, CheckCircle, Clock, CreditCard, XCircle } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
-const { formatCurrency, formatDate, formatDateTime, getPaymentTermStatusConfig, getTransactionStatusConfig, getAssessmentStatusConfig } =
-    useDataFormatting();
+const { formatCurrency, formatDate, getPaymentTermStatusConfig, getTransactionStatusConfig, getAssessmentStatusConfig } = useDataFormatting();
 
 type Fee = {
     name: string;
@@ -356,10 +355,6 @@ const firstUnpaidTermId = computed(() => {
 
 const paymentHistory = computed(() => {
     return props.transactions.filter((t) => t.kind === 'payment').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-});
-
-const pendingCharges = computed(() => {
-    return props.transactions.filter((t) => t.kind === 'charge' && t.status === 'pending');
 });
 
 const selectedTermInfo = computed(() => {

@@ -79,7 +79,7 @@ const submit = async () => {
 
     try {
         // Submit form via axios with explicit CSRF token header
-        const response = await axios.post(
+        await axios.post(
             '/login',
             {
                 email: form.email,

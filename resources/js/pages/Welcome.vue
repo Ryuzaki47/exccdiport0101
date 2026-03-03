@@ -4,8 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 // import { route } from 'ziggy-js';
 
 const page = usePage();
-const name = page.props.name;
-const quote = page.props.quote;
+// Page name and quote data available in page.props if needed
 
 const backgrounds = [
     '/images/bg1.jpg',

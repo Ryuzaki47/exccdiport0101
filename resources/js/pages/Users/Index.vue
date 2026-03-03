@@ -69,8 +69,9 @@
                             'text-gray-600 hover:bg-gray-100': !link.active,
                             'cursor-not-allowed opacity-50': !link.url,
                         }"
-                        v-html="link.label"
-                    />
+                    >
+                        {{ link.label }}
+                    </Link>
                 </div>
             </div>
         </div>

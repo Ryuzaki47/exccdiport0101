@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vite';
-import { ZiggyVue } from 'ziggy-js';
+import { execSync } from 'child_process';
 
 const plugins: any[] = [
     laravel({
@@ -17,7 +17,6 @@ const plugins: any[] = [
 // Only include wayfinder if PHP is available (skip in CI/CD environments)
 if (process.env.SKIP_WAYFINDER !== 'true') {
     try {
-        const { execSync } = require('child_process');
         execSync('php -v', { stdio: 'ignore', shell: true });
         plugins.push(wayfinder({ formVariants: true }));
     } catch {
