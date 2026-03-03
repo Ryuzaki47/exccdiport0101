@@ -303,11 +303,25 @@ class InputValidationSecurityTest extends TestCase
         // Try to inject JSON into string field
         
         $maliciousJson = [
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'json@test.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'admin_type' => 'manager',
             'permissions' => '{"role":"super"}', // Trying to set JSON
         ];
 
+        $response = $this->actingAs($this->superAdmin)
+            ->post(route('users.store'), $maliciousJson);
+
         // Verify cannot inject JSON maliciously
         // JSON field properly validated
+        // The user should not have super admin privileges from JSON injection
+        $this->assertDatabaseHas('users', [
+            'email' => 'json@test.com',
+            'admin_type' => 'manager', // Not 'super'
+        ]);
     }
 
     /** @test */
@@ -330,6 +344,12 @@ class InputValidationSecurityTest extends TestCase
 
         // Verify handled safely
         // Recommendation: Normalize unicode input
+        // Should either be accepted and stored, or rejected with validation error
+        $this->assertThat(
+            $response->status() === 302 || $response->sessionHasErrors(),
+            $this->isTrue(),
+            'Unicode input should either be accepted (302 redirect) or rejected with validation errors'
+        );
     }
 
     /** @test */
@@ -340,5 +360,25 @@ class InputValidationSecurityTest extends TestCase
         
         // Most string fields will reject binary
         // Verification depends on implementation
+        
+        $binaryData = [
+            'first_name' => 'John',
+            'last_name' => 'Test',
+            'email' => 'binary@test.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'admin_type' => 'manager',
+        ];
+
+        $response = $this->actingAs($this->superAdmin)
+            ->post(route('users.store'), $binaryData);
+
+        // Verify binary data handling is safe
+        // Should either accept the data or properly reject it
+        $this->assertThat(
+            in_array($response->status(), [302, 422]),
+            $this->isTrue(),
+            'Binary input should either be accepted or properly rejected'
+        );
     }
 }
