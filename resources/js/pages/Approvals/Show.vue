@@ -73,7 +73,7 @@
             :disabled="processing"
             class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
           >
-            Reject
+            Declined
           </button>
         </div>
       </div>
@@ -86,8 +86,8 @@
       <!-- Reject Reason Dialog -->
       <div v-if="showRejectDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 max-w-md w-full">
-          <h2 class="text-xl font-bold mb-4">Reject Approval</h2>
-          <p class="text-gray-600 mb-4">Please provide a reason for rejection:</p>
+          <h2 class="text-xl font-bold mb-4">Decline Approval</h2>
+          <p class="text-gray-600 mb-4">Please provide a reason for decline:</p>
           <textarea
             v-model="rejectReason"
             class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
@@ -106,7 +106,7 @@
               :disabled="processing"
               class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
             >
-              {{ processing ? 'Processing...' : 'Reject' }}
+              {{ processing ? 'Processing...' : 'Declined' }}
             </button>
           </div>
         </div>

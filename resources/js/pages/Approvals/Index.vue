@@ -281,18 +281,18 @@ const submitRejection = () => {
                             ✓ Approve
                         </Button>
                         <Button variant="outline" @click="openRejectDialog(approval.id)" class="border-red-300 text-red-600 hover:bg-red-50">
-                            ✗ Reject
+                            ✗ Declined
                         </Button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Reject Dialog -->
+        <!-- Decline Dialog -->
         <Dialog v-model:open="showRejectDialog">
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Reject Payment</DialogTitle>
+                    <DialogTitle>Decline Payment</DialogTitle>
                     <DialogDescription>Provide a reason. The student will be notified.</DialogDescription>
                 </DialogHeader>
                 <div class="space-y-4 mt-2">
@@ -308,7 +308,7 @@ const submitRejection = () => {
                             variant="destructive"
                             :disabled="rejectForm.processing || !rejectForm.comments"
                             @click="submitRejection"
-                        >Confirm Rejection</Button>
+                        >Confirm Decline</Button>
                     </div>
                 </div>
             </DialogContent>

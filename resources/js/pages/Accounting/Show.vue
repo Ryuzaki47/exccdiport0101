@@ -94,7 +94,7 @@
           :disabled="processing"
           class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
         >
-          {{ processing ? 'Processing...' : 'Reject' }}
+          {{ processing ? 'Processing...' : 'Declined' }}
         </button>
       </div>
     </div>
@@ -166,7 +166,7 @@ const approveWorkflow = async () => {
 }
 
 const rejectWorkflow = async () => {
-  const reason = prompt('Please provide a reason for rejection:')
+  const reason = prompt('Please provide a reason for decline:')
   if (!reason) return
 
   processing.value = true
