@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\UserRoleEnum;
 use App\Models\User;
 use App\Models\Workflow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -11,9 +12,19 @@ class WorkflowControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function makeAdminUser(): User
+    {
+        return User::factory()->create([
+            'role' => UserRoleEnum::ADMIN,
+            'admin_type' => 'super',
+            'is_active' => true,
+            'terms_accepted_at' => now(),
+        ]);
+    }
+
     public function test_can_view_workflows_index()
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdminUser();
         Workflow::factory()->count(3)->create();
 
         $response = $this->actingAs($user)->get('/workflows');
@@ -23,7 +34,7 @@ class WorkflowControllerTest extends TestCase
 
     public function test_can_create_workflow()
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdminUser();
 
         $data = [
             'name' => 'Test Workflow',
@@ -46,7 +57,7 @@ class WorkflowControllerTest extends TestCase
 
     public function test_can_view_single_workflow()
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdminUser();
         $workflow = Workflow::factory()->create();
 
         $response = $this->actingAs($user)->get("/workflows/{$workflow->id}");

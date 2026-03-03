@@ -12,8 +12,13 @@ class AdminService
     /**
      * Create a new admin user
      */
-    public function createAdmin(array $data, ?User $createdBy = null): User
+    public function createAdmin(array $data, int|User|null $createdBy = null): User
     {
+        // Resolve to User model if int given
+        if (is_int($createdBy)) {
+            $createdBy = User::find($createdBy);
+        }
+
         // Validate input
         $validated = $this->validateAdminData($data);
 

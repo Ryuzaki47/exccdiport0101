@@ -98,8 +98,15 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->group(function
 Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::resource('users', AdminController::class);
-    Route::post('users/{user}/deactivate', [AdminController::class, 'deactivate'])->name('admin.users.deactivate');
-    Route::post('users/{user}/reactivate', [AdminController::class, 'reactivate'])->name('admin.users.reactivate');
+    Route::post('users/{user}/deactivate', [AdminController::class, 'deactivate'])
+        ->name('admin.users.deactivate');
+    Route::post('users/{user}/reactivate', [AdminController::class, 'reactivate'])
+        ->name('admin.users.reactivate');
+    // Aliases without admin prefix for test/backward compatibility
+    Route::post('users/{user}/deactivate', [AdminController::class, 'deactivate'])
+        ->name('users.deactivate');
+    Route::post('users/{user}/reactivate', [AdminController::class, 'reactivate'])
+        ->name('users.reactivate');
     Route::resource('notifications', NotificationController::class);
     Route::get('/payment-terms', [PaymentTermsController::class, 'index'])->name('admin.payment-terms.index');
     Route::post('/payment-terms/{paymentTerm}/due-date', [PaymentTermsController::class, 'updateDueDate'])->name('admin.payment-terms.update-due-date');
