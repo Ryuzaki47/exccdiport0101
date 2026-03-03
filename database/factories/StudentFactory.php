@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class StudentFactory extends Factory
@@ -9,6 +10,7 @@ class StudentFactory extends Factory
     public function definition(): array
     {
         return [
+            'user_id' => User::factory(),
             'student_number' => 'STU-' . $this->faker->unique()->numberBetween(10000, 99999),
             'first_name' => $this->faker->firstName(),
             'last_name' => $this->faker->lastName(),
