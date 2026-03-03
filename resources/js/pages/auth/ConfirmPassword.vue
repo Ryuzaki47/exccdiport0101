@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import ConfirmablePasswordController from '@/actions/App/Http/Controllers/Auth/ConfirmablePasswordController';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/AuthLayout.vue';
-import { Form, Head } from '@inertiajs/vue3';
+import { useForm, Head } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
-</script>
+
+const form = useForm({
+    password: '',
+});
+
 
 <template>
     <AuthLayout title="Confirm your password" description="This is a secure area of the application. Please confirm your password before continuing.">
         <Head title="Confirm password" />
 
-        <Form v-bind="ConfirmablePasswordController.store.form()" reset-on-success v-slot="{ errors, processing }">
+        <form @submit.prevent="form.post(route('password.confirm'))" class="space-y-6">
             <div class="space-y-6">
                 <div class="grid gap-2">
                     <Label htmlFor="password">Password</Label>
@@ -25,18 +28,19 @@ import { LoaderCircle } from 'lucide-vue-next';
                         required
                         autocomplete="current-password"
                         autofocus
+                        v-model="form.password"
                     />
 
-                    <InputError :message="errors.password" />
+                    <InputError :message="form.errors.password" />
                 </div>
 
                 <div class="flex items-center">
-                    <Button class="w-full" :disabled="processing">
-                        <LoaderCircle v-if="processing" class="h-4 w-4 animate-spin" />
+                    <Button class="w-full" :disabled="form.processing" type="submit">
+                        <LoaderCircle v-if="form.processing" class="h-4 w-4 animate-spin" />
                         Confirm Password
                     </Button>
                 </div>
             </div>
-        </Form>
+        </form>
     </AuthLayout>
 </template>

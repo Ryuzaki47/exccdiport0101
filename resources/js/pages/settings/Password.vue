@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import PasswordController from '@/actions/App/Http/Controllers/Settings/PasswordController';
 import InputError from '@/components/InputError.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
-import { Form, Head, router } from '@inertiajs/vue3';
+import { useForm, Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -21,6 +20,27 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 const passwordInput = ref<HTMLInputElement | null>(null);
 const currentPasswordInput = ref<HTMLInputElement | null>(null);
+
+const form = useForm({
+    current_password: '',
+    password: '',
+    password_confirmation: '',
+});
+
+const recentlySuccessful = ref(false);
+
+const submit = () => {
+    form.post(route('password.update'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            recentlySuccessful.value = true;
+            setTimeout(() => {
+                recentlySuccessful.value = false;
+            }, 3000);
+        },
+    });
+};
+
 </script>
 
 <template>
@@ -31,16 +51,7 @@ const currentPasswordInput = ref<HTMLInputElement | null>(null);
             <div class="space-y-6">
                 <HeadingSmall title="Update password" description="Ensure your account is using a long, random password to stay secure" />
 
-                <Form
-                    v-bind="PasswordController.update.form()"
-                    :options="{
-                        preserveScroll: true,
-                    }"
-                    reset-on-success
-                    :reset-on-error="['password', 'password_confirmation', 'current_password']"
-                    class="space-y-6"
-                    v-slot="{ errors, processing, recentlySuccessful }"
-                >
+                <form @submit.prevent="submit" class="space-y-6">
                     <div class="grid gap-2">
                         <Label for="current_password">Current password</Label>
                         <Input
@@ -51,8 +62,9 @@ const currentPasswordInput = ref<HTMLInputElement | null>(null);
                             class="mt-1 block w-full"
                             autocomplete="current-password"
                             placeholder="Current password"
+                            v-model="form.current_password"
                         />
-                        <InputError :message="errors.current_password" />
+                        <InputError :message="form.errors.current_password" />
                     </div>
 
                     <div class="grid gap-2">
@@ -65,8 +77,9 @@ const currentPasswordInput = ref<HTMLInputElement | null>(null);
                             class="mt-1 block w-full"
                             autocomplete="new-password"
                             placeholder="New password"
+                            v-model="form.password"
                         />
-                        <InputError :message="errors.password" />
+                        <InputError :message="form.errors.password" />
                     </div>
 
                     <div class="grid gap-2">
@@ -78,12 +91,13 @@ const currentPasswordInput = ref<HTMLInputElement | null>(null);
                             class="mt-1 block w-full"
                             autocomplete="new-password"
                             placeholder="Confirm password"
+                            v-model="form.password_confirmation"
                         />
-                        <InputError :message="errors.password_confirmation" />
+                        <InputError :message="form.errors.password_confirmation" />
                     </div>
 
                     <div class="flex items-center gap-4">
-                        <Button :disabled="processing">Save password</Button>
+                        <Button :disabled="form.processing" type="submit">Save password</Button>
 
                         <Transition
                             enter-active-class="transition ease-in-out"
@@ -94,7 +108,7 @@ const currentPasswordInput = ref<HTMLInputElement | null>(null);
                             <p v-show="recentlySuccessful" class="text-sm text-neutral-600">Saved.</p>
                         </Transition>
                     </div>
-                </Form>
+                </form>
             </div>
         </SettingsLayout>
     </AppLayout>

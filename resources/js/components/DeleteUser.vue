@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
-import { Form } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 // Components
@@ -21,7 +20,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const passwordInput = ref<InstanceType<typeof Input> | null>(null);
-</script>
+const showDialog = ref(false);
+
+const form = useForm({
+    password: '',
+});
+
+const submit = () => {
+    form.delete(route('profile.destroy'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showDialog.value = false;
+        },
+    });
+};
+
+const resetForm = () => {
+    form.reset();
+    form.clearErrors();
+};
+
 
 <template>
     <div class="space-y-6">
@@ -31,21 +49,12 @@ const passwordInput = ref<InstanceType<typeof Input> | null>(null);
                 <p class="font-medium">Warning</p>
                 <p class="text-sm">Please proceed with caution, this cannot be undone.</p>
             </div>
-            <Dialog>
+            <Dialog v-model:open="showDialog">
                 <DialogTrigger as-child>
                     <Button variant="destructive">Delete account</Button>
                 </DialogTrigger>
                 <DialogContent>
-                    <Form
-                        v-bind="ProfileController.destroy.form()"
-                        reset-on-success
-                        @error="() => passwordInput?.$el?.focus()"
-                        :options="{
-                            preserveScroll: true,
-                        }"
-                        class="space-y-6"
-                        v-slot="{ errors, processing, reset, clearErrors }"
-                    >
+                    <form @submit.prevent="submit" class="space-y-6">
                         <DialogHeader class="space-y-3">
                             <DialogTitle>Are you sure you want to delete your account?</DialogTitle>
                             <DialogDescription>
@@ -56,28 +65,24 @@ const passwordInput = ref<InstanceType<typeof Input> | null>(null);
 
                         <div class="grid gap-2">
                             <Label for="password" class="sr-only">Password</Label>
-                            <Input id="password" type="password" name="password" ref="passwordInput" placeholder="Password" />
-                            <InputError :message="errors.password" />
+                            <Input id="password" type="password" name="password" ref="passwordInput" placeholder="Password" v-model="form.password" />
+                            <InputError :message="form.errors.password" />
                         </div>
 
                         <DialogFooter class="gap-2">
                             <DialogClose as-child>
                                 <Button
                                     variant="secondary"
-                                    @click="
-                                        () => {
-                                            clearErrors();
-                                            reset();
-                                        }
-                                    "
+                                    @click="resetForm"
+                                    type="button"
                                 >
                                     Cancel
                                 </Button>
                             </DialogClose>
 
-                            <Button type="submit" variant="destructive" :disabled="processing"> Delete account </Button>
+                            <Button type="submit" variant="destructive" :disabled="form.processing"> Delete account </Button>
                         </DialogFooter>
-                    </Form>
+                    </form>
                 </DialogContent>
             </Dialog>
         </div>
