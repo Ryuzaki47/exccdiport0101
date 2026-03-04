@@ -225,6 +225,9 @@ class AdminWorkflowIntegrationTest extends TestCase
         $this->assertNotNull($admin->created_at);
         $originalCreatedAt = $admin->created_at;
 
+        // Travel 1 second into the future so updated_at is guaranteed to be newer than created_at
+        $this->travel(1)->seconds();
+
         // Now update with different admin
         $updater = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,

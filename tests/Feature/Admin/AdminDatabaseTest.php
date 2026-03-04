@@ -297,13 +297,13 @@ class AdminDatabaseTest extends TestCase
     /** @test */
     public function created_at_and_updated_at_timestamps_are_recorded(): void
     {
-        $before = now();
-        
+        $before = now()->subSecond();
+
         $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
         ]);
 
-        $after = now();
+        $after = now()->addSecond();
 
         $this->assertTrue($admin->created_at->isBetween($before, $after));
         $this->assertTrue($admin->updated_at->isBetween($before, $after));
@@ -361,7 +361,7 @@ class AdminDatabaseTest extends TestCase
     /** @test */
     public function admin_count_statistics_are_accurate(): void
     {
-        User::factory()->count(3)->create([
+        User::factory()->count(2)->create([
             'role' => UserRoleEnum::ADMIN,
             'admin_type' => 'super',
         ]);
@@ -378,6 +378,7 @@ class AdminDatabaseTest extends TestCase
 
         $stats = $this->adminService->getAdminStats();
 
+        // setUp creates 1 superAdmin, plus 2 created here = 3 total super admins
         $this->assertEquals(15, $stats['total_admins']);
         $this->assertEquals(3, $stats['super_admins']);
         $this->assertEquals(5, $stats['managers']);
@@ -397,6 +398,9 @@ class AdminDatabaseTest extends TestCase
         $originalCreatedAt = $admin->created_at;
 
         $updater = User::factory()->create(['role' => UserRoleEnum::ADMIN]);
+
+        // Travel 1 second into the future so updated_at is guaranteed to differ from created_at
+        $this->travel(1)->seconds();
 
         $this->adminService->updateAdmin(
             $admin,

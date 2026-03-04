@@ -20,15 +20,16 @@ class AuthenticationTest extends TestCase
 
     public function test_users_can_authenticate_using_the_login_screen()
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'student']);
 
         $response = $this->post(route('login.store'), [
             'email' => $user->email,
             'password' => 'password',
+            'role' => 'student',
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $response->assertRedirect(route('student.dashboard', absolute: false));
     }
 
     public function test_users_can_not_authenticate_with_invalid_password()
@@ -55,13 +56,15 @@ class AuthenticationTest extends TestCase
 
     public function test_users_are_rate_limited()
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'student']);
 
-        RateLimiter::increment(implode('|', [$user->email, '127.0.0.1']), amount: 10);
+        // Throttle key format is: email|role|ip
+        RateLimiter::increment(implode('|', [strtolower($user->email), 'student', '127.0.0.1']), amount: 10);
 
         $response = $this->post(route('login.store'), [
             'email' => $user->email,
             'password' => 'wrong-password',
+            'role' => 'student',
         ]);
 
         $response->assertSessionHasErrors('email');

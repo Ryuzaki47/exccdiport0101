@@ -22,7 +22,8 @@ class CSRFLoginTest extends TestCase
         $response = $this->get('/login');
         
         $response->assertStatus(200);
-        $this->assertStringContainsString('Inertia', $response->getContent());
+        // Inertia renders a div with data-page attribute containing the component info
+        $this->assertStringContainsString('data-page', $response->getContent());
     }
 
     public function test_csrf_token_is_validated_on_login_post()

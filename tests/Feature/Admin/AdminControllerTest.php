@@ -396,7 +396,12 @@ class AdminControllerTest extends TestCase
         ];
 
         // Simulate update by another admin
-        $updatingAdmin = User::factory()->create(['role' => UserRoleEnum::ADMIN]);
+        $updatingAdmin = User::factory()->create([
+            'role' => UserRoleEnum::ADMIN,
+            'admin_type' => 'super',
+            'is_active' => true,
+            'terms_accepted_at' => now(),
+        ]);
 
         $this->actingAs($updatingAdmin)->put(route('users.update', $admin->id), $data);
 
