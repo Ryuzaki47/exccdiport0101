@@ -38,9 +38,11 @@ class AdminService
             'admin_type'     => $validated['admin_type'],
             'department'     => $validated['department'] ?? null,
             'is_active'      => $validated['is_active'] ?? true,
-            'created_by'     => $createdBy?->id,
             'updated_by'     => $createdBy?->id,
         ]);
+
+        // Set created_by directly (not mass-assignable to protect audit immutability)
+        $admin->forceFill(['created_by' => $createdBy?->id])->save();
 
         // Always record terms acceptance on creation
         $admin->acceptTerms();

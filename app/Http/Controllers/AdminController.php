@@ -137,6 +137,17 @@ class AdminController extends Controller
     }
 
     /**
+     * Hard delete is not permitted — use deactivate instead.
+     */
+    public function destroy(User $user)
+    {
+        $this->authorize('delete', $user);
+
+        // Policy always returns false for delete; this line is never reached
+        abort(403, 'Hard deletion of admin accounts is not permitted.');
+    }
+
+    /**
      * Deactivate the specified admin.
      */
     public function deactivate(Request $request, User $user)

@@ -46,7 +46,6 @@ class User extends Authenticatable
         'permissions',
         'department',
         'admin_type',
-        'created_by',
         'updated_by',
         'last_login_at',
     ];
