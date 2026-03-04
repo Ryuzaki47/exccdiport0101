@@ -191,16 +191,17 @@ class AdminService
      */
     public function getAdminStats(): array
     {
-        $admins = User::admins()->where('is_active', true)->get();
+        $allAdmins = User::admins()->get();
+        $activeAdmins = $allAdmins->where('is_active', true);
 
         return [
-            'total_admins'        => $admins->count(),
-            'total_active_admins' => $admins->count(),
-            'super_admins'        => $admins->where('admin_type', User::ADMIN_TYPE_SUPER)->count(),
-            'managers'            => $admins->where('admin_type', User::ADMIN_TYPE_MANAGER)->count(),
-            'operators'           => $admins->where('admin_type', User::ADMIN_TYPE_OPERATOR)->count(),
-            'terms_accepted'      => $admins->filter(fn($a) => $a->terms_accepted_at !== null)->count(),
-            'last_login_avg_days' => $this->calculateAverageLastLogin($admins),
+            'total_admins'        => $allAdmins->count(),
+            'total_active_admins' => $activeAdmins->count(),
+            'super_admins'        => $allAdmins->where('admin_type', User::ADMIN_TYPE_SUPER)->count(),
+            'managers'            => $allAdmins->where('admin_type', User::ADMIN_TYPE_MANAGER)->count(),
+            'operators'           => $allAdmins->where('admin_type', User::ADMIN_TYPE_OPERATOR)->count(),
+            'terms_accepted'      => $allAdmins->filter(fn($a) => $a->terms_accepted_at !== null)->count(),
+            'last_login_avg_days' => $this->calculateAverageLastLogin($activeAdmins),
         ];
     }
 

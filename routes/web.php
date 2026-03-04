@@ -97,7 +97,15 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->group(function
 // ============================================
 Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
-    Route::resource('users', AdminController::class);
+    Route::resource('users', AdminController::class)->names([
+        'index'   => 'users.index',
+        'create'  => 'users.create',
+        'store'   => 'users.store',
+        'show'    => 'users.show',
+        'edit'    => 'users.edit',
+        'update'  => 'users.update',
+        'destroy' => 'users.destroy',
+    ]);
     Route::post('users/{user}/deactivate', [AdminController::class, 'deactivate'])
         ->name('admin.users.deactivate');
     Route::post('users/{user}/reactivate', [AdminController::class, 'reactivate'])

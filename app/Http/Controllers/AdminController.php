@@ -148,7 +148,7 @@ class AdminController extends Controller
 
             return back()->with('success', 'Admin deactivated successfully!');
         } catch (\InvalidArgumentException $e) {
-            return back()->withErrors(['error' => $e->getMessage()]);
+            abort(403, $e->getMessage());
         }
     }
 

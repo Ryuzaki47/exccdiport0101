@@ -11,53 +11,51 @@ class UserPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin() && $user->is_active;
+        return $user->isSuperAdmin() && $user->is_active;
     }
 
     /**
      * Determine whether the user can view the user.
+     * Only super admins can view other users; everyone can view own profile.
      */
     public function view(User $user, User $model): bool
     {
-        // Admins can view any user
-        if ($user->isAdmin() && $user->is_active) {
+        // Users can view their own profile
+        if ($user->id === $model->id && $user->is_active) {
             return true;
         }
 
-        // Users can view their own profile
-        return $user->id === $model->id;
+        // Only super admins can view other users
+        return $user->isSuperAdmin() && $user->is_active;
     }
 
     /**
      * Determine whether the user can create users.
+     * Only super admins can create new admins.
      */
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->isSuperAdmin() && $user->is_active;
     }
 
     /**
      * Determine whether the user can update the user.
+     * Users can update their own profile; only super admins can update others.
      */
     public function update(User $user, User $model): bool
     {
-        // Users can update their own profile
-        if ($user->id === $model->id) {
+        // Users can update their own profile (if active)
+        if ($user->id === $model->id && $user->is_active) {
             return true;
         }
 
-        // Admins can update other users
-        if ($user->isAdmin() && $user->is_active && $user->hasPermission('manage_users')) {
-            // Cannot edit users with higher privileges
-            return $user->admin_type === User::ADMIN_TYPE_SUPER ||
-                   $user->admin_type !== User::ADMIN_TYPE_OPERATOR;
-        }
-
-        return false;
+        // Only super admins can update other users
+        return $user->isSuperAdmin() && $user->is_active;
     }
 
     /**
      * Determine whether the user can delete the user.
+     * Hard delete is never allowed (use deactivate instead).
      */
     public function delete(User $user, User $model): bool
     {
@@ -66,11 +64,8 @@ class UserPolicy
             return false;
         }
 
-        // Only super admins can delete
-        return $user->isAdmin() &&
-               $user->is_active &&
-               $user->isSuperAdmin() &&
-               $user->hasPermission('manage_users');
+        // Hard delete is forbidden by business rule
+        return false;
     }
 
     /**
@@ -92,9 +87,9 @@ class UserPolicy
     /**
      * Determine if user can manage admin accounts
      */
-    public function manageAdmins(User $user): bool
+    public function manageAdmins(User $user, User $model): bool
     {
-        return $user->isSuperAdmin() && $user->is_active && $user->hasPermission('manage_admins');
+        return $user->isSuperAdmin() && $user->is_active;
     }
 
     /**
