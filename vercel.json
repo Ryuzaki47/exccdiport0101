@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "framework": null,
+  "outputDirectory": "public",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "routes": [
+    {
+      "src": "/build/(.*)",
+      "dest": "/build/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.php"
+    }
+  ],
+  "env": {
+    "SKIP_WAYFINDER": "true"
+  }
+}
