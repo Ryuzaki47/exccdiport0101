@@ -53,10 +53,10 @@
                     </div>
                 </div>
 
-                <!-- Comment -->
-                <div v-if="approval.comment" class="border-t pt-4">
+                <!-- Comments -->
+                <div v-if="approval.comments" class="border-t pt-4">
                     <p class="text-sm text-gray-600">Comment</p>
-                    <p class="mt-2 rounded-lg bg-gray-50 p-4">{{ approval.comment }}</p>
+                    <p class="mt-2 rounded-lg bg-gray-50 p-4">{{ approval.comments }}</p>
                 </div>
 
                 <!-- Action Buttons (if pending) -->
@@ -126,7 +126,7 @@ interface Approval {
     status: string;
     workflowable_type: string;
     approver_name: string;
-    comment: string | null;
+    comments: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -183,7 +183,7 @@ const reject = async () => {
     processing.value = true;
     router.post(
         route('approvals.reject', props.approval.id),
-        { comment: rejectReason.value },
+        { comments: rejectReason.value },
         {
             onFinish: () => {
                 processing.value = false;

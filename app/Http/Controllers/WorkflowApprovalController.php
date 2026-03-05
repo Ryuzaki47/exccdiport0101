@@ -16,17 +16,29 @@ class WorkflowApprovalController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
+        $userRole = $user->role->value ?? null;
 
-        // Show approvals directly assigned to this user OR assigned to their role
-        // (the workflow engine assigns approvals to all users with the approver_role
-        //  at the time the workflow is started, but we also show pending ones for
-        //  their role so no approval falls through the cracks).
+        // Show approvals directly assigned to this user.
+        // Additionally, accounting and admin users can see every approval that
+        // belongs to a step with approver_role = 'accounting', so no submission
+        // falls through the cracks even if the approval record was created before
+        // the user existed (mirrors the logic in WorkflowApprovalPolicy).
         $approvals = WorkflowApproval::query()
             ->with([
                 'workflowInstance.workflow',
                 'workflowInstance.workflowable.user',
             ])
-            ->where('approver_id', $user->id)
+            ->where(function ($query) use ($user, $userRole) {
+                $query->where('approver_id', $user->id);
+
+                if (in_array($userRole, ['accounting', 'admin'])) {
+                    // Also include pending approvals on steps whose approver_role
+                    // is 'accounting', regardless of who was originally assigned.
+                    $query->orWhereHas('workflowInstance.workflow', function ($wq) {
+                        $wq->whereJsonContains('steps', ['approver_role' => 'accounting']);
+                    });
+                }
+            })
             ->when($request->status, fn($q, $status) => $q->where('status', $status))
             ->latest()
             ->paginate(15);

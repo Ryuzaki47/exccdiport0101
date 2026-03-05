@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Models\User;
 use App\Models\Workflow;
 use App\Models\Student;
+use App\Enums\UserRoleEnum;
 use App\Services\WorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -23,12 +24,15 @@ class WorkflowServiceTest extends TestCase
 
     public function test_can_start_workflow()
     {
+        // Create an admin user to serve as approver
+        User::factory()->create(['role' => UserRoleEnum::ADMIN]);
+        
         $user = User::factory()->create();
         $student = Student::factory()->create();
         
         $workflow = Workflow::factory()->create([
             'steps' => [
-                ['name' => 'Step 1', 'requires_approval' => false],
+                ['name' => 'Step 1', 'requires_approval' => true, 'approver_role' => 'admin'],
                 ['name' => 'Step 2', 'requires_approval' => false],
             ],
         ]);
@@ -45,12 +49,15 @@ class WorkflowServiceTest extends TestCase
 
     public function test_can_advance_workflow()
     {
+        // Create an admin user to serve as approver
+        User::factory()->create(['role' => UserRoleEnum::ADMIN]);
+        
         $user = User::factory()->create();
         $student = Student::factory()->create();
         
         $workflow = Workflow::factory()->create([
             'steps' => [
-                ['name' => 'Step 1', 'requires_approval' => false],
+                ['name' => 'Step 1', 'requires_approval' => true, 'approver_role' => 'admin'],
                 ['name' => 'Step 2', 'requires_approval' => false],
             ],
         ]);
@@ -68,6 +75,8 @@ class WorkflowServiceTest extends TestCase
         $user = User::factory()->create();
         $student = Student::factory()->create();
         
+        // With a single step that requires no approval, startWorkflow
+        // auto-advances immediately and completes the workflow
         $workflow = Workflow::factory()->create([
             'steps' => [
                 ['name' => 'Step 1', 'requires_approval' => false],
@@ -75,7 +84,6 @@ class WorkflowServiceTest extends TestCase
         ]);
 
         $instance = $this->service->startWorkflow($workflow, $student, $user->id);
-        $this->service->advanceWorkflow($instance, $user->id);
 
         $instance->refresh();
 

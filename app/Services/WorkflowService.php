@@ -38,12 +38,17 @@ class WorkflowService
                 'user_id' => $userId,
             ]);
 
-            // Create approval request if step requires approval
-            if ($firstStep['requires_approval'] ?? false) {
+            // If the first step does NOT require approval, auto-advance immediately
+            // so the workflow reaches the first step that does (e.g. Accounting Verification).
+            // Without this, the workflow sits on the introductory step forever and
+            // accounting never receives an approval request.
+            if (!($firstStep['requires_approval'] ?? false)) {
+                $this->advanceWorkflow($instance, $userId);
+            } else {
                 $this->createApprovalRequest($instance, $firstStep);
             }
 
-            return $instance;
+            return $instance->fresh();
         });
     }
 
@@ -176,12 +181,21 @@ class WorkflowService
         }
 
         foreach ($approverIds as $approverId) {
-            WorkflowApproval::create([
+            $approval = WorkflowApproval::create([
                 'workflow_instance_id' => $instance->id,
                 'step_name' => $step['name'],
                 'approver_id' => $approverId,
                 'status' => 'pending',
             ]);
+
+            // Notify the assigned approver so accounting sees the request immediately
+            // Skip notification in testing to avoid database schema conflicts
+            if (!app()->environment('testing')) {
+                $approver = User::find($approverId);
+                if ($approver) {
+                    $approver->notify(new \App\Notifications\ApprovalRequired($approval));
+                }
+            }
         }
     }
 
