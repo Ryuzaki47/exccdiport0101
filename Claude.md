@@ -1,6 +1,6 @@
 # CLAUDE.md — CCDI Account Portal
 
-> Project instructions for Claude Code (VS Code Agent). Read this before making any changes.
+> **⚠️ Read this Claude.md file FIRST before making any changes.** Full project instructions for Claude Code (VS Code Agent).
 
 ---
 

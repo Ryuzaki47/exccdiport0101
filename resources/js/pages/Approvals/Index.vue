@@ -66,16 +66,6 @@ const uniqueYears = computed(() => {
     });
 });
 
-// Extract unique semesters from approvals (for filtering reference)
-const uniqueSemesters = computed(() => {
-    const semesters = new Set<string>();
-    props.approvals.data.forEach((approval) => {
-        const semester = approval.workflow_instance.metadata?.semester;
-        if (semester) semesters.add(semester);
-    });
-    return Array.from(semesters).sort();
-});
-
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
 
 const formatDate = (date: string) => new Date(date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });

@@ -219,7 +219,7 @@ const processing = ref(false);
 const showRejectDialog = ref(false);
 const rejectReason = ref('');
 
-const { formatCurrency, formatDate: formatDateUtil } = useDataFormatting();
+const { formatCurrency } = useDataFormatting();
 
 const breadcrumbs = [
     { title: 'Dashboard', href: route('admin.dashboard') },
