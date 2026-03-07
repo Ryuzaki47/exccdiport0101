@@ -15,6 +15,7 @@ use App\Events\PaymentRecorded;
 use App\Enums\UserRoleEnum;
 use App\Services\AccountService;
 use Illuminate\Support\Str;
+use Database\Seeders\Traits\GetAdminUserTrait;
 
 /**
  * StudentFirstPaymentSeeder
@@ -53,6 +54,7 @@ use Illuminate\Support\Str;
  */
 class StudentFirstPaymentSeeder extends Seeder
 {
+    use GetAdminUserTrait;
     private static $accountIdCounter = 101;
 
     public function run(): void
@@ -276,7 +278,7 @@ class StudentFirstPaymentSeeder extends Seeder
             'other_fees' => $otherFees,
             'total_assessment' => $totalAssessment,
             'status' => 'active',
-            'created_by' => 1, // Admin user
+            'created_by' => $this->getOrFindAdminUserId(),
         ]);
 
         // Create payment terms for this assessment

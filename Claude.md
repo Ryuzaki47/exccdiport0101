@@ -8,7 +8,7 @@
 
 **CCDI Account Portal** — A school financial management system for CCDI (a Philippine educational institution). Handles student enrollment, fee assessment, payment tracking, and accounting workflows across three user roles.
 
-**Stack:** Laravel 12 + Vue 3 + Inertia.js + TypeScript + Tailwind CSS v4 + SQLite  
+**Stack:** Laravel 12 + Vue 3 + Inertia.js + TypeScript + Tailwind CSS v4 + MySQL  
 **Pattern:** Monolithic SPA via Inertia.js (no REST API for frontend — data flows through controller props)
 
 ---
@@ -247,7 +247,7 @@ Currency display uses Philippine Peso `₱` via `Intl.NumberFormat('en-PH', { cu
 
 ## Database
 
-**Driver:** SQLite (default, see `.env`)  
+**Driver:** MySQL (configured in `.env` as `DB_CONNECTION=mysql`)  
 **ORM:** Eloquent with SoftDeletes on Student, User models
 
 ### Key Models & Relationships

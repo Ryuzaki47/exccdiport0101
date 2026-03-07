@@ -12,6 +12,7 @@ use App\Models\StudentPaymentTerm;
 use App\Models\Account;
 use App\Models\Notification;
 use App\Enums\UserRoleEnum;
+use Database\Seeders\Traits\GetAdminUserTrait;
 
 /**
  * AdditionalStudentSeeder
@@ -30,6 +31,8 @@ use App\Enums\UserRoleEnum;
  */
 class AdditionalStudentSeeder extends Seeder
 {
+    use GetAdminUserTrait;
+
     private $students = [
         ['email' => 'maria.santos@test.com', 'first_name' => 'Maria', 'last_name' => 'Santos', 'student_id' => '2024-0002'],
         ['email' => 'juan.dela.cruz@test.com', 'first_name' => 'Juan', 'last_name' => 'Dela Cruz', 'student_id' => '2024-0003'],
@@ -138,7 +141,7 @@ class AdditionalStudentSeeder extends Seeder
                 'other_fees' => $otherFees,
                 'total_assessment' => $totalAssessment,
                 'status' => 'active',
-                'created_by' => 1,
+                'created_by' => $this->getOrFindAdminUserId(),
             ]);
 
             $this->command->info("  Assessment created: {$assessment->assessment_number} (Total: ₱" . number_format($totalAssessment, 2) . ")");

@@ -8,9 +8,11 @@ use App\Models\Subject;
 use App\Models\StudentAssessment;
 use App\Models\Transaction;
 use App\Models\Fee;
+use Database\Seeders\Traits\GetAdminUserTrait;
 
 class QuickStudentAssessmentSeeder extends Seeder
 {
+    use GetAdminUserTrait;
     public function run(): void
     {
         $schoolYear = '2025-2026';
@@ -90,7 +92,7 @@ class QuickStudentAssessmentSeeder extends Seeder
             'subjects' => $subjectData,
             'fee_breakdown' => $feeBreakdown,
             'status' => 'active',
-            'created_by' => 1,
+            'created_by' => $this->getOrFindAdminUserId(),
         ]);
 
         // Create subject transactions

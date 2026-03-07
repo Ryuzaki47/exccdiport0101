@@ -10,6 +10,7 @@ use App\Models\StudentPaymentTerm;
 use App\Models\Transaction;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Database\Seeders\Traits\GetAdminUserTrait;
 
 /**
  * ComprehensiveAssessmentSeeder
@@ -23,6 +24,7 @@ use Carbon\Carbon;
  */
 class ComprehensiveAssessmentSeeder extends Seeder
 {
+    use GetAdminUserTrait;
     private string $schoolYear = '2025-2026';
 
     /**
@@ -144,8 +146,7 @@ class ComprehensiveAssessmentSeeder extends Seeder
     // ─────────────────────────────────────────────────────────────────
     public function run(): void
     {
-        $admin   = User::where('role', 'admin')->first();
-        $adminId = $admin?->id ?? 1;
+        $adminId = $this->getOrFindAdminUserId();
 
         // Step 1 — Clear student assessment data (students start clean)
         $this->command->info('🗑️  Clearing existing assessments & payment terms for all students...');

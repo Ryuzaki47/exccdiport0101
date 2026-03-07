@@ -13,6 +13,7 @@ use App\Models\Transaction;
 use App\Models\Account;
 use App\Enums\UserRoleEnum;
 use Illuminate\Support\Str;
+use Database\Seeders\Traits\GetAdminUserTrait;
 
 /**
  * StudentTransactionHistorySeeder
@@ -49,6 +50,8 @@ use Illuminate\Support\Str;
  */
 class StudentTransactionHistorySeeder extends Seeder
 {
+    use GetAdminUserTrait;
+
     private static $accountIdCounter = 201;
     private const EMAIL = 'transaction.history@ccdi.edu.ph';
     private const COURSE = 'Computer Science';
@@ -229,7 +232,7 @@ class StudentTransactionHistorySeeder extends Seeder
             'other_fees' => self::TOTAL_ASSESSMENT_PER_TERM * 0.3,
             'total_assessment' => self::TOTAL_ASSESSMENT_PER_TERM,
             'status' => 'active',
-            'created_by' => 1,
+            'created_by' => $this->getOrFindAdminUserId(),
         ]);
 
         // Create payment terms
@@ -322,7 +325,7 @@ class StudentTransactionHistorySeeder extends Seeder
             'other_fees' => self::TOTAL_ASSESSMENT_PER_TERM * 0.3,
             'total_assessment' => self::TOTAL_ASSESSMENT_PER_TERM,
             'status' => 'active',
-            'created_by' => 1,
+            'created_by' => $this->getOrFindAdminUserId(),
         ]);
 
         // Create payment terms - ALL UNPAID
