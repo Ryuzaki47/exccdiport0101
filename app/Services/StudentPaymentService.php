@@ -39,6 +39,10 @@ class StudentPaymentService
     {
         $termId = (int) ($options['selected_term_id'] ?? 0);
 
+        if ($termId === 0) {
+            throw new \Exception('A payment term must be selected.');
+        }
+
         $term = StudentPaymentTerm::findOrFail($termId);
 
         if ($amount <= 0) {
@@ -50,13 +54,22 @@ class StudentPaymentService
             $reference = 'PAY-' . Str::upper(Str::random(8));
 
             // Determine transaction status based on approval requirement
-            $status = $requiresApproval ? 'pending' : 'paid';
+            $status = $requiresApproval ? 'awaiting_approval' : 'paid';
 
-            // Build meta for audit trail
+            // Normalise description — never null to satisfy DB NOT NULL constraint
+            $description = $options['description'] ?? null;
+            if (empty($description)) {
+                $description = 'Payment — ' . ($options['term_name'] ?? $term->term_name);
+            }
+
+            // Build meta for audit trail. Store selected_term_id so finalizeApprovedPayment()
+            // can look up the EXACT term without relying on term_name string-matching, which
+            // breaks when a student has multiple assessments with identically-named terms.
             $meta = [
                 'payment_method'    => $options['payment_method'] ?? null,
-                'description'       => $options['description'] ?? null,
+                'description'       => $description,
                 'term_name'         => $options['term_name'] ?? $term->term_name,
+                'selected_term_id'  => $term->id,   // ← stored for reliable finalization
                 'requires_approval' => $requiresApproval,
             ];
 
@@ -95,7 +108,7 @@ class StudentPaymentService
                         'amount'           => $amount,
                         'payment_method'   => $options['payment_method'] ?? null,
                         'reference_number' => $reference,
-                        'description'      => $options['description'] ?? ($options['term_name'] ?? $term->term_name),
+                        'description'      => $description,
                         'status'           => Payment::STATUS_COMPLETED,
                         'paid_at'          => $options['paid_at'] ?? now(),
                     ]);
@@ -106,7 +119,7 @@ class StudentPaymentService
 
                 $message = 'Payment of ₱' . number_format($amount, 2) . ' recorded successfully.';
             } else {
-                $message = 'Payment of ₱' . number_format($amount, 2) . ' submitted and is awaiting approval.';
+                $message = 'Payment of ₱' . number_format($amount, 2) . ' submitted and is awaiting accounting approval.';
             }
 
             return [
@@ -121,6 +134,11 @@ class StudentPaymentService
      * Finalize an approved payment by updating the transaction and payment term.
      * Called when a payment approval workflow is completed.
      *
+     * Uses the stored `selected_term_id` in transaction meta for reliable term
+     * lookup — avoids mismatches when a student has multiple assessments that
+     * contain identically-named payment terms (e.g. "Upon Registration" for both
+     * 1st Sem and 2nd Sem assessments).
+     *
      * @param  Transaction $transaction The approved payment transaction
      * @return void
      * @throws \Exception on processing failure
@@ -132,25 +150,35 @@ class StudentPaymentService
         }
 
         if ($transaction->status === 'paid') {
-            // Already finalized, skip
+            // Already finalized — idempotent, skip
             return;
         }
 
         DB::transaction(function () use ($transaction) {
-            $user = $transaction->user;
-            $amount = $transaction->amount;
-            
-            // Get the term name from transaction meta or type
-            $termName = $transaction->meta['term_name'] ?? $transaction->type;
+            $user   = $transaction->user;
+            $amount = (float) $transaction->amount;
 
-            // Find the associated StudentPaymentTerm by user_id and term_name
-            // StudentPaymentTerm is directly linked to User, not through Student
-            $term = StudentPaymentTerm::where('user_id', $user->id)
-                ->where('term_name', $termName)
-                ->first();
+            // ── Priority 1: use the term ID stored in meta (added in processPayment) ──
+            $termId = isset($transaction->meta['selected_term_id'])
+                ? (int) $transaction->meta['selected_term_id']
+                : null;
 
+            $term = null;
+
+            if ($termId) {
+                $term = StudentPaymentTerm::find($termId);
+            }
+
+            // ── Fallback: match by term name scoped to user (last resort) ──
             if (!$term) {
-                // Fallback: find any unpaid or partial term with this name for this user
+                $termName = $transaction->meta['term_name'] ?? $transaction->type;
+
+                Log::warning('finalizeApprovedPayment: term_id not in meta, falling back to name match', [
+                    'transaction_id' => $transaction->id,
+                    'term_name'      => $termName,
+                    'user_id'        => $user->id,
+                ]);
+
                 $term = StudentPaymentTerm::where('user_id', $user->id)
                     ->where('term_name', $termName)
                     ->whereIn('status', ['pending', 'partial'])
@@ -160,43 +188,57 @@ class StudentPaymentService
 
             if (!$term) {
                 throw new \Exception(
-                    "Could not find StudentPaymentTerm for '{$termName}' for user {$user->id}. " .
-                    "Payment cannot be finalized without term reference."
+                    "Could not find StudentPaymentTerm for transaction #{$transaction->id} (user {$user->id}). " .
+                    "Payment cannot be finalized without a term reference."
                 );
             }
 
-            // Update the payment term balance and status
+            // ── Update the payment term ──
             $newBalance = max(0, (float) $term->balance - $amount);
-            $newStatus = $newBalance <= 0
+            $newStatus  = $newBalance <= 0
                 ? StudentPaymentTerm::STATUS_PAID
                 : StudentPaymentTerm::STATUS_PARTIAL;
 
             $term->update([
                 'balance'   => $newBalance,
                 'status'    => $newStatus,
-                'paid_date' => $newStatus === StudentPaymentTerm::STATUS_PAID ? now() : $term->paid_date,
+                'paid_date' => $newStatus === StudentPaymentTerm::STATUS_PAID
+                    ? now()
+                    : $term->paid_date,
             ]);
 
-            // Create a Payment record for history
+            // ── Normalise description ──
+            $description = $transaction->meta['description'] ?? null;
+            if (empty($description)) {
+                $description = 'Payment — ' . $term->term_name;
+            }
+
+            // ── Create Payment record for history ──
             if ($user->student) {
                 Payment::create([
                     'student_id'       => $user->student->id,
                     'amount'           => $amount,
                     'payment_method'   => $transaction->payment_channel,
                     'reference_number' => $transaction->reference,
-                    'description'      => $transaction->meta['description'] ?? $termName,
+                    'description'      => $description,
                     'status'           => Payment::STATUS_COMPLETED,
-                    'paid_at'          => $transaction->paid_at,
+                    'paid_at'          => $transaction->paid_at ?? now(),
                 ]);
             }
 
-            // Update the transaction status to 'paid'
-            $transaction->update([
-                'status' => 'paid',
-            ]);
+            // ── Mark transaction as paid ──
+            $transaction->update(['status' => 'paid']);
 
-            // Recalculate the account balance
+            // ── Recalculate account balance ──
             AccountService::recalculate($user);
+
+            Log::info('Payment finalized successfully', [
+                'transaction_id' => $transaction->id,
+                'term_id'        => $term->id,
+                'term_name'      => $term->term_name,
+                'amount'         => $amount,
+                'new_balance'    => $newBalance,
+            ]);
         });
     }
 
@@ -206,7 +248,6 @@ class StudentPaymentService
      *
      * @param  Transaction $transaction The rejected payment transaction
      * @return void
-     * @throws \Exception on processing failure
      */
     public function cancelRejectedPayment(Transaction $transaction): void
     {
@@ -215,18 +256,27 @@ class StudentPaymentService
         }
 
         DB::transaction(function () use ($transaction) {
-            // Update the transaction status to 'cancelled'
-            $transaction->update([
-                'status' => 'cancelled',
-            ]);
-
-            // No need to update term balance since it was never deducted
-            // (payment was pending, not yet applied)
+            // Mark as cancelled — term balance was never deducted (payment was pending)
+            $transaction->update(['status' => 'cancelled']);
 
             Log::info('Payment cancelled due to workflow rejection', [
                 'transaction_id' => $transaction->id,
-                'amount' => $transaction->amount,
+                'amount'         => $transaction->amount,
+                'reference'      => $transaction->reference,
             ]);
         });
+    }
+
+    /**
+     * Get the total outstanding balance for a user, derived from their payment terms.
+     *
+     * @param  User $user
+     * @return float
+     */
+    public function getTotalOutstandingBalance(User $user): float
+    {
+        return (float) StudentPaymentTerm::where('user_id', $user->id)
+            ->whereIn('status', ['pending', 'partial'])
+            ->sum('balance');
     }
 }
