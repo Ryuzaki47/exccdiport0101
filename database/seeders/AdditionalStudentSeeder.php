@@ -33,6 +33,32 @@ class AdditionalStudentSeeder extends Seeder
 {
     use GetAdminUserTrait;
 
+    // Instance counter for generating account numbers sequentially during seeding
+    private $accountNumberCounter = 0;
+
+    /**
+     * Generate account number sequentially by querying last used number from database
+     */
+    private function getNextAccountNumber(): string
+    {
+        $year = now()->year;
+        
+        // Query for highest number used in current year
+        if ($this->accountNumberCounter === 0) {
+            $lastAccount = \App\Models\Account::where('account_number', 'like', "ACC-{$year}-%")
+                ->orderByRaw("CAST(SUBSTRING(account_number, 10) AS UNSIGNED) DESC")
+                ->first();
+            
+            if ($lastAccount) {
+                $this->accountNumberCounter = intval(substr($lastAccount->account_number, -4));
+            }
+        }
+        
+        $this->accountNumberCounter++;
+        $number = str_pad($this->accountNumberCounter, 4, '0', STR_PAD_LEFT);
+        return "ACC-{$year}-{$number}";
+    }
+
     private $students = [
         ['email' => 'maria.santos@test.com', 'first_name' => 'Maria', 'last_name' => 'Santos', 'student_id' => '2024-0002'],
         ['email' => 'juan.dela.cruz@test.com', 'first_name' => 'Juan', 'last_name' => 'Dela Cruz', 'student_id' => '2024-0003'],
@@ -86,6 +112,7 @@ class AdditionalStudentSeeder extends Seeder
             // Create account
             Account::create([
                 'user_id' => $user->id,
+                'account_number' => $this->getNextAccountNumber(),
                 'balance' => 0,
             ]);
 

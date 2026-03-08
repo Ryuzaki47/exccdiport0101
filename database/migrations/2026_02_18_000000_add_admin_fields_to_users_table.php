@@ -13,21 +13,32 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             // Admin-specific fields
-            $table->boolean('is_active')->default(true)->after('role');
-            $table->timestamp('terms_accepted_at')->nullable()->after('is_active');
-            $table->json('permissions')->nullable()->after('terms_accepted_at');
-            $table->string('department')->nullable()->after('permissions');
-            $table->enum('admin_type', ['super', 'manager', 'operator'])->nullable()->after('department');
+            if (!Schema::hasColumn('users', 'is_active')) {
+                $table->boolean('is_active')->default(true)->after('role');
+            }
+            if (!Schema::hasColumn('users', 'terms_accepted_at')) {
+                $table->timestamp('terms_accepted_at')->nullable()->after('is_active');
+            }
+            if (!Schema::hasColumn('users', 'permissions')) {
+                $table->json('permissions')->nullable()->after('terms_accepted_at');
+            }
+            if (!Schema::hasColumn('users', 'department')) {
+                $table->string('department')->nullable()->after('permissions');
+            }
+            if (!Schema::hasColumn('users', 'admin_type')) {
+                $table->enum('admin_type', ['super', 'manager', 'operator'])->nullable()->after('department');
+            }
 
             // Audit fields
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete()->after('admin_type');
-            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete()->after('created_by');
-            $table->timestamp('last_login_at')->nullable()->after('updated_by');
-
-            // Indexing for performance
-            $table->index('role');
-            $table->index('is_active');
-            $table->index('admin_type');
+            if (!Schema::hasColumn('users', 'created_by')) {
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete()->after('admin_type');
+            }
+            if (!Schema::hasColumn('users', 'updated_by')) {
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete()->after('created_by');
+            }
+            if (!Schema::hasColumn('users', 'last_login_at')) {
+                $table->timestamp('last_login_at')->nullable()->after('updated_by');
+            }
         });
     }
 

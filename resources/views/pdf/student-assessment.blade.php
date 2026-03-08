@@ -18,6 +18,7 @@
         .header h1 {
             margin: 0;
             font-size: 20px;
+            text-transform: uppercase;
         }
         .header p {
             margin: 5px 0;
@@ -84,14 +85,29 @@
 </head>
 <body>
     <div class="header">
-        <h1>CAMARINES NORTE COLLEGE COMPUTER DEPT. INC.</h1>
-        <p>Certificate of Matriculation / Assessment Form</p>
+        <h1>{{ strtoupper(config('school.name')) }}</h1>
+        <p>
+            Main Campus: {{ config('school.main_address') }} |
+            {{ config('school.annex_address') }}
+        </p>
+        <p>
+            Website: {{ config('school.website') }} &nbsp;|&nbsp;
+            Hotline: {{ config('school.hotline') }} &nbsp;|&nbsp;
+            CP: {{ config('school.mobile') }}
+        </p>
+        <p style="margin-top: 8px; font-size: 11px; font-weight: bold;">
+            Certificate of Matriculation / Assessment Form
+        </p>
         <p>Assessment No: {{ $assessment->assessment_number }}</p>
     </div>
 
     <div class="section">
         <div class="section-title">Student Information</div>
         <div class="info-grid">
+            <div class="info-row">
+                <div class="info-label">Account ID:</div>
+                <div class="info-value">{{ $student->user->account->id ?? 'N/A' }}</div>
+            </div>
             <div class="info-row">
                 <div class="info-label">Student ID:</div>
                 <div class="info-value">{{ $student->student_id }}</div>
@@ -134,7 +150,7 @@
                     $charges = $transactions->where('kind', 'charge');
                     $grouped = $charges->groupBy('type');
                 @endphp
-                
+
                 @foreach($grouped as $category => $items)
                     @foreach($items as $item)
                         <tr>

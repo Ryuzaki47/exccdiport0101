@@ -5,10 +5,37 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Student;
+use App\Models\Account;
 use Illuminate\Support\Facades\Hash;
 
 class ComprehensiveUserSeeder extends Seeder
 {
+    // Instance counter for generating account numbers sequentially during seeding
+    private $accountNumberCounter = 0;
+
+    /**
+     * Generate account number sequentially by querying last used number from database
+     */
+    private function getNextAccountNumber(): string
+    {
+        $year = now()->year;
+        
+        // Query for highest number used in current year
+        if ($this->accountNumberCounter === 0) {
+            $lastAccount = \App\Models\Account::where('account_number', 'like', "ACC-{$year}-%")
+                ->orderByRaw("CAST(SUBSTRING(account_number, 10) AS UNSIGNED) DESC")
+                ->first();
+            
+            if ($lastAccount) {
+                $this->accountNumberCounter = intval(substr($lastAccount->account_number, -4));
+            }
+        }
+        
+        $this->accountNumberCounter++;
+        $number = str_pad($this->accountNumberCounter, 4, '0', STR_PAD_LEFT);
+        return "ACC-{$year}-{$number}";
+    }
+
     public function run(): void
     {
         // Clear existing student data
@@ -186,8 +213,9 @@ class ComprehensiveUserSeeder extends Seeder
                 'address' => $address,
             ]);
 
-            // Create account with balance
+            // Create account with balance and account number
             $user->account()->create([
+                'account_number' => $this->getNextAccountNumber(),
                 'balance' => -$data['balance'] // Negative means they owe
             ]);
 

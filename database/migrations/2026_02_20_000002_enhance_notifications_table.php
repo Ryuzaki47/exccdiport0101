@@ -36,11 +36,13 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('notifications', function (Blueprint $table) {
-            $table->dropForeign(['user_id']);
-            $table->dropIndex(['user_id', 'is_active']);
-            $table->dropIndex(['target_role', 'is_active']);
-            $table->dropColumn(['user_id', 'is_active', 'is_complete', 'dismissed_at']);
-        });
+        if (Schema::hasTable('notifications')) {
+            Schema::table('notifications', function (Blueprint $table) {
+                $table->dropForeign(['user_id']);
+                $table->dropIndex(['user_id', 'is_active']);
+                $table->dropIndex(['target_role', 'is_active']);
+                $table->dropColumn(['user_id', 'is_active', 'is_complete', 'dismissed_at']);
+            });
+        }
     }
 };

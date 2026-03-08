@@ -26,16 +26,18 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('notifications', function (Blueprint $table) {
-            if (Schema::hasColumn('notifications', 'term_ids')) {
-                $table->dropColumn('term_ids');
-            }
-            if (Schema::hasColumn('notifications', 'target_term_name')) {
-                $table->dropColumn('target_term_name');
-            }
-            if (Schema::hasColumn('notifications', 'trigger_days_before_due')) {
-                $table->dropColumn('trigger_days_before_due');
-            }
-        });
+        if (Schema::hasTable('notifications')) {
+            Schema::table('notifications', function (Blueprint $table) {
+                if (Schema::hasColumn('notifications', 'term_ids')) {
+                    $table->dropColumn('term_ids');
+                }
+                if (Schema::hasColumn('notifications', 'target_term_name')) {
+                    $table->dropColumn('target_term_name');
+                }
+                if (Schema::hasColumn('notifications', 'trigger_days_before_due')) {
+                    $table->dropColumn('trigger_days_before_due');
+                }
+            });
+        }
     }
 };

@@ -50,10 +50,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (Schema::hasTable('notifications')) {
-            Schema::table('notifications', function (Blueprint $table) {
-                $table->dropColumnIfExists(['type', 'data', 'read_at', 'notifiable_id', 'notifiable_type', 'uuid']);
-            });
-        }
+        Schema::dropIfExists('notifications');
     }
 };
