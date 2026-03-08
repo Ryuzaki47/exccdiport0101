@@ -82,6 +82,8 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->prefix('studen
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
     Route::get('/transactions/download', [TransactionController::class, 'download'])->name('transactions.download');
+    // Single-transaction receipt PDF — any authenticated user, but controller enforces ownership
+    Route::get('/transactions/{transaction}/receipt', [TransactionController::class, 'receipt'])->name('transactions.receipt');
     Route::post('/account/pay-now', [TransactionController::class, 'payNow'])->name('account.pay-now');
 });
 

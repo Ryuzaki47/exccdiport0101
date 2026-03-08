@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Transaction Receipt — {{ $student->account_id }}</title>
+    <title>Transaction Receipt — {{ $student->account_id ?? 'Student' }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -70,7 +70,7 @@
         table.data th,
         table.data td {
             border: 1px solid #ccc;
-            padding: 6px 8px;
+            padding: 5px 7px;
             font-size: 10px;
         }
         table.data th {
@@ -103,6 +103,13 @@
             padding-top: 6px;
             font-size: 14px;
             font-weight: bold;
+        }
+        .summary-row.credit { color: #065f46; }
+        .credit-note {
+            margin-top: 6px;
+            font-size: 9px;
+            color: #065f46;
+            font-style: italic;
         }
 
         /* ── Status badges ─────────────────────────────────── */
@@ -156,20 +163,25 @@
     <div class="section-title">Student Information</div>
     <table class="info-table">
         <tr>
-            <td class="lbl">Student ID:</td>
-            <td>{{ $student->account_id }}</td>
-            <td class="lbl">Account ID:</td>
-            <td>{{ $student->account->id ?? 'N/A' }}</td>
+            {{--
+                $student is the User model.
+                account_id on User = school-assigned student number (e.g. 2025-0001).
+                account->account_number = internal formatted account number (e.g. ACC-2025-0001).
+            --}}
+            <td class="lbl">Student No.:</td>
+            <td>{{ $student->account_id ?? '—' }}</td>
+            <td class="lbl">Account No.:</td>
+            <td>{{ $student->account->account_number ?? '—' }}</td>
         </tr>
         <tr>
             <td class="lbl">Full Name:</td>
             <td>{{ $student->name }}</td>
             <td class="lbl">Course:</td>
-            <td>{{ $student->course }}</td>
+            <td>{{ $student->course ?? '—' }}</td>
         </tr>
         <tr>
             <td class="lbl">Year Level:</td>
-            <td>{{ $student->year_level }}</td>
+            <td>{{ $student->year_level ?? '—' }}</td>
             <td class="lbl">Email:</td>
             <td>{{ $student->email }}</td>
         </tr>
@@ -187,6 +199,7 @@
         <thead>
             <tr>
                 <th>Date</th>
+                <th>Payment Date</th>
                 <th>Reference</th>
                 <th>Description</th>
                 <th>Method</th>
@@ -199,13 +212,32 @@
             @foreach($transactions as $txn)
             @php
                 $rowClass = $txn->kind === 'charge' ? 'row-charge' : 'row-payment';
-                $desc = $txn->meta['description'] ?? $txn->meta['fee_name'] ?? $txn->type ?? '—';
+
+                // Resolve a human-readable description:
+                // 1. meta.description (set by StudentPaymentService & manual entries)
+                // 2. meta.fee_name    (set by old fee assignment code)
+                // 3. type             (category string on the transaction)
+                // 4. Fallback dash
+                $desc = $txn->meta['description']
+                    ?? $txn->meta['fee_name']
+                    ?? $txn->type
+                    ?? '—';
+
+                // Payment date: use paid_at for confirmed payments, otherwise dash
+                $paymentDate = ($txn->kind === 'payment' && $txn->paid_at)
+                    ? $txn->paid_at->format('M d, Y')
+                    : '—';
             @endphp
             <tr class="{{ $rowClass }}">
                 <td>{{ $txn->created_at->format('M d, Y') }}</td>
+                <td>{{ $paymentDate }}</td>
                 <td style="font-family:monospace;">{{ $txn->reference ?? '—' }}</td>
                 <td>{{ $desc }}</td>
-                <td>{{ $txn->payment_channel ? strtoupper(str_replace('_', ' ', $txn->payment_channel)) : '—' }}</td>
+                <td>
+                    {{ $txn->payment_channel
+                        ? strtoupper(str_replace('_', ' ', $txn->payment_channel))
+                        : '—' }}
+                </td>
                 <td class="text-center">
                     <span class="badge {{ $txn->kind === 'charge' ? 'badge-charge' : 'badge-payment' }}">
                         {{ ucfirst($txn->kind) }}
@@ -235,11 +267,11 @@
 
             {{-- Subtotals --}}
             <tr class="row-total">
-                <td colspan="6" class="text-right">Total Assessed (Charges):</td>
+                <td colspan="7" class="text-right">Total Assessed (Charges):</td>
                 <td class="text-right" style="color:#991b1b;">₱{{ number_format($totalCharges, 2) }}</td>
             </tr>
             <tr class="row-total">
-                <td colspan="6" class="text-right">Total Paid (Payments):</td>
+                <td colspan="7" class="text-right">Total Paid:</td>
                 <td class="text-right" style="color:#065f46;">₱{{ number_format($totalPaid, 2) }}</td>
             </tr>
         </tbody>
@@ -259,10 +291,28 @@
             <span>Total Paid:</span>
             <span>₱{{ number_format($totalPaid, 2) }}</span>
         </div>
-        <div class="summary-row grand">
-            <span>Remaining Balance:</span>
-            <span>₱{{ number_format(max(0, $netBalance), 2) }}</span>
-        </div>
+
+        @if($netBalance < 0)
+            {{-- Student has overpaid — show credit --}}
+            <div class="summary-row grand credit">
+                <span>Credit Balance:</span>
+                <span>₱{{ number_format(abs($netBalance), 2) }}</span>
+            </div>
+            <p class="credit-note">
+                ✔ You have a credit of ₱{{ number_format(abs($netBalance), 2) }}.
+                This will be applied to your next assessment.
+            </p>
+        @elseif($netBalance == 0)
+            <div class="summary-row grand" style="color:#065f46;">
+                <span>Remaining Balance:</span>
+                <span>₱0.00 — Fully Paid</span>
+            </div>
+        @else
+            <div class="summary-row grand">
+                <span>Remaining Balance:</span>
+                <span>₱{{ number_format($netBalance, 2) }}</span>
+            </div>
+        @endif
     </div>
 </div>
 

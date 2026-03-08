@@ -10,22 +10,24 @@ use App\Services\AccountService;
 class Transaction extends Model
 {
     protected $fillable = [
-        'user_id', 'account_id', 'fee_id', 'reference', 
-        'payment_channel', 'kind', 'type', 'amount', 'status', 
-        'paid_at', 'meta', 'year', 'semester'
+        'user_id', 'account_id', 'fee_id', 'reference',
+        'payment_channel', 'kind', 'type', 'amount', 'status',
+        'paid_at', 'meta', 'year', 'semester',
     ];
 
     protected $casts = [
-        'meta' => 'array',
+        'meta'    => 'array',
         'paid_at' => 'datetime',
-        'amount' => 'decimal:2',
+        'amount'  => 'decimal:2',
     ];
+
+    // ─── Relationships ────────────────────────────────────────────────────────
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
-    
+
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
@@ -41,6 +43,12 @@ class Transaction extends Model
         return $this->morphMany(WorkflowInstance::class, 'workflowable');
     }
 
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    /**
+     * Returns the pending WorkflowInstance for this transaction, if any.
+     * Used by the approval workflow to find in-progress approvals.
+     */
     public function pendingApproval(): ?WorkflowInstance
     {
         return $this->workflowInstances()
@@ -49,22 +57,34 @@ class Transaction extends Model
             ->first();
     }
 
-    protected static function booted()
+    /**
+     * Returns a human-readable description for this transaction.
+     * Checks meta->description first, then meta->fee_name, then type, then kind.
+     */
+    public function getDescriptionAttribute(): string
     {
-        static::saved(function ($transaction) {
-            AccountService::recalculate($transaction->user);
-        });
+        return $this->meta['description']
+            ?? $this->meta['fee_name']
+            ?? $this->type
+            ?? ucfirst($this->kind ?? 'transaction');
     }
 
-    public function download()
+    /**
+     * Returns the term label for this transaction.
+     * Format: "2026 1st Sem" or empty string if not set.
+     */
+    public function getTermLabelAttribute(): string
     {
-        $transactions = auth()->user()->transactions()->with('fee')->get();
+        $parts = array_filter([$this->year, $this->semester]);
+        return implode(' ', $parts);
+    }
 
-        // Use a PDF generator like DomPDF
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.transactions', [
-            'transactions' => $transactions
-        ]);
+    // ─── Model Events ─────────────────────────────────────────────────────────
 
-        return $pdf->download('transactions.pdf');
+    protected static function booted(): void
+    {
+        static::saved(function (Transaction $transaction) {
+            AccountService::recalculate($transaction->user);
+        });
     }
 }

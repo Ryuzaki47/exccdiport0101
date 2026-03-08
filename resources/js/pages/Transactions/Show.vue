@@ -11,8 +11,8 @@ interface Props {
         status: string;
         type: string;
         kind?: 'charge' | 'payment';
-        year?: string;
-        semester?: string;
+        year?: string | null;
+        semester?: string | null;
         created_at: string;
         paid_at?: string;
         payment_channel?: string;
@@ -47,9 +47,25 @@ const accountBalance = parseFloat(String(props.account?.balance ?? 0));
 const hasCredit      = accountBalance < 0;
 const displayBalance = Math.abs(accountBalance);
 
+/**
+ * Build the term key for the receipt download.
+ * Guards against null year/semester which would produce "null null" in the URL.
+ *
+ * Falls back to the current term derived client-side when the transaction
+ * has no year/semester (e.g. old manual-entry records).
+ */
+const buildCurrentTermFallback = (): string => {
+    const now    = new Date();
+    const month  = now.getMonth() + 1; // 1-based
+    const year   = now.getFullYear();
+    const sem    = month >= 6 && month <= 10 ? '1st Sem' : '2nd Sem';
+    return `${year} ${sem}`;
+};
+
 const downloadReceipt = () => {
-    const termKey = [props.transaction.year, props.transaction.semester].filter(Boolean).join(' ');
-    const url = route('transactions.download') + (termKey ? '?term=' + encodeURIComponent(termKey) : '');
+    const parts   = [props.transaction.year, props.transaction.semester].filter(Boolean);
+    const termKey = parts.length === 2 ? parts.join(' ') : buildCurrentTermFallback();
+    const url     = route('transactions.download') + '?term=' + encodeURIComponent(termKey);
     window.open(url, '_blank');
 };
 </script>
@@ -109,7 +125,9 @@ const downloadReceipt = () => {
                 <!-- Academic Term -->
                 <div v-if="transaction.year || transaction.semester" class="border-t pt-4">
                     <p class="mb-1 text-xs font-medium text-gray-500 uppercase">Academic Term</p>
-                    <p class="text-lg font-semibold">{{ transaction.year }} {{ transaction.semester }}</p>
+                    <p class="text-lg font-semibold">
+                        {{ [transaction.year, transaction.semester].filter(Boolean).join(' ') }}
+                    </p>
                 </div>
 
                 <!-- Payment Info -->
@@ -119,7 +137,7 @@ const downloadReceipt = () => {
                         <div>
                             <p class="text-xs font-medium text-gray-500 uppercase">Method</p>
                             <p class="mt-1 font-medium capitalize">
-                                {{ transaction.payment_channel?.replace('_', ' ') || 'N/A' }}
+                                {{ transaction.payment_channel?.replace(/_/g, ' ') || 'N/A' }}
                             </p>
                         </div>
                         <div>
@@ -146,7 +164,7 @@ const downloadReceipt = () => {
                             <p class="mt-1 font-medium">{{ transaction.user.name }}</p>
                         </div>
                         <div v-if="transaction.user.account_id">
-                            <p class="text-xs font-medium text-gray-500 uppercase">Account ID</p>
+                            <p class="text-xs font-medium text-gray-500 uppercase">Student No.</p>
                             <p class="mt-1 font-medium">{{ transaction.user.account_id }}</p>
                         </div>
                         <div>

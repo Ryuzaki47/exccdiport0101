@@ -18,8 +18,8 @@ interface Transaction {
     };
     kind: 'charge' | 'payment';
     type: string;
-    year: string;
-    semester: string;
+    year: string | null;
+    semester: string | null;
     amount: number;
     status: string;
     payment_channel?: string;
@@ -55,11 +55,11 @@ const props = defineProps<Props>();
 // ─── State ────────────────────────────────────────────────────────────────────
 const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 'Transaction History' }];
 
-const search                = ref('');
-const expanded              = ref<Record<string, boolean>>({});
-const showPastSemesters     = ref(false);
-const selectedTransaction   = ref<Transaction | null>(null);
-const showDetailsDialog     = ref(false);
+const search              = ref('');
+const expanded            = ref<Record<string, boolean>>({});
+const showPastSemesters   = ref(false);
+const selectedTransaction = ref<Transaction | null>(null);
+const showDetailsDialog   = ref(false);
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const isStaff = computed(() => ['admin', 'accounting', 'super_admin'].includes(props.auth.user.role));
@@ -87,19 +87,11 @@ const calculateTermSummary = (transactions: Transaction[]): TermSummary => {
 };
 
 // ─── Filtering ────────────────────────────────────────────────────────────────
-
-/**
- * For the Transaction History page we show ALL transaction kinds — charges AND
- * payments. The old code excluded laboratory/miscellaneous charges which caused
- * the balance calculation to appear wrong (charges were hidden but still counted
- * in the account balance).
- */
 const filteredTransactionsByTerm = computed(() => {
     if (!props.transactionsByTerm) return {};
 
     let terms = props.transactionsByTerm;
 
-    // Limit to current term unless "show past semesters" is toggled
     if (!showPastSemesters.value && props.currentTerm && terms[props.currentTerm]) {
         terms = { [props.currentTerm]: terms[props.currentTerm] };
     }
@@ -124,16 +116,10 @@ const filteredTransactionsByTerm = computed(() => {
 });
 
 // ─── Balance ──────────────────────────────────────────────────────────────────
-
-/**
- * Account balance is stored as (charges - payments), so a positive value = student owes money.
- * We display it as-is (positive = debt, no Math.abs needed).
- * If the balance is negative, it means the student has a credit — show as credit.
- */
-const accountBalance    = computed(() => parseFloat(String(props.account?.balance ?? 0)));
-const hasCredit         = computed(() => accountBalance.value < 0);
-const displayBalance    = computed(() => Math.abs(accountBalance.value));
-const canMakePayment    = computed(() => accountBalance.value > 0);
+const accountBalance = computed(() => parseFloat(String(props.account?.balance ?? 0)));
+const hasCredit      = computed(() => accountBalance.value < 0);
+const displayBalance = computed(() => Math.abs(accountBalance.value));
+const canMakePayment = computed(() => accountBalance.value > 0);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatCurrency = (amount: number) =>
@@ -142,14 +128,30 @@ const formatCurrency = (amount: number) =>
 const formatDate = (date: string) =>
     new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
-// ─── Actions ──────────────────────────────────────────────────────────────────
+// ─── Receipt helpers ──────────────────────────────────────────────────────────
 
 /**
- * Download the transaction receipt PDF for a specific term.
- * Passes the term key as a query param so the controller can filter correctly.
- * Uses window.open so the PDF downloads without navigating away from the page.
+ * Download a SINGLE-PAYMENT receipt PDF for one specific transaction.
+ *
+ * Calls GET /transactions/{id}/receipt — the PDF shows only that payment:
+ * what it was for (term name), amount, method, date, and remaining balance.
+ *
+ * Used by the 📄 Receipt button on each individual payment row.
  */
-const downloadPDF = (termKey: string) => {
+const downloadReceipt = (transactionId: number) => {
+    const url = route('transactions.receipt', { transaction: transactionId });
+    window.open(url, '_blank');
+};
+
+/**
+ * Download a FULL-TERM summary PDF for all transactions in a given term.
+ *
+ * Calls GET /transactions/download?term=2026+1st+Sem — the PDF shows all
+ * charges and payments for the term with balance totals.
+ *
+ * Used by the 📄 Receipt button on the term-group header.
+ */
+const downloadTermSummary = (termKey: string) => {
     const url = route('transactions.download') + '?term=' + encodeURIComponent(termKey);
     window.open(url, '_blank');
 };
@@ -160,7 +162,7 @@ const viewTransaction = (transaction: Transaction) => {
 };
 
 const closeDetailsDialog = () => {
-    showDetailsDialog.value  = false;
+    showDetailsDialog.value   = false;
     selectedTransaction.value = null;
 };
 
@@ -254,13 +256,16 @@ const payNow = () => {
                             </p>
                         </div>
 
-                        <!-- Receipt button — opens PDF in new tab, scoped to this term -->
+                        <!--
+                            Term-level Receipt button: downloads the FULL TERM SUMMARY PDF.
+                            Shows all charges and payments for this academic term.
+                        -->
                         <button
                             class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                            @click.stop="downloadPDF(termKey)"
-                            title="Download receipt for this term"
+                            @click.stop="downloadTermSummary(termKey)"
+                            title="Download full term summary"
                         >
-                            📄 Receipt
+                            📄 Term Summary
                         </button>
 
                         <!-- Chevron -->
@@ -311,7 +316,10 @@ const payNow = () => {
                                             {{ t.kind }}
                                         </span>
                                     </td>
-                                    <td class="p-3 text-sm">{{ t.type }}</td>
+                                    <td class="p-3 text-sm">
+                                        <!-- Show term_name from meta if available (e.g. "Prelim"), otherwise type -->
+                                        {{ t.meta?.term_name ?? t.type }}
+                                    </td>
                                     <td class="p-3 text-sm">
                                         <div v-if="t.year || t.semester" class="space-y-0.5">
                                             <p v-if="t.year" class="font-medium">{{ t.year }}</p>
@@ -345,11 +353,16 @@ const payNow = () => {
                                             >
                                                 View
                                             </button>
+                                            <!--
+                                                Row-level Receipt: downloads a SINGLE-PAYMENT receipt PDF
+                                                for this specific payment transaction only.
+                                                Available for paid and awaiting_approval payments.
+                                            -->
                                             <button
-                                                v-if="t.kind === 'payment' && t.status === 'paid'"
-                                                @click="downloadPDF(termKey)"
+                                                v-if="t.kind === 'payment' && (t.status === 'paid' || t.status === 'awaiting_approval')"
+                                                @click="downloadReceipt(t.id)"
                                                 class="rounded-lg bg-green-600 px-3 py-1 text-xs text-white transition-colors hover:bg-green-700"
-                                                title="Download receipt for this term"
+                                                :title="t.status === 'paid' ? 'Download payment receipt' : 'Download provisional receipt (awaiting approval)'"
                                             >
                                                 📄 Receipt
                                             </button>
@@ -394,7 +407,9 @@ const payNow = () => {
                                 </div>
                                 <div>
                                     <p class="text-xs text-gray-500">Term</p>
-                                    <p class="text-sm font-medium">{{ selectedTransaction.year }} {{ selectedTransaction.semester }}</p>
+                                    <p class="text-sm font-medium">
+                                        {{ [selectedTransaction.year, selectedTransaction.semester].filter(Boolean).join(' ') || '—' }}
+                                    </p>
                                 </div>
                                 <div>
                                     <p class="text-xs text-gray-500">Kind</p>
@@ -422,7 +437,9 @@ const payNow = () => {
                                 </div>
                                 <div>
                                     <p class="text-xs text-gray-500">Category</p>
-                                    <p class="text-sm font-medium">{{ selectedTransaction.type }}</p>
+                                    <p class="text-sm font-medium">
+                                        {{ selectedTransaction.meta?.term_name ?? selectedTransaction.type }}
+                                    </p>
                                 </div>
                                 <div class="col-span-2">
                                     <p class="text-xs text-gray-500">Amount</p>
@@ -449,7 +466,7 @@ const payNow = () => {
                                     <p class="text-sm font-medium">{{ selectedTransaction.user.name }}</p>
                                 </div>
                                 <div>
-                                    <p class="text-xs text-gray-500">Account ID</p>
+                                    <p class="text-xs text-gray-500">Student No.</p>
                                     <p class="text-sm font-medium">{{ selectedTransaction.user.account_id }}</p>
                                 </div>
                                 <div>
@@ -466,7 +483,7 @@ const payNow = () => {
                                 <div>
                                     <p class="text-xs text-gray-500">Payment Method</p>
                                     <p class="text-sm font-medium capitalize">
-                                        {{ selectedTransaction.payment_channel?.replace('_', ' ') || 'N/A' }}
+                                        {{ selectedTransaction.payment_channel?.replace(/_/g, ' ') || 'N/A' }}
                                     </p>
                                 </div>
                                 <div>
@@ -476,8 +493,12 @@ const payNow = () => {
                                     </p>
                                 </div>
                                 <div v-if="selectedTransaction.meta?.term_name" class="col-span-2">
-                                    <p class="text-xs text-gray-500">Applied to Term</p>
-                                    <p class="text-sm font-medium">{{ selectedTransaction.meta.term_name }}</p>
+                                    <p class="text-xs text-gray-500">Payment For</p>
+                                    <p class="text-sm font-semibold text-green-700">{{ selectedTransaction.meta.term_name }}</p>
+                                </div>
+                                <div v-if="selectedTransaction.meta?.description" class="col-span-2">
+                                    <p class="text-xs text-gray-500">Description</p>
+                                    <p class="text-sm font-medium">{{ selectedTransaction.meta.description }}</p>
                                 </div>
                             </div>
                         </div>
@@ -485,8 +506,15 @@ const payNow = () => {
                         <!-- Actions -->
                         <div class="flex justify-end gap-3 border-t pt-4">
                             <Button variant="outline" @click="closeDetailsDialog">Close</Button>
-                            <Button @click="downloadPDF(`${selectedTransaction.year} ${selectedTransaction.semester}`)">
-                                📄 {{ selectedTransaction.kind === 'payment' ? 'Payment Receipt' : 'Invoice' }}
+                            <!--
+                                Dialog receipt button: downloads the SINGLE-PAYMENT receipt for this
+                                specific transaction. Only shown for payment transactions.
+                            -->
+                            <Button
+                                v-if="selectedTransaction.kind === 'payment' && (selectedTransaction.status === 'paid' || selectedTransaction.status === 'awaiting_approval')"
+                                @click="downloadReceipt(selectedTransaction.id)"
+                            >
+                                📄 Payment Receipt
                             </Button>
                             <Button
                                 v-if="selectedTransaction.status === 'pending' && selectedTransaction.kind === 'charge' && !isStaff"
