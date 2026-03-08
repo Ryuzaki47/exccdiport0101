@@ -67,7 +67,7 @@ class AccountingDashboardController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'student_id' => $user->student_id,
+                    'account_id' => $user->account_id,
                     'course' => $user->course,
                     'year_level' => $user->year_level,
                     'balance' => abs($user->account->balance ?? 0),

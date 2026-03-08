@@ -13,7 +13,7 @@ interface Transaction {
     user?: {
         id: number;
         name: string;
-        student_id: string;
+        account_id: string;
         email: string;
     };
     kind: 'charge' | 'payment';
@@ -115,7 +115,7 @@ const filteredTransactionsByTerm = computed(() => {
                 t.reference?.toLowerCase().includes(q) ||
                 t.type?.toLowerCase().includes(q) ||
                 t.user?.name?.toLowerCase().includes(q) ||
-                t.user?.student_id?.toLowerCase().includes(q),
+                t.user?.account_id?.toLowerCase().includes(q),
         );
         if (matched.length) result[term] = matched;
     });
@@ -300,7 +300,7 @@ const payNow = () => {
                                     <td v-if="isStaff" class="p-3 text-sm">
                                         <div>
                                             <p class="font-medium">{{ t.user?.name }}</p>
-                                            <p class="text-xs text-gray-500">{{ t.user?.student_id }}</p>
+                                            <p class="text-xs text-gray-500">{{ t.user?.account_id }}</p>
                                         </div>
                                     </td>
                                     <td class="p-3">
@@ -449,8 +449,8 @@ const payNow = () => {
                                     <p class="text-sm font-medium">{{ selectedTransaction.user.name }}</p>
                                 </div>
                                 <div>
-                                    <p class="text-xs text-gray-500">Student ID</p>
-                                    <p class="text-sm font-medium">{{ selectedTransaction.user.student_id }}</p>
+                                    <p class="text-xs text-gray-500">Account ID</p>
+                                    <p class="text-sm font-medium">{{ selectedTransaction.user.account_id }}</p>
                                 </div>
                                 <div>
                                     <p class="text-xs text-gray-500">Email</p>

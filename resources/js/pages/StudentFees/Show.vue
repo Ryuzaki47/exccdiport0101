@@ -329,7 +329,7 @@ const getStudentStatusColor = (status: string) => {
                     </Link>
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">{{ student.name }}</h1>
-                        <p class="mt-0.5 text-sm text-gray-500">{{ student.student_id }} · {{ student.course }} · {{ student.year_level }}</p>
+                        <p class="mt-0.5 text-sm text-gray-500">{{ student.account_id }} · {{ student.course }} · {{ student.year_level }}</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -525,7 +525,7 @@ const getStudentStatusColor = (status: string) => {
                         </div>
                         <div>
                             <Label class="text-xs text-gray-500">Account ID</Label>
-                            <p class="mt-0.5 font-medium">{{ student.student_id }}</p>
+                            <p class="mt-0.5 font-medium">{{ student.account_id }}</p>
                         </div>
                         <div>
                             <Label class="text-xs text-gray-500">Course</Label>

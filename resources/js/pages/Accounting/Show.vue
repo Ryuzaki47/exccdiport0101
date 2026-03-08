@@ -39,7 +39,7 @@
                 <div class="rounded-xl border bg-white p-6 shadow-sm">
                     <p class="text-sm text-gray-600">Student</p>
                     <p class="mt-2 text-lg font-bold">{{ workflow.student_name }}</p>
-                    <p class="mt-1 text-sm text-gray-600">ID: {{ workflow.student_id }}</p>
+                    <p class="mt-1 text-sm text-gray-600">ID: {{ workflow.account_id }}</p>
                     <div class="mt-4 border-t pt-4">
                         <p class="text-sm text-gray-600">Year Level</p>
                         <p class="font-semibold">{{ workflow.student_year_level }}</p>
@@ -113,7 +113,7 @@ interface Workflow {
     type: string;
     status: string;
     student_name: string;
-    student_id: string;
+    account_id: string;
     student_year_level: string;
     amount: number;
     payment_method: string;

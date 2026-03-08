@@ -204,7 +204,7 @@ class ComprehensiveUserSeeder extends Seeder
                 'email' => $email,
                 'password' => Hash::make('password'), // All students use 'password'
                 'role' => 'student',
-                'student_id' => $studentId,
+                'account_id' => $studentId,
                 'status' => $statusMap[$data['status']],
                 'course' => $course,
                 'year_level' => $data['year_level'],

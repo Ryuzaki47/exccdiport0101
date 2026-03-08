@@ -34,7 +34,7 @@ class User extends Authenticatable
         'birthday',
         'address',
         'phone',
-        'student_id',
+        'account_id',
         'profile_picture',
         'course',
         'year_level',
@@ -279,7 +279,7 @@ class User extends Authenticatable
     public static function getValidationRules($userId = null): array
     {
         return [
-            'student_id' => 'nullable|string|unique:users,student_id,' . $userId,
+            'account_id' => 'nullable|string|unique:users,account_id,' . $userId,
             'address' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:20',
             'course' => 'nullable|string|max:100',

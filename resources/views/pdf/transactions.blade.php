@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Transaction Receipt — {{ $student->student_id }}</title>
+    <title>Transaction Receipt — {{ $student->account_id }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -157,7 +157,7 @@
     <table class="info-table">
         <tr>
             <td class="lbl">Student ID:</td>
-            <td>{{ $student->student_id }}</td>
+            <td>{{ $student->account_id }}</td>
             <td class="lbl">Account ID:</td>
             <td>{{ $student->account->id ?? 'N/A' }}</td>
         </tr>

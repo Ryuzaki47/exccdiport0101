@@ -33,7 +33,7 @@ type Student = {
     id: number;
     name: string;
     email: string;
-    student_id: string;
+    account_id: string;
     course: string;
     year_level: string;
     balance: number;
@@ -528,7 +528,7 @@ const viewStudent = (studentId: number) => {
                                 <div class="flex items-start justify-between">
                                     <div class="flex-1">
                                         <p class="font-medium text-gray-900">{{ student.name }}</p>
-                                        <p class="text-sm text-gray-600">{{ student.student_id }} • {{ student.email }}</p>
+                                        <p class="text-sm text-gray-600">{{ student.account_id }} • {{ student.email }}</p>
                                         <p class="mt-1 text-xs text-gray-500">{{ student.course }} - {{ student.year_level }}</p>
                                     </div>
                                     <div class="text-right">

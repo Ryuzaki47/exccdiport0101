@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Assessment Receipt — {{ $student->student_id }}</title>
+    <title>Assessment Receipt — {{ $student->account_id }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -195,7 +195,7 @@
             <td class="lbl">Account ID:</td>
             <td class="val">{{ $student->account->id ?? 'N/A' }}</td>
             <td class="lbl">Student ID:</td>
-            <td class="val">{{ $student->student_id }}</td>
+            <td class="val">{{ $student->account_id }}</td>
         </tr>
         <tr>
             <td class="lbl">Full Name:</td>

@@ -49,7 +49,7 @@ class RegisteredUserController extends Controller
         DB::beginTransaction();
         try {
             // Auto-generate Account ID
-            $studentId = $this->generateUniqueStudentId();
+            $accountId = $this->generateUniqueAccountId();
 
             // Create user record
             $user = User::create([
@@ -63,7 +63,7 @@ class RegisteredUserController extends Controller
                 'course' => $request->course,
                 'address' => $request->address,
                 'phone' => $request->phone,
-                'student_id' => $studentId,
+                'account_id' => $accountId,
                 'status' => User::STATUS_ACTIVE,
                 'role' => 'student', // default new users to student role
             ]);
@@ -71,7 +71,7 @@ class RegisteredUserController extends Controller
             // Create Student record with all required fields
             Student::create([
                 'user_id' => $user->id,
-                'student_id' => $studentId,
+                'student_id' => $accountId,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
                 'middle_initial' => $user->middle_initial,
@@ -110,39 +110,39 @@ class RegisteredUserController extends Controller
      * Note: This method is called BEFORE the main transaction, so it doesn't
      * create nested transactions which can cause issues in tests.
      */
-    private function generateUniqueStudentId(): string
+    private function generateUniqueAccountId(): string
     {
         $year = now()->year;
         
         // Lock the table to prevent concurrent ID generation
-        $lastStudent = User::where('student_id', 'like', "{$year}-%")
+        $lastStudent = User::where('account_id', 'like', "{$year}-%")
             ->lockForUpdate()
-            ->orderByRaw('CAST(SUBSTRING(student_id, 6) AS UNSIGNED) DESC')
+            ->orderByRaw('CAST(SUBSTRING(account_id, 6) AS UNSIGNED) DESC')
             ->first();
 
         if ($lastStudent) {
             // Extract the number part and increment
-            $lastNumber = intval(substr($lastStudent->student_id, -4));
+            $lastNumber = intval(substr($lastStudent->account_id, -4));
             $newNumber = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
         } else {
             $newNumber = '0001';
         }
 
-        $newStudentId = "{$year}-{$newNumber}";
+        $newAccountId = "{$year}-{$newNumber}";
         
         // Double-check uniqueness
         $attempts = 0;
-        while (User::where('student_id', $newStudentId)->exists() && $attempts < 10) {
+        while (User::where('account_id', $newAccountId)->exists() && $attempts < 10) {
             $lastNumber = intval($newNumber);
             $newNumber = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
-            $newStudentId = "{$year}-{$newNumber}";
+            $newAccountId = "{$year}-{$newNumber}";
             $attempts++;
         }
         
         if ($attempts >= 10) {
-            throw new \Exception('Unable to generate unique student ID after multiple attempts.');
+            throw new \Exception('Unable to generate unique account ID after multiple attempts.');
         }
         
-        return $newStudentId;
+        return $newAccountId;
     }
 }

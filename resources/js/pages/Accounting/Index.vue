@@ -57,7 +57,7 @@
                             <td class="p-4">
                                 <div>
                                     <p class="font-medium">{{ workflow.student_name }}</p>
-                                    <p class="text-xs text-gray-500">{{ workflow.student_id }}</p>
+                                    <p class="text-xs text-gray-500">{{ workflow.account_id }}</p>
                                 </div>
                             </td>
                             <td class="p-4 font-semibold">₱{{ formatCurrency(workflow.amount) }}</td>
@@ -108,7 +108,7 @@ interface Workflow {
     reference: string;
     type: string;
     student_name: string;
-    student_id: string;
+    account_id: string;
     amount: number;
     status: string;
     created_at: string;
@@ -134,7 +134,7 @@ const filteredWorkflows = computed(() => {
             (w) =>
                 w.reference.toLowerCase().includes(query) ||
                 w.student_name.toLowerCase().includes(query) ||
-                w.student_id.toLowerCase().includes(query) ||
+                w.account_id.toLowerCase().includes(query) ||
                 w.type.toLowerCase().includes(query),
         );
     }

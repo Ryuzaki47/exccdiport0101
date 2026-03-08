@@ -11,7 +11,7 @@ import { computed, ref, watch } from 'vue';
 
 interface Student {
     id: number;
-    student_id: string;
+    account_id: string;
     name: string;
     email: string;
     course: string;
@@ -84,7 +84,7 @@ const filteredStudents = computed(() => {
     const search = studentSearch.value.toLowerCase();
     return props.students.filter(
         (student) =>
-            student.student_id.toLowerCase().includes(search) ||
+            student.account_id.toLowerCase().includes(search) ||
             student.name.toLowerCase().includes(search) ||
             student.email.toLowerCase().includes(search) ||
             student.course.toLowerCase().includes(search),
@@ -343,7 +343,7 @@ const getStatusColor = (status: string) => {
                                     @click="selectStudent(student)"
                                 >
                                     <td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
-                                        {{ student.student_id }}
+                                        {{ student.account_id }}
                                     </td>
                                     <td class="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
                                         <div>
@@ -382,7 +382,7 @@ const getStatusColor = (status: string) => {
                             <div class="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
                                 <div>
                                     <span class="text-gray-600">Account ID:</span>
-                                    <p class="font-medium">{{ selectedStudent?.student_id }}</p>
+                                    <p class="font-medium">{{ selectedStudent?.account_id }}</p>
                                 </div>
                                 <div>
                                     <span class="text-gray-600">Name:</span>

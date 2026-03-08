@@ -315,9 +315,9 @@ class TransactionController extends Controller
         $pdf->setPaper('A4', 'portrait');
 
         // Build a descriptive filename
-        $studentId = $targetUser->student_id ?? 'unknown';
+        $accountId = $targetUser->account_id ?? 'unknown';
         $termSlug  = $termKey ? str_replace([' ', '/'], '-', $termKey) : 'all-terms';
-        $filename  = "transactions-{$studentId}-{$termSlug}.pdf";
+        $filename  = "transactions-{$accountId}-{$termSlug}.pdf";
 
         return $pdf->download($filename);
     }

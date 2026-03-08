@@ -107,7 +107,7 @@ interface Workflow {
 }
 
 interface Props {
-    student_id: string;
+    account_id: string;
     workflows: Workflow[];
 }
 
@@ -116,7 +116,7 @@ const props = defineProps<Props>();
 const breadcrumbs = [
     { title: 'Dashboard', href: route('admin.dashboard') },
     { title: 'Students', href: route('students.index') },
-    { title: `${props.student_id} - Workflow History` },
+    { title: `${props.account_id} - Workflow History` },
 ];
 
 const formatDate = (date: string) => {

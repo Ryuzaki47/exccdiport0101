@@ -82,7 +82,7 @@ const form = useForm({
     address: (user as any).address ?? '',
     phone: (user as any).phone ?? '',
     // Student-specific fields
-    student_id: (user as any).student_id ?? '',
+    account_id: (user as any).account_id ?? '',
     course: (user as any).course ?? '',
     year_level: (user as any).year_level ?? '',
     // Staff-specific fields
@@ -249,9 +249,9 @@ const yearLevelOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
                     <!-- Account ID (Students Only) - Read Only -->
                     <div v-if="isStudent" class="grid gap-2">
-                        <Label for="student_id">Account ID</Label>
+                        <Label for="account_id">Account ID</Label>
                         <div class="flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-600">
-                            <span class="font-medium">{{ form.student_id }}</span>
+                            <span class="font-medium">{{ form.account_id }}</span>
                         </div>
                     </div>
 

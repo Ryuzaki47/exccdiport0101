@@ -32,7 +32,7 @@ class StudentFeeController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('student_id', 'like', "%{$search}%")
+                $q->where('account_id', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('first_name', 'like', "%{$search}%")
                     ->orWhereRaw("CONCAT(last_name, ', ', first_name, ' ', COALESCE(middle_initial, '')) like ?", ["%{$search}%"]);
@@ -120,7 +120,7 @@ class StudentFeeController extends Controller
             ->get()
             ->map(fn($user) => [
                 'id'         => $user->id,
-                'student_id' => $user->student_id,
+                'account_id' => $user->account_id,
                 'name'       => $user->name,
                 'email'      => $user->email,
                 'course'     => $user->course,
@@ -563,7 +563,7 @@ class StudentFeeController extends Controller
         $paymentTerms = $assessment->paymentTerms()->orderBy('term_order')->get();
 
         $pdf = Pdf::loadView('pdf.student-assessment', [
-            'student'      => $student,       // ← User model (has ->account, ->student_id, etc.)
+            'student'      => $student,       // ← User model (has ->account, ->account_id, etc.)
             'assessment'   => $assessment,
             'transactions' => $transactions,
             'payments'     => $payments,
@@ -572,7 +572,7 @@ class StudentFeeController extends Controller
 
         $pdf->setPaper('A4', 'portrait');
 
-        $filename = 'receipt-' . $student->student_id . '-' . $assessment->semester . '-' . $assessment->school_year . '.pdf';
+        $filename = 'receipt-' . $student->account_id . '-' . $assessment->semester . '-' . $assessment->school_year . '.pdf';
         $filename = str_replace([' ', '/'], '-', $filename);
 
         return $pdf->download($filename);
@@ -622,7 +622,7 @@ class StudentFeeController extends Controller
             'address'        => 'required|string|max:255',
             'year_level'     => 'required|string',
             'course'         => 'required|string',
-            'student_id'     => 'nullable|string|unique:users,student_id',
+            'account_id'     => 'nullable|string|unique:users,account_id',
         ]);
 
         DB::beginTransaction();
@@ -661,38 +661,38 @@ class StudentFeeController extends Controller
         }
     }
 
-    private function generateUniqueStudentId(): string
+    private function generateUniqueAccountId(): string
     {
         $year = now()->year;
 
         return DB::transaction(function () use ($year) {
-            $lastStudent = User::where('student_id', 'like', "{$year}-%")
+            $lastStudent = User::where('account_id', 'like', "{$year}-%")
                 ->lockForUpdate()
-                ->orderByRaw('CAST(SUBSTRING(student_id, 6) AS UNSIGNED) DESC')
+                ->orderByRaw('CAST(SUBSTRING(account_id, 6) AS UNSIGNED) DESC')
                 ->first();
 
             if ($lastStudent) {
-                $lastNumber = intval(substr($lastStudent->student_id, -4));
+                $lastNumber = intval(substr($lastStudent->account_id, -4));
                 $newNumber  = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
             } else {
                 $newNumber = '0001';
             }
 
-            $newStudentId = "{$year}-{$newNumber}";
+            $newAccountId = "{$year}-{$newNumber}";
 
             $attempts = 0;
-            while (User::where('student_id', $newStudentId)->exists() && $attempts < 10) {
+            while (User::where('account_id', $newAccountId)->exists() && $attempts < 10) {
                 $lastNumber   = intval($newNumber);
                 $newNumber    = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
-                $newStudentId = "{$year}-{$newNumber}";
+                $newAccountId = "{$year}-{$newNumber}";
                 $attempts++;
             }
 
             if ($attempts >= 10) {
-                throw new \Exception('Unable to generate unique student ID after multiple attempts.');
+                throw new \Exception('Unable to generate unique account ID after multiple attempts.');
             }
 
-            return $newStudentId;
+            return $newAccountId;
         });
     }
 }

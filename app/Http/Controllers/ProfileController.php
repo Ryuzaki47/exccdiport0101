@@ -49,11 +49,11 @@ class ProfileController extends Controller
 
         // Add student-specific validation rules
         if ($user->role === 'student') {
-            $rules['student_id'] = [
+            $rules['account_id'] = [
                 'nullable',
                 'string',
                 'max:50',
-                Rule::unique('students', 'student_id')->ignore(optional($user->student)->id),
+                Rule::unique('users', 'account_id')->ignore($user->id),
             ];
             $rules['course'] = ['required', 'string', 'max:255'];
             $rules['year_level'] = ['required', 'string', 'max:50', 'in:1st Year,2nd Year,3rd Year,4th Year'];
@@ -89,7 +89,7 @@ class ProfileController extends Controller
 
         // Add role-specific fields to users table
         if ($user->role === 'student') {
-            $userUpdateData['student_id'] = $data['student_id'] ?? $user->student_id;
+            $userUpdateData['account_id'] = $data['account_id'] ?? $user->account_id;
             $userUpdateData['course'] = $data['course'];
             $userUpdateData['year_level'] = $data['year_level'];
             

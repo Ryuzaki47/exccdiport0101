@@ -10,7 +10,7 @@ import { computed, ref, watch } from 'vue';
 
 interface Student {
     id: number;
-    student_id: string;
+    account_id: string;
     name: string;
     email: string;
     course: string;
@@ -224,7 +224,7 @@ const getStatusColor = (status: string) => {
                             <div class="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
                                 <div>
                                     <span class="text-gray-600">Account ID:</span>
-                                    <p class="font-medium">{{ student.student_id }}</p>
+                                    <p class="font-medium">{{ student.account_id }}</p>
                                 </div>
                                 <div>
                                     <span class="text-gray-600">Name:</span>

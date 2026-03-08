@@ -30,7 +30,7 @@ interface Approval {
         workflowable: {
             reference: string;
             amount: number;
-            user?: { first_name: string; last_name: string; student_id: string };
+            user?: { first_name: string; last_name: string; account_id: string };
         };
     };
 }
@@ -111,8 +111,8 @@ const filteredApprovals = computed(() => {
         result = result.filter((approval) => {
             const studentName = getStudentName(approval).toLowerCase();
             const ref = approval.workflow_instance.workflowable.reference.toLowerCase();
-            const studentId = approval.workflow_instance.workflowable.user?.student_id?.toLowerCase() ?? '';
-            return studentName.includes(query) || ref.includes(query) || studentId.includes(query);
+            const accountId = approval.workflow_instance.workflowable.user?.account_id?.toLowerCase() ?? '';
+            return studentName.includes(query) || ref.includes(query) || accountId.includes(query);
         });
     }
 
@@ -267,7 +267,7 @@ const refreshApprovals = () => {
                         </div>
                         <div>
                             <p class="text-xs tracking-wide text-gray-400 uppercase">Account ID</p>
-                            <p>{{ approval.workflow_instance.workflowable.user?.student_id ?? '—' }}</p>
+                            <p>{{ approval.workflow_instance.workflowable.user?.account_id ?? '—' }}</p>
                         </div>
                         <div>
                             <p class="text-xs tracking-wide text-gray-400 uppercase">Submitted</p>

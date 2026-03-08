@@ -136,7 +136,7 @@ class ResetDemoUsers extends Command
                     'middle_initial' => $s['middle_initial'],
                     'password' => Hash::make('password'),
                     'role' => 'student',
-                    'student_id' => $s['student_id'],
+                    'account_id' => $s['student_id'],
                     'status' => $statusMap[$s['status']] ?? User::STATUS_ACTIVE,
                     'course' => $s['course'],
                     'year_level' => $s['year_level'],

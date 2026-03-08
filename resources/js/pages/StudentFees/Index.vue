@@ -25,7 +25,7 @@ interface Assessment {
 
 interface Student {
     id: number;
-    student_id: string;
+    account_id: string;
     name: string;
     course: string;
     year_level: string;
@@ -297,7 +297,7 @@ const behindCount = computed(() => props.students.data.filter((s) => getBalanceT
                             </tr>
                             <tr v-for="student in students.data" :key="student.id" class="transition-colors hover:bg-gray-50">
                                 <td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
-                                    {{ student.student_id }}
+                                    {{ student.account_id }}
                                 </td>
                                 <td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
                                     {{ student.name }}

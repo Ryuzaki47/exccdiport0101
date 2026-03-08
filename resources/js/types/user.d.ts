@@ -15,7 +15,7 @@ export interface User {
 
 // StudentUser extends User
 export interface StudentUser extends User {
-    student_id: string;
+    account_id: string;
     course: string;
     year_level: string;
 

@@ -38,11 +38,11 @@ class ProfileUpdateRequest extends FormRequest
 
         // Add student-specific fields
         if ($user->role === 'student' || $this->input('role') === 'student') {
-            $rules['student_id'] = [
+            $rules['account_id'] = [
                 'nullable',
                 'string',
                 'max:50',
-                Rule::unique('users', 'student_id')->ignore($user->id),
+                Rule::unique('users', 'account_id')->ignore($user->id),
             ];
             $rules['course']     = ['required', 'string', 'max:255'];
             $rules['year_level'] = ['required', 'string', 'max:50', 'in:1st Year,2nd Year,3rd Year,4th Year'];
@@ -88,7 +88,7 @@ class ProfileUpdateRequest extends FormRequest
             'last_name'      => 'last name',
             'first_name'     => 'first name',
             'middle_initial' => 'middle initial',
-            'student_id'     => 'student ID',
+            'account_id'     => 'account ID',
             'year_level'     => 'year level',
         ];
     }
@@ -104,7 +104,7 @@ class ProfileUpdateRequest extends FormRequest
             'phone.regex'      => 'The phone number format is invalid.',
             'birthday.before'  => 'The birthday must be a date before today.',
             'email.unique'     => 'This email address is already in use.',
-            'student_id.unique'=> 'This student ID is already in use.',
+            'account_id.unique'=> 'This account ID is already in use.',
         ];
     }
 }

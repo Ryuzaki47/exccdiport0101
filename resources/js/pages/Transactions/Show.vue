@@ -21,7 +21,7 @@ interface Props {
             id: number;
             name: string;
             email: string;
-            student_id?: string;
+            account_id?: string;
         };
     };
     account?: {
@@ -145,9 +145,9 @@ const downloadReceipt = () => {
                             <p class="text-xs font-medium text-gray-500 uppercase">Name</p>
                             <p class="mt-1 font-medium">{{ transaction.user.name }}</p>
                         </div>
-                        <div v-if="transaction.user.student_id">
-                            <p class="text-xs font-medium text-gray-500 uppercase">Student ID</p>
-                            <p class="mt-1 font-medium">{{ transaction.user.student_id }}</p>
+                        <div v-if="transaction.user.account_id">
+                            <p class="text-xs font-medium text-gray-500 uppercase">Account ID</p>
+                            <p class="mt-1 font-medium">{{ transaction.user.account_id }}</p>
                         </div>
                         <div>
                             <p class="text-xs font-medium text-gray-500 uppercase">Email</p>
