@@ -2,384 +2,255 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
-use App\Models\User;
+use App\Enums\UserRoleEnum;
+use App\Models\Account;
 use App\Models\Student;
 use App\Models\StudentAssessment;
-use App\Models\StudentPaymentTerm;
-use App\Models\Transaction;
-use App\Models\Account;
-use App\Events\PaymentRecorded;
-use App\Enums\UserRoleEnum;
-use App\Services\AccountService;
-use Illuminate\Support\Str;
+use App\Models\User;
 use Database\Seeders\Traits\GetAdminUserTrait;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * StudentFirstPaymentSeeder
  *
- * Creates a test student with unpaid payment terms ready for manual payment testing.
- * All payment terms remain UNPAID so students can test the payment flow from the UI.
+ * Creates a newly registered student with NO course and NO assessment.
+ * Simulates a student who has just enrolled and is waiting for the
+ * Accounting/Admin staff to create their first assessment.
  *
  * USAGE:
  * ------
- * Run all seeders including this one:
- *   php artisan db:seed
- *
- * Run only this seeder:
  *   php artisan db:seed --class=StudentFirstPaymentSeeder
  *
  * STUDENT DETAILS:
  * ----------------
- * Email: jcdc742713@gmail.com
- * Password: password
- * If not found, a test student will be created.
+ * Email     : newstudent2025@gmail.com
+ * Password  : password
+ * Year Level: 1st Year
+ * Course    : (none — not yet assigned)
+ * Assessment: (none — not yet created)
  *
  * EXPECTED OUTCOME:
  * -----------------
- * ✅ One test student account created
- * ✅ One student assessment generated ($15,540 total)
- * ✅ Five unpaid payment terms with standard percentages:
- *    - Upon Registration (42.15%)
- *    - Prelim (17.86%)
- *    - Midterm (17.86%)
- *    - Semi-Final (14.88%)
- *    - Final (7.26%)
- * ✅ All terms remain PENDING status (ready for student to pay)
- * ✅ Carryover system enabled (excess payment carries to next term)
- * ✅ Student can now make selective term payments via UI
- * ✅ No auto-generated transactions
+ * ✅ One newly registered student (users + students + accounts)
+ * ✅ Year level = "1st Year"
+ * ✅ Course = null on users table (not yet assigned)
+ * ✅ NO StudentAssessment (staff creates it later via UI)
+ * ✅ NO payment terms, NO transactions, NO charges
+ * ✅ Account balance = ₱0.00
+ * ✅ Student status = enrolled
  */
 class StudentFirstPaymentSeeder extends Seeder
 {
     use GetAdminUserTrait;
-    
-    private static $accountIdCounter = 101;
-    // Instance counter for generating account numbers sequentially during seeding
-    private $accountNumberCounter = 0;
 
-    /**
-     * Generate account number sequentially by querying last used number from database
-     */
-    private function getNextAccountNumber(): string
-    {
-        $year = now()->year;
-        
-        // Query for highest number used in current year
-        if ($this->accountNumberCounter === 0) {
-            $lastAccount = \App\Models\Account::where('account_number', 'like', "ACC-{$year}-%")
-                ->orderByRaw("CAST(SUBSTRING(account_number, 10) AS UNSIGNED) DESC")
-                ->first();
-            
-            if ($lastAccount) {
-                $this->accountNumberCounter = intval(substr($lastAccount->account_number, -4));
-            }
-        }
-        
-        $this->accountNumberCounter++;
-        $number = str_pad($this->accountNumberCounter, 4, '0', STR_PAD_LEFT);
-        return "ACC-{$year}-{$number}";
-    }
+    // ── Student credentials ────────────────────────────────────────────────────
+    private const STUDENT_EMAIL          = 'newstudent2025@gmail.com';
+    private const STUDENT_PASSWORD       = 'password';
+    private const STUDENT_LAST_NAME      = 'Dela Cruz';
+    private const STUDENT_FIRST_NAME     = 'Juan';
+    private const STUDENT_MIDDLE_INITIAL = 'A';
+    private const YEAR_LEVEL             = '1st Year';
+
+    // ── Account ID counter fallback ───────────────────────────────────────────
+    private static int $accountIdCounter = 200;
+
+    // =========================================================================
+    // MAIN ENTRY POINT
+    // =========================================================================
 
     public function run(): void
     {
         DB::transaction(function () {
-            // ============================================
-            // 1. FIND OR CREATE STUDENT
-            // ============================================
-            $student = $this->getOrCreateStudent();
 
-            if (!$student) {
-                $this->command->error('Failed to find or create student');
-                return;
-            }
+            // ── 1. User ───────────────────────────────────────────────────────
+            $user = $this->findOrCreateUser();
 
-            $this->command->info("✓ Student found/created: {$student->email} (ID: {$student->id})");
+            $this->command->info("✓ User ready      : {$user->email} (ID: {$user->id})");
+            $this->command->info("  └─ Year Level   : " . self::YEAR_LEVEL);
+            $this->command->info("  └─ Course       : (not assigned)");
 
-            // ============================================
-            // 2. GET CURRENT SEMESTER ASSESSMENT
-            // ============================================
-            $assessment = $this->getCurrentSemesterAssessment($student);
+            // ── 2. Student record ─────────────────────────────────────────────
+            $student = $this->ensureStudentRecord($user);
 
-            if (!$assessment) {
-                $this->command->error('No assessment found and could not create one');
-                return;
-            }
+            $this->command->info("✓ Student record  : student.id = {$student->id}");
 
-            // Check if assessment was just created (by looking at created_at timestamp)
-            $isNewlyCreated = $assessment->created_at->diffInSeconds(now()) < 5;
+            // ── 3. Account row ────────────────────────────────────────────────
+            $account = $this->ensureAccount($user);
 
-            if ($isNewlyCreated) {
-                $this->command->info("✓ Assessment CREATED: {$assessment->assessment_number} (Total: " .
-                    number_format($assessment->total_assessment, 2) . ")");
-                $this->command->info("  └─ Generated 5 payment terms with standard percentages");
+            $this->command->info("✓ Account ready   : {$account->account_number} (₱0.00)");
+
+            // ── 4. Confirm no assessment ──────────────────────────────────────
+            $assessmentCount = StudentAssessment::where('user_id', $user->id)->count();
+
+            if ($assessmentCount > 0) {
+                $this->command->warn(
+                    "⚠  Student already has {$assessmentCount} assessment(s). " .
+                    "This seeder targets students with NO assessment."
+                );
             } else {
-                $this->command->info("✓ Assessment found: {$assessment->assessment_number} (Total: " .
-                    number_format($assessment->total_assessment, 2) . ")");
+                $this->command->info("✓ Assessment      : NONE — student awaiting first assessment");
             }
 
-            // ============================================
-            // 3. GET FIRST PAYMENT TERM
-            // ============================================
-            $firstTerm = StudentPaymentTerm::where('student_assessment_id', $assessment->id)
-                ->where('term_order', 1)
-                ->first();
-
-            if (!$firstTerm) {
-                $this->command->error('First payment term not found for assessment');
-                return;
-            }
-
-            $this->command->info("✓ First term found: {$firstTerm->term_name} - Amount: " .
-                number_format($firstTerm->amount, 2));
-
-            // ============================================
-            // 4. VERIFY ALL PAYMENT TERMS ARE UNPAID
-            // ============================================
-            $allTerms = StudentPaymentTerm::where('student_assessment_id', $assessment->id)
-                ->orderBy('term_order')
-                ->get();
-
-            $unpaidCount = 0;
-            foreach ($allTerms as $term) {
-                if ($term->status === StudentPaymentTerm::STATUS_PENDING) {
-                    $unpaidCount++;
-                    $this->command->info("  • {$term->term_order}. {$term->term_name}: " .
-                        number_format($term->amount, 2) . " ({$term->percentage}%) - Status: PENDING");
-                }
-            }
-
-            $this->command->info("✓ All {$unpaidCount} payment terms are UNPAID and ready for student payments");
-
-            // ============================================
-            // 5. STUDENT PAYMENT READY
-            // ============================================
-            $this->command->info("\n" . str_repeat("=", 60));
-            $this->command->info("✅ SEEDER COMPLETED - STUDENT READY FOR TESTING");
-            $this->command->info(str_repeat("=", 60));
-            $this->command->info("Summary:");
-            $this->command->info("  • Student: {$student->email}");
-            $this->command->info("  • Assessment: {$assessment->assessment_number}");
-            $this->command->info("  • Total Payable: " . number_format($assessment->total_assessment, 2));
-            $this->command->info("  • Payment Terms: 5 (all UNPAID)");
-            $this->command->info("  • Carryover System: ENABLED");
-            $this->command->info("  • Payment Method: Student can now make selective term payments");
-            $this->command->info("  • Note: When a student pays more than a term amount,");
-            $this->command->info("          excess will carry over to the next term");
-            $this->command->info(str_repeat("=", 60) . "\n");
+            // ── 5. Summary ────────────────────────────────────────────────────
+            $this->printSummary($user, $account);
         });
     }
 
+    // =========================================================================
+    // PRIVATE HELPERS
+    // =========================================================================
+
     /**
-     * Find student by email or create a test student
+     * Find an existing user by email or create a fresh one.
+     * course is intentionally null on the users table.
      */
-    private function getOrCreateStudent(): ?Student
+    private function findOrCreateUser(): User
     {
-        $email = 'jcdc742713@gmail.com';
+        $existing = User::where('email', self::STUDENT_EMAIL)->first();
 
-        // Try to find existing student
-        $student = Student::whereHas('user', function ($query) use ($email) {
-            $query->where('email', $email);
-        })->first();
-
-        if ($student) {
-            return $student;
-        }
-
-        // Try to find user first
-        $user = User::where('email', $email)->first();
-
-        if ($user) {
-            // User exists but no student record - create one
-            $accountId = '2025-' . str_pad(self::$accountIdCounter++, 4, '0', STR_PAD_LEFT);
-            $student = Student::create([
-                'user_id' => $user->id,
-                'email' => $email,
-                'first_name' => 'Test',
-                'last_name' => 'Student',
-                'student_id' => $accountId,
-                'course' => 'Computer Science',
-                'year_level' => '2nd Year',
-                'total_balance' => 15000,
-                'enrollment_status' => 'active',
-            ]);
-
-            return $student;
-        }
-
-        // Create new user and student
-        $accountId = '2025-' . str_pad(self::$accountIdCounter++, 4, '0', STR_PAD_LEFT);
-        $user = User::create([
-            'first_name' => 'Test',
-            'last_name' => 'Student',
-            'email' => $email,
-            'password' => bcrypt('password'),
-            'email_verified_at' => now(),
-            'role' => UserRoleEnum::STUDENT->value,
-            'account_id' => $accountId,
-        ]);
-
-        // Ensure user has an account
-        if (!$user->account) {
-            Account::create([
-                'user_id' => $user->id,
-                'account_number' => $this->getNextAccountNumber(),
-                'balance' => 0,
-            ]);
-        }
-
-        $student = Student::create([
-            'user_id' => $user->id,
-            'email' => $email,
-            'first_name' => 'Test',
-            'last_name' => 'Student',
-            'student_id' => $accountId,
-            'course' => 'Computer Science',
-            'year_level' => '2nd Year',
-            'total_balance' => 15000,
-            'enrollment_status' => 'active',
-        ]);
-
-        return $student;
-    }
-
-    /**
-     * Get current semester assessment for student
-     */
-    private function getCurrentSemesterAssessment(Student $student): ?StudentAssessment
-    {
-        $currentYear = now()->year;
-        $currentMonth = now()->month;
-
-        // Determine semester (1st sem: June-November, 2nd sem: December-May)
-        $semester = $currentMonth >= 6 ? '1st Sem' : '2nd Sem';
-        $schoolYear = $currentMonth >= 6
-            ? "{$currentYear}-" . ($currentYear + 1)
-            : ($currentYear - 1) . "-{$currentYear}";
-
-        // Find or create assessment
-        $assessment = StudentAssessment::where('user_id', $student->user_id)
-            ->where('semester', $semester)
-            ->where('school_year', $schoolYear)
-            ->orderByDesc('created_at')
-            ->first();
-
-        if (!$assessment) {
-            // Look for any recent assessment
-            $assessment = StudentAssessment::where('user_id', $student->user_id)
-                ->orderByDesc('created_at')
-                ->first();
-        }
-
-        // If still no assessment, create one with payment terms
-        if (!$assessment) {
-            $assessment = $this->createAssessmentWithPaymentTerms($student, $semester, $schoolYear);
-        }
-
-        return $assessment;
-    }
-
-    /**
-     * Create a new assessment with payment terms for the student
-     */
-    private function createAssessmentWithPaymentTerms(
-        Student $student,
-        string $semester,
-        string $schoolYear
-    ): StudentAssessment {
-        // Default assessment amounts
-        $tuitionFee = 12000.00;
-        $otherFees = 3540.00;
-        $totalAssessment = $tuitionFee + $otherFees;
-
-        // Create the assessment
-        $assessment = StudentAssessment::create([
-            'user_id' => $student->user_id,
-            'assessment_number' => StudentAssessment::generateAssessmentNumber(),
-            'year_level' => $student->year_level ?? '2nd Year',
-            'semester' => $semester,
-            'school_year' => $schoolYear,
-            'tuition_fee' => $tuitionFee,
-            'other_fees' => $otherFees,
-            'total_assessment' => $totalAssessment,
-            'status' => 'active',
-            'created_by' => $this->getOrFindAdminUserId(),
-        ]);
-
-        // Create payment terms for this assessment
-        $this->createPaymentTermsForAssessment($assessment);
-
-        // ── FIX: Create a charge Transaction for the full assessment ──────────────
-        // AccountService::recalculate() derives account.balance ONLY from the
-        // transactions table (kind='charge' minus kind='payment' status='paid').
-        // Without a charge transaction, account.balance stays 0 and the frontend
-        // displays ₱0.00 instead of ₱15,540 in both Index and Show.
-        \App\Models\Transaction::create([
-            'user_id'   => $student->user_id,
-            'reference' => 'ASSESS-' . strtoupper(Str::random(8)),
-            'kind'      => 'charge',
-            'type'      => 'Tuition',
-            'year'      => explode('-', $schoolYear)[0],
-            'semester'  => $semester,
-            'amount'    => $totalAssessment,
-            'status'    => 'pending',
-            'meta'      => [
-                'assessment_id' => $assessment->id,
-                'description'   => "Assessment Charge - {$semester} {$schoolYear}",
-            ],
-        ]);
-
-        // Sync account.balance → will equal $totalAssessment (no payments yet)
-        AccountService::recalculate($student->user);
-
-        return $assessment;
-    }
-
-    /**
-     * Create standard payment terms for an assessment
-     */
-    private function createPaymentTermsForAssessment(StudentAssessment $assessment): void
-    {
-        $baseDate = now()->startOfMonth();
-        $terms = StudentPaymentTerm::TERMS;
-        $totalAmount = 0;
-        $totalTerms = count($terms);
-
-        foreach ($terms as $termOrder => $termData) {
-            // For the last term, use remainder to ensure total equals assessment (no rounding)
-            if ($termOrder === $totalTerms) {
-                $amount = $assessment->total_assessment - $totalAmount;
-            } else {
-                // Calculate amount based on percentage
-                $amount = round($assessment->total_assessment * ($termData['percentage'] / 100), 2);
-                $totalAmount += $amount;
+        if ($existing) {
+            if ($existing->year_level !== self::YEAR_LEVEL) {
+                $existing->update(['year_level' => self::YEAR_LEVEL]);
+                $this->command->warn("  ↳ year_level corrected to '" . self::YEAR_LEVEL . "'");
             }
-
-            // Calculate due date based on term order
-            $dueDate = match ($termOrder) {
-                1 => $baseDate->copy(), // Upon Registration - due immediately
-                2 => $baseDate->copy()->addWeeks(4), // Prelim - 4 weeks
-                3 => $baseDate->copy()->addWeeks(8), // Midterm - 8 weeks
-                4 => $baseDate->copy()->addWeeks(12), // Semi-Final - 12 weeks
-                5 => $baseDate->copy()->addWeeks(16), // Final - 16 weeks
-                default => $baseDate->copy()->addWeeks($termOrder),
-            };
-
-            StudentPaymentTerm::create([
-                'student_assessment_id' => $assessment->id,
-                'user_id' => $assessment->user_id,
-                'term_name' => $termData['name'],
-                'term_order' => $termOrder,
-                'percentage' => $termData['percentage'],
-                'amount' => $amount,
-                'balance' => $amount, // Initially full balance
-                'due_date' => $dueDate,
-                'status' => StudentPaymentTerm::STATUS_PENDING,
-                'remarks' => null,
-                'paid_date' => null,
-            ]);
+            return $existing;
         }
+
+        $accountId = $this->generateAccountId();
+
+        return User::create([
+            'last_name'         => self::STUDENT_LAST_NAME,
+            'first_name'        => self::STUDENT_FIRST_NAME,
+            'middle_initial'    => self::STUDENT_MIDDLE_INITIAL,
+            'email'             => self::STUDENT_EMAIL,
+            'password'          => bcrypt(self::STUDENT_PASSWORD),
+            'email_verified_at' => now(),
+            'role'              => UserRoleEnum::STUDENT->value,
+            'account_id'        => $accountId,
+            'year_level'        => self::YEAR_LEVEL,
+            'course'            => null,    // not yet assigned — users.course IS nullable
+            'status'            => 'active',
+        ]);
+    }
+
+    /**
+     * Ensure a Student pivot record exists.
+     *
+     * students table schema requires:
+     *   - student_id  VARCHAR NOT NULL UNIQUE  (CCDI student ID string)
+     *   - course      VARCHAR NOT NULL          (placeholder until assigned)
+     *   - status      ENUM('enrolled','graduated','inactive')
+     *
+     * users.course stays null; students.course gets 'N/A' as a placeholder
+     * so the NOT NULL constraint is satisfied without assigning a real program.
+     */
+    private function ensureStudentRecord(User $user): Student
+    {
+        $existing = Student::where('user_id', $user->id)->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        return Student::create([
+            'user_id'        => $user->id,
+            'student_id'     => $user->account_id,  // CCDI student ID (e.g. "2026-0200")
+            'last_name'      => $user->last_name,
+            'first_name'     => $user->first_name,
+            'middle_initial' => $user->middle_initial,
+            'email'          => $user->email,
+            'course'         => 'N/A',              // placeholder — NOT NULL constraint
+            'year_level'     => self::YEAR_LEVEL,
+            'total_balance'  => 0,
+            'status'         => 'enrolled',         // enum: enrolled|graduated|inactive
+        ]);
+    }
+
+    /**
+     * Ensure the user has an Account row for balance tracking.
+     * Balance is ₱0.00 — no fees assessed yet.
+     */
+    private function ensureAccount(User $user): Account
+    {
+        $account = Account::where('user_id', $user->id)->first();
+
+        if ($account) {
+            return $account;
+        }
+
+        return Account::create([
+            'user_id'        => $user->id,
+            'account_number' => $this->generateAccountNumber(),
+            'balance'        => 0.00,
+        ]);
+    }
+
+    /**
+     * Generate a unique student account ID (e.g. "2026-0200").
+     */
+    private function generateAccountId(): string
+    {
+        $year = now()->year;
+
+        $last = User::where('account_id', 'like', "{$year}-%")
+            ->orderByRaw("CAST(SUBSTRING(account_id, 6) AS UNSIGNED) DESC")
+            ->value('account_id');
+
+        if ($last) {
+            $lastNumber             = (int) (explode('-', $last)[1] ?? self::$accountIdCounter);
+            self::$accountIdCounter = $lastNumber + 1;
+        }
+
+        return $year . '-' . str_pad(self::$accountIdCounter, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Generate a unique Account number (e.g. "ACC-2026-0042").
+     */
+    private function generateAccountNumber(): string
+    {
+        $year = now()->year;
+
+        $last = Account::where('account_number', 'like', "ACC-{$year}-%")
+            ->orderByRaw("CAST(SUBSTRING(account_number, 10) AS UNSIGNED) DESC")
+            ->value('account_number');
+
+        $next = 1;
+        if ($last) {
+            $next = ((int) substr($last, strrpos($last, '-') + 1)) + 1;
+        }
+
+        return 'ACC-' . $year . '-' . str_pad($next, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Print the final summary to the console.
+     */
+    private function printSummary(User $user, Account $account): void
+    {
+        $line = str_repeat('=', 60);
+
+        $this->command->info('');
+        $this->command->info($line);
+        $this->command->info('✅  SEEDER COMPLETED — NEWLY REGISTERED STUDENT READY');
+        $this->command->info($line);
+        $this->command->info('  Name       : ' . $user->name);
+        $this->command->info('  Email      : ' . $user->email);
+        $this->command->info('  Password   : ' . self::STUDENT_PASSWORD);
+        $this->command->info('  Student ID : ' . $user->account_id);
+        $this->command->info('  Account#   : ' . $account->account_number);
+        $this->command->info('  Year Level : ' . self::YEAR_LEVEL);
+        $this->command->info('  Course     : (not yet assigned)');
+        $this->command->info('  Assessment : NONE');
+        $this->command->info('  Balance    : ₱0.00');
+        $this->command->info($line);
+        $this->command->info('');
+        $this->command->info('NEXT STEPS FOR STAFF:');
+        $this->command->info('  1. Log in as Accounting or Admin');
+        $this->command->info('  2. Go to Student Fee Management → Create Assessment');
+        $this->command->info('  3. Search for this student — Year Level pre-fills "1st Year"');
+        $this->command->info('  4. Assign a Course and complete the assessment form');
+        $this->command->info($line);
     }
 }
