@@ -5,17 +5,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Save, Trash2 } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { ArrowLeft, Save, Plus, Trash2, UserCog } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Student {
     id: number;
     account_id: string;
     name: string;
+    last_name: string;
+    first_name: string;
+    middle_initial: string | null;
     email: string;
-    course: string;
-    year_level: string;
+    birthday: string | null;
+    phone: string | null;
+    address: string | null;
+    course: string | null;
+    year_level: string | null;
     status: string;
+}
+
+interface FeeLineItem {
+    category: string;
+    name: string;
+    amount: number;
 }
 
 interface Assessment {
@@ -27,181 +41,162 @@ interface Assessment {
     tuition_fee: number;
     other_fees: number;
     total_assessment: number;
-    subjects: AssessmentSubject[];
-    fee_breakdown: FeeBreakdownItem[];
+    fee_breakdown: FeeLineItem[];
     status: string;
 }
 
-interface AssessmentSubject {
-    id: number;
-    units: number;
-    amount: number;
-}
-
-interface FeeBreakdownItem {
-    id: number;
-    amount: number;
-}
-
-interface Subject {
-    id: number;
-    code: string;
-    name: string;
-    units: number;
-    price_per_unit: number;
-    has_lab: boolean;
-    lab_fee: number;
-    total_cost: number;
-}
-
-interface Fee {
-    id: number;
-    name: string;
-    category: string;
-    amount: number;
-}
-
 interface Props {
-    student: Student;
-    assessment: Assessment;
-    subjects: Subject[];
-    fees: Fee[];
+    student:        Student;
+    assessment:     Assessment;
+    courses:        string[];
+    feeCategories:  string[];
 }
 
 const props = defineProps<Props>();
 
+// ─── Breadcrumbs ──────────────────────────────────────────────────────────────
+
 const breadcrumbs = [
-    { title: 'Dashboard', href: route('dashboard') },
+    { title: 'Dashboard',              href: route('dashboard') },
     { title: 'Student Fee Management', href: route('student-fees.index') },
-    { title: props.student.name, href: route('student-fees.show', props.student.id) },
-    { title: 'Edit Assessment' },
+    { title: props.student.name,       href: route('student-fees.show', props.student.id) },
+    { title: 'Edit' },
 ];
 
-// Initialize selected items from existing assessment
-const selectedSubjects = ref<AssessmentSubject[]>([...(props.assessment.subjects || [])]);
-const selectedFees = ref<FeeBreakdownItem[]>([...(props.assessment.fee_breakdown || [])]);
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-// Form
-const form = useForm({
-    year_level: props.assessment.year_level,
-    semester: props.assessment.semester,
-    school_year: props.assessment.school_year,
-    subjects: selectedSubjects.value,
-    other_fees: selectedFees.value,
-});
-
-// Year levels and semesters
 const yearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
-const semesters = ['1st Sem', '2nd Sem', 'Summer'];
+const semesters  = ['1st Sem', '2nd Sem', 'Summer'];
 
-// Calculate totals
-const tuitionTotal = computed(() => {
-    return selectedSubjects.value.reduce((sum, s) => sum + (s.amount || 0), 0);
-});
+// ─── Form ─────────────────────────────────────────────────────────────────────
 
-const otherFeesTotal = computed(() => {
-    return selectedFees.value.reduce((sum, f) => sum + (f.amount || 0), 0);
-});
-
-const grandTotal = computed(() => {
-    return tuitionTotal.value + otherFeesTotal.value;
-});
-
-// Subject management
-const addSubject = (subject: Subject) => {
-    const exists = selectedSubjects.value.find((s) => s.id === subject.id);
-    if (!exists) {
-        selectedSubjects.value.push({
-            id: subject.id,
-            units: subject.units,
-            amount: parseFloat(String(subject.total_cost)) || 0,
-        });
+// Seed fee_items from the stored fee_breakdown JSON.
+// Each item has category, name, amount — matching exactly what update() expects.
+const seedFeeItems = (): FeeLineItem[] => {
+    const bd = props.assessment.fee_breakdown ?? [];
+    if (bd.length > 0) {
+        return bd.map((item) => ({
+            category: item.category ?? 'Tuition',
+            name:     item.name     ?? '',
+            amount:   Number(item.amount) || 0,
+        }));
     }
+    // Fallback: single tuition line from totals when fee_breakdown is empty
+    return [
+        { category: 'Tuition', name: 'Tuition Fee',  amount: Number(props.assessment.tuition_fee)  || 0 },
+        { category: 'Other',   name: 'Other Fees',   amount: Number(props.assessment.other_fees)   || 0 },
+    ].filter((r) => r.amount > 0);
 };
 
-const removeSubject = (subjectId: number) => {
-    selectedSubjects.value = selectedSubjects.value.filter((s) => s.id !== subjectId);
-};
+const form = useForm({
+    // ── Student profile ──────────────────────────────────────────────────────
+    last_name:      props.student.last_name      ?? '',
+    first_name:     props.student.first_name     ?? '',
+    middle_initial: props.student.middle_initial ?? '',
+    email:          props.student.email          ?? '',
+    birthday:       props.student.birthday       ?? '',
+    phone:          props.student.phone          ?? '',
+    address:        props.student.address        ?? '',
+    course:         props.student.course && props.student.course !== 'N/A'
+                        ? props.student.course : '',
+    // ── Assessment term ──────────────────────────────────────────────────────
+    year_level:     props.assessment.year_level  ?? '',
+    semester:       props.assessment.semester    ?? '',
+    school_year:    props.assessment.school_year ?? '',
+    // ── Fee breakdown (sent as fee_items[]) ──────────────────────────────────
+    fee_items:      seedFeeItems(),
+});
 
-const getSubjectDetails = (subjectId: number) => {
-    return props.subjects.find((s) => s.id === subjectId);
-};
+// ─── Fee row management ───────────────────────────────────────────────────────
 
-const isSubjectSelected = (subjectId: number) => {
-    return selectedSubjects.value.some((s) => s.id === subjectId);
-};
+function addFeeRow() {
+    form.fee_items.push({ category: 'Miscellaneous', name: '', amount: 0 });
+}
 
-// Fee management
-const addFee = (fee: Fee) => {
-    const exists = selectedFees.value.find((f) => f.id === fee.id);
-    if (!exists) {
-        selectedFees.value.push({
-            id: fee.id,
-            amount: parseFloat(String(fee.amount)) || 0,
-        });
-    }
-};
+function removeFeeRow(index: number) {
+    form.fee_items.splice(index, 1);
+}
 
-const removeFee = (feeId: number) => {
-    selectedFees.value = selectedFees.value.filter((f) => f.id !== feeId);
-};
+// ─── Totals ───────────────────────────────────────────────────────────────────
 
-const getFeeDetails = (feeId: number) => {
-    return props.fees.find((f) => f.id === feeId);
-};
-
-const isFeeSelected = (feeId: number) => {
-    return selectedFees.value.some((f) => f.id === feeId);
-};
-
-// Watch for changes to update form
-watch(
-    [selectedSubjects, selectedFees],
-    () => {
-        form.subjects = selectedSubjects.value;
-        form.other_fees = selectedFees.value;
-    },
-    { deep: true },
+const tuitionTotal = computed(() =>
+    form.fee_items
+        .filter((r) => r.category === 'Tuition')
+        .reduce((s, r) => s + (Number(r.amount) || 0), 0),
 );
 
-// Submit form
-const submit = () => {
+const otherTotal = computed(() =>
+    form.fee_items
+        .filter((r) => r.category !== 'Tuition')
+        .reduce((s, r) => s + (Number(r.amount) || 0), 0),
+);
+
+const grandTotal = computed(() => tuitionTotal.value + otherTotal.value);
+
+const totalChanged = computed(() =>
+    Math.abs(grandTotal.value - Number(props.assessment.total_assessment)) > 0.01,
+);
+
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+const localErrors = ref<Record<string, string>>({});
+
+function validate(): boolean {
+    localErrors.value = {};
+
+    if (!form.last_name.trim())  localErrors.value.last_name  = 'Last name is required.';
+    if (!form.first_name.trim()) localErrors.value.first_name = 'First name is required.';
+    if (!form.email.trim())      localErrors.value.email      = 'Email is required.';
+    if (!form.course.trim())     localErrors.value.course     = 'Course is required.';
+    if (!form.year_level)        localErrors.value.year_level = 'Year level is required.';
+    if (!form.semester)          localErrors.value.semester   = 'Semester is required.';
+    if (!form.school_year.match(/^\d{4}-\d{4}$/))
+        localErrors.value.school_year = 'School year must be in YYYY-YYYY format.';
+    if (form.fee_items.length === 0)
+        localErrors.value.fee_items = 'At least one fee line is required.';
+    if (grandTotal.value <= 0)
+        localErrors.value.fee_items = 'Total assessment must be greater than zero.';
+    const emptyName = form.fee_items.some((r) => !r.name.trim());
+    if (emptyName)
+        localErrors.value.fee_items = 'All fee line items must have a name.';
+
+    return Object.keys(localErrors.value).length === 0;
+}
+
+// ─── Submit ───────────────────────────────────────────────────────────────────
+
+function submit() {
+    if (!validate()) return;
+
     form.put(route('student-fees.update', props.student.id), {
         preserveScroll: true,
     });
-};
+}
 
-// Format currency
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP',
-    }).format(amount);
-};
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// Get status color
-const getStatusColor = (status: string) => {
-    switch (status) {
-        case 'active':
-            return 'bg-green-100 text-green-800';
-        case 'completed':
-            return 'bg-blue-100 text-blue-800';
-        case 'cancelled':
-            return 'bg-red-100 text-red-800';
-        default:
-            return 'bg-gray-100 text-gray-800';
-    }
-};
+const fmt = (n: number) =>
+    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n);
+
+const statusColor = (s: string) => ({
+    active:    'bg-green-100 text-green-800',
+    completed: 'bg-blue-100 text-blue-800',
+    cancelled: 'bg-red-100 text-red-800',
+}[s] ?? 'bg-gray-100 text-gray-800');
+
+// Helper: show either server error or local validation error
+const err = (field: string): string =>
+    (form.errors as Record<string, string>)[field] ?? localErrors.value[field] ?? '';
 </script>
 
 <template>
-    <Head :title="`Edit Assessment - ${student.name}`" />
+    <Head :title="`Edit — ${student.name}`" />
 
     <AppLayout>
-        <div class="mx-auto max-w-7xl space-y-6 p-6">
+        <div class="mx-auto max-w-5xl space-y-6 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
-            <!-- Header -->
+            <!-- Page header -->
             <div class="flex items-center gap-4">
                 <Link :href="route('student-fees.show', student.id)">
                     <Button variant="outline" size="sm" class="flex items-center gap-2">
@@ -210,281 +205,319 @@ const getStatusColor = (status: string) => {
                     </Button>
                 </Link>
                 <div>
-                    <h1 class="text-3xl font-bold">Edit Assessment</h1>
-                    <p class="mt-2 text-gray-600">Modify the assessment for {{ student.name }}</p>
+                    <h1 class="text-2xl font-bold text-gray-900">Edit Student &amp; Assessment</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Assessment&nbsp;
+                        <span class="font-semibold text-blue-600">{{ assessment.assessment_number }}</span>
+                        &nbsp;&middot;&nbsp;
+                        <span :class="['inline-block rounded-full px-2 py-0.5 text-xs font-semibold', statusColor(assessment.status)]">
+                            {{ assessment.status }}
+                        </span>
+                    </p>
                 </div>
             </div>
 
             <form @submit.prevent="submit" class="space-y-6">
-                <!-- Student Info -->
-                <div class="rounded-lg border-2 border-blue-200 bg-blue-50 p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Student Information</h3>
-                            <div class="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
-                                <div>
-                                    <span class="text-gray-600">Account ID:</span>
-                                    <p class="font-medium">{{ student.account_id }}</p>
-                                </div>
-                                <div>
-                                    <span class="text-gray-600">Name:</span>
-                                    <p class="font-medium">{{ student.name }}</p>
-                                </div>
-                                <div>
-                                    <span class="text-gray-600">Course:</span>
-                                    <p class="font-medium">{{ student.course }}</p>
-                                </div>
-                                <div>
-                                    <span class="text-gray-600">Year Level:</span>
-                                    <p class="font-medium">{{ student.year_level }}</p>
-                                </div>
+
+                <!-- ══════════════════════════════════════════════════════════ -->
+                <!-- SECTION 1 — Student Information (editable)                -->
+                <!-- ══════════════════════════════════════════════════════════ -->
+                <div class="rounded-lg border bg-white shadow-sm">
+                    <div class="flex items-center gap-3 border-b px-6 py-4">
+                        <UserCog class="h-5 w-5 text-blue-600" />
+                        <h2 class="font-semibold text-gray-900">Student Information</h2>
+                        <span class="ml-auto rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                            Editable
+                        </span>
+                    </div>
+
+                    <div class="space-y-5 p-6">
+
+                        <!-- Read-only Account ID -->
+                        <div class="rounded-lg bg-gray-50 px-4 py-3 text-sm">
+                            <span class="text-gray-500">Account ID:</span>
+                            <span class="ml-2 font-semibold text-gray-800">{{ student.account_id }}</span>
+                        </div>
+
+                        <!-- Name row -->
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <div class="space-y-1">
+                                <Label for="last_name">Last Name <span class="text-red-500">*</span></Label>
+                                <Input
+                                    id="last_name"
+                                    v-model="form.last_name"
+                                    placeholder="Dela Cruz"
+                                    :class="err('last_name') ? 'border-red-400' : ''"
+                                />
+                                <p v-if="err('last_name')" class="text-xs text-red-600">{{ err('last_name') }}</p>
+                            </div>
+
+                            <div class="space-y-1">
+                                <Label for="first_name">First Name <span class="text-red-500">*</span></Label>
+                                <Input
+                                    id="first_name"
+                                    v-model="form.first_name"
+                                    placeholder="Juan"
+                                    :class="err('first_name') ? 'border-red-400' : ''"
+                                />
+                                <p v-if="err('first_name')" class="text-xs text-red-600">{{ err('first_name') }}</p>
+                            </div>
+
+                            <div class="space-y-1">
+                                <Label for="middle_initial">Middle Initial</Label>
+                                <Input
+                                    id="middle_initial"
+                                    v-model="form.middle_initial"
+                                    maxlength="10"
+                                    placeholder="A"
+                                />
                             </div>
                         </div>
-                        <div class="text-right">
-                            <p class="text-sm text-gray-600">Assessment Number</p>
-                            <p class="text-lg font-bold text-blue-600">{{ assessment.assessment_number }}</p>
-                            <span class="mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold" :class="getStatusColor(assessment.status)">
-                                {{ assessment.status }}
-                            </span>
+
+                        <!-- Contact row -->
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div class="space-y-1">
+                                <Label for="email">Email <span class="text-red-500">*</span></Label>
+                                <Input
+                                    id="email"
+                                    v-model="form.email"
+                                    type="email"
+                                    placeholder="student@ccdi.edu.ph"
+                                    :class="err('email') ? 'border-red-400' : ''"
+                                />
+                                <p v-if="err('email')" class="text-xs text-red-600">{{ err('email') }}</p>
+                            </div>
+
+                            <div class="space-y-1">
+                                <Label for="birthday">Birthday</Label>
+                                <Input id="birthday" v-model="form.birthday" type="date" />
+                            </div>
                         </div>
+
+                        <!-- Contact row 2 -->
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div class="space-y-1">
+                                <Label for="phone">Phone</Label>
+                                <Input id="phone" v-model="form.phone" placeholder="09171234567" />
+                            </div>
+
+                            <div class="space-y-1">
+                                <Label for="address">Address</Label>
+                                <Input id="address" v-model="form.address" placeholder="Sorsogon City" />
+                            </div>
+                        </div>
+
+                        <!-- Academic row -->
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div class="space-y-1">
+                                <Label for="course">Course <span class="text-red-500">*</span></Label>
+                                <select
+                                    id="course"
+                                    v-model="form.course"
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                                    :class="err('course') ? 'border-red-400' : ''"
+                                >
+                                    <option value="">— Select Course —</option>
+                                    <option v-for="c in courses" :key="c" :value="c">{{ c }}</option>
+                                </select>
+                                <p v-if="err('course')" class="text-xs text-red-600">{{ err('course') }}</p>
+                            </div>
+
+                            <!-- year_level on the student profile is updated separately from
+                                 the assessment year_level below. Both are saved on submit. -->
+                            <div class="space-y-1">
+                                <Label for="profile_year_level">Year Level (Profile)</Label>
+                                <select
+                                    id="profile_year_level"
+                                    v-model="form.year_level"
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                                >
+                                    <option value="">— Select Year Level —</option>
+                                    <option v-for="y in yearLevels" :key="y" :value="y">{{ y }}</option>
+                                </select>
+                                <p class="text-xs text-gray-400">Also used as the assessment year level below.</p>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
-                <!-- Term Information -->
+                <!-- ══════════════════════════════════════════════════════════ -->
+                <!-- SECTION 2 — Assessment Term                               -->
+                <!-- ══════════════════════════════════════════════════════════ -->
                 <div class="rounded-lg border bg-white p-6 shadow-sm">
-                    <h2 class="mb-4 text-lg font-semibold">Term Information</h2>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="space-y-2">
-                            <Label for="year_level">Year Level</Label>
-                            <select
-                                id="year_level"
-                                v-model="form.year_level"
-                                required
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="">Select year level</option>
-                                <option v-for="year in yearLevels" :key="year" :value="year">
-                                    {{ year }}
-                                </option>
-                            </select>
-                            <p v-if="form.errors?.year_level" class="text-sm text-red-500">
-                                {{ form.errors.year_level }}
-                            </p>
-                        </div>
+                    <h2 class="mb-4 font-semibold text-gray-900">Assessment Term</h2>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 
-                        <div class="space-y-2">
-                            <Label for="semester">Semester</Label>
+                        <div class="space-y-1">
+                            <Label for="semester">Semester <span class="text-red-500">*</span></Label>
                             <select
                                 id="semester"
                                 v-model="form.semester"
-                                required
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                                :class="err('semester') ? 'border-red-400' : ''"
                             >
                                 <option value="">Select semester</option>
-                                <option v-for="sem in semesters" :key="sem" :value="sem">
-                                    {{ sem }}
-                                </option>
+                                <option v-for="s in semesters" :key="s" :value="s">{{ s }}</option>
                             </select>
-                            <p v-if="form.errors?.semester" class="text-sm text-red-500">
-                                {{ form.errors.semester }}
-                            </p>
+                            <p v-if="err('semester')" class="text-xs text-red-600">{{ err('semester') }}</p>
                         </div>
 
-                        <div class="space-y-2">
-                            <Label for="school_year">School Year</Label>
-                            <Input id="school_year" v-model="form.school_year" placeholder="2025-2026" required />
-                            <p v-if="form.errors?.school_year" class="text-sm text-red-500">
-                                {{ form.errors.school_year }}
-                            </p>
+                        <div class="space-y-1">
+                            <Label for="school_year">School Year <span class="text-red-500">*</span></Label>
+                            <Input
+                                id="school_year"
+                                v-model="form.school_year"
+                                placeholder="2025-2026"
+                                :class="err('school_year') ? 'border-red-400' : ''"
+                            />
+                            <p v-if="err('school_year')" class="text-xs text-red-600">{{ err('school_year') }}</p>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════════ -->
+                <!-- SECTION 3 — Fee Breakdown                                 -->
+                <!-- ══════════════════════════════════════════════════════════ -->
+                <div class="rounded-lg border bg-white shadow-sm">
+                    <div class="flex items-center justify-between border-b px-6 py-4">
+                        <h2 class="font-semibold text-gray-900">Fee Breakdown</h2>
+                        <Button type="button" variant="outline" size="sm" class="flex items-center gap-1" @click="addFeeRow">
+                            <Plus class="h-3.5 w-3.5" />
+                            Add Line
+                        </Button>
+                    </div>
+
+                    <div class="p-6 space-y-3">
+
+                        <!-- Column headers -->
+                        <div class="grid grid-cols-12 gap-2 px-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            <div class="col-span-3">Category</div>
+                            <div class="col-span-6">Name / Description</div>
+                            <div class="col-span-2 text-right">Amount (₱)</div>
+                            <div class="col-span-1"></div>
+                        </div>
+
+                        <!-- Fee rows -->
+                        <div
+                            v-for="(row, idx) in form.fee_items"
+                            :key="idx"
+                            class="grid grid-cols-12 items-center gap-2"
+                        >
+                            <!-- Category -->
+                            <div class="col-span-3">
+                                <select
+                                    v-model="row.category"
+                                    class="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                                >
+                                    <option v-for="cat in feeCategories" :key="cat" :value="cat">{{ cat }}</option>
+                                </select>
+                            </div>
+
+                            <!-- Name -->
+                            <div class="col-span-6">
+                                <Input
+                                    v-model="row.name"
+                                    placeholder="e.g. Tuition Fee"
+                                    class="text-sm"
+                                />
+                            </div>
+
+                            <!-- Amount -->
+                            <div class="col-span-2">
+                                <Input
+                                    v-model.number="row.amount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="text-right text-sm"
+                                />
+                            </div>
+
+                            <!-- Remove -->
+                            <div class="col-span-1 flex justify-center">
+                                <button
+                                    type="button"
+                                    class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                    :disabled="form.fee_items.length === 1"
+                                    @click="removeFeeRow(idx)"
+                                >
+                                    <Trash2 class="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Empty state -->
+                        <div v-if="form.fee_items.length === 0" class="rounded-lg border border-dashed py-8 text-center text-sm text-gray-400">
+                            No fee lines. Click "Add Line" to start.
+                        </div>
+
+                        <p v-if="err('fee_items')" class="text-xs text-red-600">{{ err('fee_items') }}</p>
+
+                        <!-- Sub-totals -->
+                        <div class="mt-4 space-y-1 border-t pt-4 text-sm">
+                            <div class="flex justify-between text-gray-600">
+                                <span>Tuition</span>
+                                <span>{{ fmt(tuitionTotal) }}</span>
+                            </div>
+                            <div class="flex justify-between text-gray-600">
+                                <span>Other Fees</span>
+                                <span>{{ fmt(otherTotal) }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Subjects Section -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
-                    <h2 class="mb-4 text-lg font-semibold">Subjects</h2>
-
-                    <!-- Available Subjects -->
-                    <div class="mb-4 space-y-2">
-                        <Label>Available Subjects</Label>
-                        <div class="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-lg border p-2">
-                            <div
-                                v-for="subject in subjects"
-                                :key="subject.id"
-                                class="flex items-center justify-between rounded border p-3 transition-colors"
-                                :class="isSubjectSelected(subject.id) ? 'border-green-200 bg-green-50' : 'cursor-pointer hover:bg-gray-50'"
-                                @click="!isSubjectSelected(subject.id) && addSubject(subject)"
-                            >
-                                <div>
-                                    <p class="font-medium">{{ subject.code }} - {{ subject.name }}</p>
-                                    <p class="text-sm text-gray-600">
-                                        {{ subject.units }} units × {{ formatCurrency(subject.price_per_unit) }}
-                                        <span v-if="subject.has_lab">+ Lab Fee {{ formatCurrency(subject.lab_fee) }}</span>
-                                    </p>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="font-medium text-blue-600">
-                                        {{ formatCurrency(subject.total_cost) }}
-                                    </span>
-                                    <span v-if="isSubjectSelected(subject.id)" class="text-sm font-medium text-green-600"> ✓ Added </span>
-                                </div>
-                            </div>
-                            <div v-if="subjects.length === 0" class="py-4 text-center text-gray-500">No subjects available</div>
-                        </div>
-                    </div>
-
-                    <!-- Selected Subjects -->
-                    <div class="space-y-2">
-                        <Label>Selected Subjects</Label>
-                        <div class="space-y-2">
-                            <div
-                                v-for="selected in selectedSubjects"
-                                :key="selected.id"
-                                class="flex items-center justify-between rounded-lg border bg-gray-50 p-3"
-                            >
-                                <div class="flex-1">
-                                    <p class="font-medium">
-                                        {{ getSubjectDetails(selected.id)?.code }} -
-                                        {{ getSubjectDetails(selected.id)?.name }}
-                                    </p>
-                                    <p class="text-sm text-gray-600">{{ selected.units }} units</p>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <span class="font-medium">{{ formatCurrency(selected.amount) }}</span>
-                                    <button
-                                        type="button"
-                                        class="rounded p-1 text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
-                                        @click="removeSubject(selected.id)"
-                                    >
-                                        <Trash2 class="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
-                            <div v-if="selectedSubjects.length === 0" class="rounded-lg border bg-gray-50 py-8 text-center text-gray-500">
-                                No subjects selected. Click on subjects above to add them.
-                            </div>
-                        </div>
-                        <p v-if="form.errors?.subjects" class="text-sm text-red-500">
-                            {{ form.errors.subjects }}
-                        </p>
-                    </div>
-
-                    <!-- Tuition Total -->
-                    <div class="mt-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
-                        <span class="text-lg font-medium">Total Tuition Fee</span>
-                        <span class="text-2xl font-bold text-blue-600">{{ formatCurrency(tuitionTotal) }}</span>
-                    </div>
-                </div>
-
-                <!-- Other Fees Section -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
-                    <h2 class="mb-4 text-lg font-semibold">Other Fees</h2>
-
-                    <!-- Available Fees -->
-                    <div class="mb-4 space-y-2">
-                        <Label>Available Fees</Label>
-                        <div class="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-lg border p-2">
-                            <div
-                                v-for="fee in fees"
-                                :key="fee.id"
-                                class="flex items-center justify-between rounded border p-3 transition-colors"
-                                :class="isFeeSelected(fee.id) ? 'border-green-200 bg-green-50' : 'cursor-pointer hover:bg-gray-50'"
-                                @click="!isFeeSelected(fee.id) && addFee(fee)"
-                            >
-                                <div>
-                                    <p class="font-medium">{{ fee.name }}</p>
-                                    <p class="text-sm text-gray-600">{{ fee.category }}</p>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="font-medium text-blue-600">
-                                        {{ formatCurrency(fee.amount) }}
-                                    </span>
-                                    <span v-if="isFeeSelected(fee.id)" class="text-sm font-medium text-green-600"> ✓ Added </span>
-                                </div>
-                            </div>
-                            <div v-if="fees.length === 0" class="py-4 text-center text-gray-500">No fees available</div>
-                        </div>
-                    </div>
-
-                    <!-- Selected Fees -->
-                    <div class="space-y-2">
-                        <Label>Selected Fees</Label>
-                        <div class="space-y-2">
-                            <div
-                                v-for="selected in selectedFees"
-                                :key="selected.id"
-                                class="flex items-center justify-between rounded-lg border bg-gray-50 p-3"
-                            >
-                                <div class="flex-1">
-                                    <p class="font-medium">{{ getFeeDetails(selected.id)?.name }}</p>
-                                    <p class="text-sm text-gray-600">
-                                        {{ getFeeDetails(selected.id)?.category }}
-                                    </p>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <span class="font-medium">{{ formatCurrency(selected.amount) }}</span>
-                                    <button
-                                        type="button"
-                                        class="rounded p-1 text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
-                                        @click="removeFee(selected.id)"
-                                    >
-                                        <Trash2 class="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
-                            <div v-if="selectedFees.length === 0" class="rounded-lg border bg-gray-50 py-8 text-center text-gray-500">
-                                No fees selected. Click on fees above to add them.
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Other Fees Total -->
-                    <div class="mt-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
-                        <span class="text-lg font-medium">Total Other Fees</span>
-                        <span class="text-2xl font-bold text-blue-600">{{ formatCurrency(otherFeesTotal) }}</span>
-                    </div>
-                </div>
-
-                <!-- Grand Total -->
-                <div class="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white shadow-lg">
+                <!-- ══════════════════════════════════════════════════════════ -->
+                <!-- Grand Total banner                                        -->
+                <!-- ══════════════════════════════════════════════════════════ -->
+                <div class="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 p-5 text-white shadow-lg">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="mb-1 text-sm tracking-wide text-blue-100 uppercase">Total Assessment Fee Amount</p>
-                            <p class="text-4xl font-bold">{{ formatCurrency(grandTotal) }}</p>
+                            <p class="text-xs font-medium tracking-widest text-blue-200 uppercase">Total Assessment</p>
+                            <p class="text-4xl font-bold">{{ fmt(grandTotal) }}</p>
                         </div>
-                        <div class="text-right">
-                            <p class="text-sm text-blue-100">Tuition: {{ formatCurrency(tuitionTotal) }}</p>
-                            <p class="text-sm text-blue-100">Other Fees: {{ formatCurrency(otherFeesTotal) }}</p>
+                        <div class="text-right text-sm text-blue-200">
+                            <p>Tuition: {{ fmt(tuitionTotal) }}</p>
+                            <p>Other: {{ fmt(otherTotal) }}</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Change Summary (if amounts changed) -->
-                <div v-if="grandTotal !== assessment.total_assessment" class="rounded-lg border-2 border-yellow-200 bg-yellow-50 p-4">
-                    <p class="mb-2 font-medium text-yellow-800">⚠️ Assessment Amount Changed</p>
-                    <div class="space-y-1 text-sm text-yellow-700">
-                        <p>Previous Total: {{ formatCurrency(assessment.total_assessment) }}</p>
-                        <p>New Total: {{ formatCurrency(grandTotal) }}</p>
-                        <p class="font-medium">
+                <!-- Change warning -->
+                <div v-if="totalChanged" class="rounded-lg border-2 border-amber-200 bg-amber-50 px-5 py-4">
+                    <p class="mb-1 font-semibold text-amber-800">⚠ Assessment Total Changed</p>
+                    <div class="space-y-0.5 text-sm text-amber-700">
+                        <p>Previous: {{ fmt(Number(assessment.total_assessment)) }}</p>
+                        <p>New: {{ fmt(grandTotal) }}</p>
+                        <p class="font-semibold">
                             Difference:
-                            <span :class="grandTotal > assessment.total_assessment ? 'text-red-600' : 'text-green-600'">
-                                {{ grandTotal > assessment.total_assessment ? '+' : ''
-                                }}{{ formatCurrency(grandTotal - assessment.total_assessment) }}
+                            <span :class="grandTotal > assessment.total_assessment ? 'text-red-600' : 'text-green-700'">
+                                {{ grandTotal > assessment.total_assessment ? '+' : '' }}{{ fmt(grandTotal - assessment.total_assessment) }}
                             </span>
                         </p>
                     </div>
+                    <p class="mt-2 text-xs text-amber-600">
+                        Payment terms will be recalculated proportionally on save.
+                    </p>
                 </div>
 
-                <!-- Actions -->
+                <!-- ── Actions ──────────────────────────────────────────────── -->
                 <div class="flex items-center justify-between gap-4 border-t pt-4">
                     <Link :href="route('student-fees.show', student.id)">
-                        <Button type="button" variant="outline"> Cancel </Button>
+                        <Button type="button" variant="outline">Cancel</Button>
                     </Link>
-                    <Button type="submit" :disabled="form.processing || selectedSubjects.length === 0" class="flex min-w-[200px] items-center gap-2">
+                    <Button
+                        type="submit"
+                        :disabled="form.processing"
+                        class="flex min-w-[180px] items-center justify-center gap-2"
+                    >
                         <Save class="h-4 w-4" />
-                        {{ form.processing ? 'Saving...' : 'Save Changes' }}
+                        {{ form.processing ? 'Saving…' : 'Save Changes' }}
                     </Button>
                 </div>
+
             </form>
         </div>
     </AppLayout>

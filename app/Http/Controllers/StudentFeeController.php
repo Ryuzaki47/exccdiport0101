@@ -804,9 +804,33 @@ class StudentFeeController extends Controller
                 ->with('info', 'Please create an assessment for this student first.');
         }
 
+        // Build the same course list used in create()
+        $courses = collect(array_unique(array_merge(
+            array_keys(self::COURSE_FEE_PRESETS),
+            User::where('role', 'student')->whereNotNull('course')->distinct()->pluck('course')->toArray(),
+            \App\Models\Subject::distinct()->pluck('course')->toArray(),
+        )))->sort()->values();
+
         return Inertia::render('StudentFees/Edit', [
-            'student'       => $student,
+            'student'       => [
+                'id'             => $student->id,
+                'account_id'     => $student->account_id,
+                'name'           => $student->name,
+                'last_name'      => $student->last_name,
+                'first_name'     => $student->first_name,
+                'middle_initial' => $student->middle_initial,
+                'email'          => $student->email,
+                'birthday'       => $student->birthday
+                    ? \Carbon\Carbon::parse($student->birthday)->format('Y-m-d')
+                    : null,
+                'phone'          => $student->phone,
+                'address'        => $student->address,
+                'course'         => $student->course,
+                'year_level'     => $student->year_level,
+                'status'         => $student->status,
+            ],
             'assessment'    => $assessment,
+            'courses'       => $courses,
             'feeCategories' => self::FEE_CATEGORIES,
         ]);
     }
@@ -814,42 +838,131 @@ class StudentFeeController extends Controller
     public function update(Request $request, $userId)
     {
         $validated = $request->validate([
+            // ── Student profile ────────────────────────────────────────────
+            'last_name'              => 'required|string|max:255',
+            'first_name'             => 'required|string|max:255',
+            'middle_initial'         => 'nullable|string|max:10',
+            'email'                  => 'required|email|max:255|unique:users,email,' . $userId,
+            'birthday'               => 'nullable|date',
+            'phone'                  => 'nullable|string|max:20',
+            'address'                => 'nullable|string|max:255',
+            'course'                 => 'required|string|max:100',
+            // ── Assessment term ────────────────────────────────────────────
             'year_level'             => 'required|string',
-            'semester'               => 'required|string',
-            'school_year'            => 'required|string',
+            'semester'               => 'required|in:1st Sem,2nd Sem,Summer',
+            'school_year'            => ['required', 'string', 'max:20', 'regex:/^\d{4}-\d{4}$/'],
+            // ── Fee breakdown ──────────────────────────────────────────────
             'fee_items'              => 'required|array|min:1',
-            'fee_items.*.name'       => 'required|string|max:100',
             'fee_items.*.category'   => 'required|string|in:Tuition,Laboratory,Miscellaneous,Other',
+            'fee_items.*.name'       => 'required|string|max:100',
             'fee_items.*.amount'     => 'required|numeric|min:0',
         ]);
 
-        $assessment = StudentAssessment::where('user_id', $userId)
-            ->where('status', 'active')
-            ->latest()
-            ->firstOrFail();
+        DB::beginTransaction();
+        try {
+            $user = User::where('role', 'student')->findOrFail($userId);
 
-        $feeItems     = collect($validated['fee_items']);
-        $tuitionTotal = $feeItems->where('category', 'Tuition')->sum('amount');
-        $otherTotal   = $feeItems->whereNotIn('category', ['Tuition'])->sum('amount');
+            // ── 1. Update users table ──────────────────────────────────────
+            $user->update([
+                'last_name'      => $validated['last_name'],
+                'first_name'     => $validated['first_name'],
+                'middle_initial' => $validated['middle_initial'] ?? null,
+                'email'          => $validated['email'],
+                'birthday'       => $validated['birthday'] ?? null,
+                'phone'          => $validated['phone']   ?? null,
+                'address'        => $validated['address'] ?? null,
+                'course'         => $validated['course'],
+                'year_level'     => $validated['year_level'],
+            ]);
 
-        $assessment->update([
-            'year_level'       => $validated['year_level'],
-            'semester'         => $validated['semester'],
-            'school_year'      => $validated['school_year'],
-            'subjects'         => [],
-            'fee_breakdown'    => $feeItems->map(fn($item) => [
-                'category' => $item['category'],
-                'name'     => $item['name'],
-                'amount'   => (float) $item['amount'],
-            ])->values()->toArray(),
-            'tuition_fee'      => $tuitionTotal,
-            'other_fees'       => $otherTotal,
-            'total_assessment' => round($tuitionTotal + $otherTotal, 2),
-        ]);
+            // ── 2. Sync students pivot table ───────────────────────────────
+            if ($user->student) {
+                $user->student->update([
+                    'last_name'      => $validated['last_name'],
+                    'first_name'     => $validated['first_name'],
+                    'middle_initial' => $validated['middle_initial'] ?? null,
+                    'email'          => $validated['email'],
+                    'birthday'       => $validated['birthday'] ?? null,
+                    'phone'          => $validated['phone']   ?? null,
+                    'address'        => $validated['address'] ?? null,
+                    'course'         => $validated['course'],
+                    'year_level'     => $validated['year_level'],
+                ]);
+            }
 
-        return redirect()
-            ->route('student-fees.show', $userId)
-            ->with('success', 'Assessment updated successfully!');
+            // ── 3. Update the active assessment ───────────────────────────
+            $assessment = StudentAssessment::where('user_id', $userId)
+                ->where('status', 'active')
+                ->latest()
+                ->firstOrFail();
+
+            $feeItems     = collect($validated['fee_items']);
+            $tuitionTotal = round($feeItems->where('category', 'Tuition')->sum('amount'), 2);
+            $otherTotal   = round($feeItems->whereNotIn('category', ['Tuition'])->sum('amount'), 2);
+            $grandTotal   = round($tuitionTotal + $otherTotal, 2);
+
+            $assessment->update([
+                'year_level'       => $validated['year_level'],
+                'semester'         => $validated['semester'],
+                'school_year'      => $validated['school_year'],
+                'subjects'         => [],
+                'fee_breakdown'    => $feeItems->map(fn($item) => [
+                    'category' => $item['category'],
+                    'name'     => $item['name'],
+                    'amount'   => (float) $item['amount'],
+                ])->values()->toArray(),
+                'tuition_fee'      => $tuitionTotal,
+                'other_fees'       => $otherTotal,
+                'total_assessment' => $grandTotal,
+            ]);
+
+            // ── 4. Recalculate payment terms if total changed ──────────────
+            // Rescale each term's amount + balance proportionally so they
+            // still add up to the new grand total.
+            $terms = $assessment->paymentTerms()->orderBy('term_order')->get();
+            if ($terms->isNotEmpty()) {
+                $oldTotal     = $terms->sum('amount');
+                $scaleFactor  = $oldTotal > 0 ? ($grandTotal / $oldTotal) : 1;
+                $runningTotal = 0;
+                $lastIdx      = $terms->count() - 1;
+
+                foreach ($terms as $i => $term) {
+                    if ($i === $lastIdx) {
+                        // Last term absorbs rounding remainder
+                        $newAmount = round($grandTotal - $runningTotal, 2);
+                    } else {
+                        $newAmount = round($term->amount * $scaleFactor, 2);
+                        $runningTotal += $newAmount;
+                    }
+
+                    // Preserve any already-paid portion; only rescale the balance
+                    $alreadyPaid = $term->amount - $term->balance;
+                    $newBalance  = max(0, round($newAmount - $alreadyPaid, 2));
+
+                    $term->update([
+                        'amount'  => $newAmount,
+                        'balance' => $newBalance,
+                    ]);
+                }
+            }
+
+            // ── 5. Recalculate account balance ────────────────────────────
+            \App\Services\AccountService::recalculate($user);
+
+            DB::commit();
+
+            return redirect()
+                ->route('student-fees.show', $userId)
+                ->with('success', 'Student information and assessment updated successfully!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Assessment update failed', [
+                'user_id' => $userId,
+                'error'   => $e->getMessage(),
+            ]);
+            return back()->withErrors(['error' => 'Update failed: ' . $e->getMessage()]);
+        }
     }
 
     // =========================================================================

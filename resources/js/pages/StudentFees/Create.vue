@@ -93,6 +93,18 @@ const currentStep     = ref<1 | 2>(1);
 const selectedStudent = ref<Student | null>(null);
 const studentSearch   = ref('');
 
+// ─── Inline course editing ─────────────────────────────────────────────────────────────────────
+// When a student has no course (newly registered), staff can assign one
+// directly from the Create Assessment form without navigating elsewhere.
+const editableCourse  = ref<string>('');
+
+// True when the student has no real course yet (null or seeder placeholder 'N/A')
+const needsCourse = computed<boolean>(() => {
+    const c = selectedStudent.value?.course;
+    return !c || c.trim() === '' || c === 'N/A';
+});
+
+
 // ─── Assessment type ──────────────────────────────────────────────────────────
 
 const assessmentType = ref<'regular' | 'irregular'>('regular');
@@ -127,12 +139,13 @@ const regularFeeRows = ref<RegularFeeRow[]>([]);
 
 // Populate preset rows whenever course/year/semester changes
 const presetLines = computed<FeeLineItem[]>(() => {
-    const course = selectedStudent.value?.course;
+    // Use editableCourse if student has no assigned course yet
+    const course = needsCourse.value ? editableCourse.value : selectedStudent.value?.course;
     if (!course || !yearLevel.value || !semester.value) return [];
     return props.feePresets?.[course]?.[yearLevel.value]?.[semester.value] ?? [];
 });
 
-watch([() => selectedStudent.value?.course, yearLevel, semester, assessmentType], () => {
+watch([() => selectedStudent.value?.course, editableCourse, yearLevel, semester, assessmentType], () => {
     if (assessmentType.value !== 'regular') return;
     if (presetLines.value.length > 0) {
         regularFeeRows.value = presetLines.value.map((l) => ({
@@ -174,8 +187,8 @@ function toggleGroup(key: string) {
 
 // When student is selected and type is Irregular, pre-load their current year/sem subjects
 function preloadIrregularSubjects() {
-    if (!selectedStudent.value?.course || !yearLevel.value || !semester.value) return;
-    const course = selectedStudent.value.course;
+    const course = needsCourse.value ? editableCourse.value : selectedStudent.value?.course;
+    if (!course || !yearLevel.value || !semester.value) return;
     const subjectsForCurrentTerm =
         props.subjectMap?.[course]?.[yearLevel.value]?.[semester.value] ?? [];
 
@@ -200,7 +213,7 @@ function preloadIrregularSubjects() {
 
 // All subjects for the current student's course (any year/sem)
 const allSubjectsForCourse = computed((): SubjectItem[] => {
-    const course = selectedStudent.value?.course;
+    const course = needsCourse.value ? editableCourse.value : selectedStudent.value?.course;
     if (!course || !props.subjectMap[course]) return [];
     const result: SubjectItem[] = [];
     for (const yl of Object.keys(props.subjectMap[course])) {
@@ -213,7 +226,7 @@ const allSubjectsForCourse = computed((): SubjectItem[] => {
 
 // Grouped & search-filtered subjects for the browser panel
 const groupedSubjects = computed(() => {
-    const course = selectedStudent.value?.course;
+    const course = needsCourse.value ? editableCourse.value : selectedStudent.value?.course;
     if (!course || !props.subjectMap[course]) return {};
     const search  = subjectSearch.value.toLowerCase();
     const byYear  = props.subjectMap[course];
@@ -279,6 +292,10 @@ const grandTotal = computed(() =>
 
 function selectStudent(student: Student) {
     selectedStudent.value  = student;
+    // Pre-populate editableCourse from the student's existing course (if any).
+    // If they have no course or a placeholder, leave empty so staff must pick one.
+    const existingCourse = student.course;
+    editableCourse.value = (existingCourse && existingCourse !== 'N/A') ? existingCourse : '';
     // Use the suggested (next-term) year level, not the current stored year_level.
     // The controller computes this based on the student's last completed assessment.
     yearLevel.value        = student.suggested_year_level || student.year_level || '';
@@ -297,6 +314,7 @@ function selectStudent(student: Student) {
 function backToStudentSelection() {
     currentStep.value      = 1;
     selectedStudent.value  = null;
+    editableCourse.value   = '';
     selectedSubjects.value = [];
     regularFeeRows.value   = [];
     yearLevel.value        = '';
@@ -362,12 +380,20 @@ function submit() {
         return;
     }
 
+    // If student has no course, staff must assign one before submitting
+    if (needsCourse.value && !editableCourse.value.trim()) {
+        formErrors.value.course = 'Please assign a course to this student before creating an assessment.';
+        return;
+    }
+
     const payload: Record<string, any> = {
         user_id:         selectedStudent.value!.id,
         year_level:      yearLevel.value,
         semester:        semester.value,
         school_year:     effectiveSchoolYear.value,
         assessment_type: assessmentType.value,
+        // Include course so the controller can update the student's record if needed
+        course:          needsCourse.value ? editableCourse.value.trim() : (selectedStudent.value!.course ?? ''),
     };
 
     if (assessmentType.value === 'regular') {
@@ -547,8 +573,29 @@ const categoryColor: Record<string, string> = {
                                 <p class="font-semibold text-gray-900">{{ selectedStudent?.name }}</p>
                             </div>
                             <div>
-                                <p class="text-xs text-gray-500">Course</p>
-                                <p class="font-semibold text-gray-900">{{ selectedStudent?.course || '—' }}</p>
+                                <p class="text-xs text-gray-500">
+                                    Course
+                                    <span v-if="needsCourse" class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-700 font-semibold text-xs">
+                                        Required
+                                    </span>
+                                </p>
+                                <!-- Read-only when student already has a course assigned -->
+                                <p v-if="!needsCourse" class="font-semibold text-gray-900">
+                                    {{ selectedStudent?.course }}
+                                </p>
+                                <!-- Editable dropdown when student has no course (newly registered) -->
+                                <div v-else class="mt-1">
+                                    <select
+                                        v-model="editableCourse"
+                                        class="w-full rounded-md border border-amber-400 bg-white px-2 py-1.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                    >
+                                        <option value="">— Select Course —</option>
+                                        <option v-for="c in courses" :key="c" :value="c">{{ c }}</option>
+                                    </select>
+                                    <p v-if="formErrors.course" class="mt-1 text-xs text-red-600">
+                                        {{ formErrors.course }}
+                                    </p>
+                                </div>
                             </div>
                             <div>
                                 <p class="text-xs text-gray-500">Current Year Level</p>
