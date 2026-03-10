@@ -38,6 +38,7 @@ class User extends Authenticatable
         'profile_picture',
         'course',
         'year_level',
+        'is_irregular',
         'faculty',
         'status',
         'role',
@@ -84,6 +85,7 @@ class User extends Authenticatable
             'terms_accepted_at' => 'datetime',
             'permissions' => 'json',
             'is_active' => 'boolean',
+            'is_irregular' => 'boolean',
             'last_login_at' => 'datetime',
         ];
     }

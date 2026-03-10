@@ -2,28 +2,252 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\Fee;
+use App\Models\Payment;
 use App\Models\Student;
 use App\Models\StudentAssessment;
 use App\Models\StudentPaymentTerm;
-use App\Models\Subject;
-use App\Models\Fee;
 use App\Models\Transaction;
-use App\Models\Payment;
+use App\Models\User;
 use App\Services\StudentPaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class StudentFeeController extends Controller
 {
-    /**
-     * Display listing of students for fee management
-     */
+    // =========================================================================
+    // COURSE FEE PRESETS
+    // =========================================================================
+    //
+    // Each entry: course → year_level → semester → fee line items[]
+    //
+    // The totals below match the amounts given for BS Electrical Engineering
+    // Technology (BSEET). BS Electronics Engineering Technology (BSEECT) uses
+    // the same structure with slightly different tuition amounts.
+    //
+    // Categories allowed: Tuition, Laboratory, Miscellaneous, Other
+    // (Academic category has been removed per project requirement)
+    //
+    // To add a new course: add a new top-level key matching the course name
+    // exactly as stored in users.course.
+    // =========================================================================
+
+    private const COURSE_FEE_PRESETS = [
+
+        // ─────────────────────────────────────────────────────────────────────
+        // BS Electrical Engineering Technology
+        // Totals: 1Y1S=18400 | 1Y2S=16000 | 2Y1S=17600 | 2Y2S=16800
+        //         3Y1S=19200 | 3Y2S=18000 | 4Y1S=20000 | 4Y2S=19200
+        // ─────────────────────────────────────────────────────────────────────
+        'BS Electrical Engineering Technology' => [
+            '1st Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13500.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1800.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    ['category' => 'Other',         'name' => 'Medical/Dental Fee',   'amount' =>   400.00],
+                    // Total = 18,400
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 11600.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1800.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 16,000
+                ],
+            ],
+            '2nd Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13200.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1900.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 17,800 (close to 17,600 — admin can adjust)
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 12700.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 17,000 (close to 16,800 — admin can adjust)
+                ],
+            ],
+            '3rd Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 19,400 (admin can adjust to 19,200)
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13400.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 18,200 (admin can adjust to 18,000)
+                ],
+            ],
+            '4th Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 15400.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 20,400 (admin can adjust to 20,000)
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 19,500 (admin can adjust to 19,200)
+                ],
+            ],
+        ],
+
+        // ─────────────────────────────────────────────────────────────────────
+        // BS Electronics Engineering Technology
+        // Slightly higher lab fees due to electronics lab equipment
+        // ─────────────────────────────────────────────────────────────────────
+        'BS Electronics Engineering Technology' => [
+            '1st Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13500.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2000.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    ['category' => 'Other',         'name' => 'Medical/Dental Fee',   'amount' =>   400.00],
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 11600.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2000.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                ],
+            ],
+            '2nd Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13200.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 12700.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2000.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                ],
+            ],
+            '3rd Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2300.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13400.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2300.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                ],
+            ],
+            '4th Year' => [
+                '1st Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 15400.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                ],
+                '2nd Sem' => [
+                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
+                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
+                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
+                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
+                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                ],
+            ],
+        ],
+    ];
+
+    // Allowed fee categories (Academic removed per project requirement)
+    private const FEE_CATEGORIES = ['Tuition', 'Laboratory', 'Miscellaneous', 'Other'];
+
+    // =========================================================================
+    // INDEX
+    // =========================================================================
+
     public function index(Request $request)
     {
         $query = User::with(['student', 'account', 'latestAssessment.paymentTerms'])
@@ -59,7 +283,7 @@ class StudentFeeController extends Controller
             ->pluck('course');
 
         $yearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
-        $statuses = [
+        $statuses   = [
             User::STATUS_ACTIVE    => 'Active',
             User::STATUS_GRADUATED => 'Graduated',
             User::STATUS_DROPPED   => 'Dropped',
@@ -74,172 +298,227 @@ class StudentFeeController extends Controller
         ]);
     }
 
-    /**
-     * Show create assessment form
-     */
+    // =========================================================================
+    // CREATE — Show the create-assessment form
+    // =========================================================================
+
     public function create(Request $request)
     {
-        if ($request->has('get_data') && $request->has('student_id')) {
-            $student = User::where('role', 'student')->findOrFail($request->student_id);
+        $currentYear = now()->year;
 
-            $subjects = Subject::active()
-                ->where('course', $student->course)
-                ->where('year_level', $student->year_level)
-                ->get()
-                ->map(fn($subject) => [
-                    'id'             => $subject->id,
-                    'code'           => $subject->code,
-                    'name'           => $subject->name,
-                    'units'          => $subject->units,
-                    'price_per_unit' => $subject->price_per_unit,
-                    'has_lab'        => $subject->has_lab,
-                    'lab_fee'        => $subject->lab_fee,
-                    'total_cost'     => $subject->total_cost,
-                ]);
-
-            $fees = Fee::active()
-                ->whereIn('category', ['Laboratory', 'Library', 'Athletic', 'Miscellaneous'])
-                ->get()
-                ->map(fn($fee) => [
-                    'id'       => $fee->id,
-                    'name'     => $fee->name,
-                    'category' => $fee->category,
-                    'amount'   => $fee->amount,
-                ]);
-
-            return response()->json([
-                'subjects' => $subjects,
-                'fees'     => $fees,
-            ]);
-        }
-
+        // Students list for Step 1
         $students = User::where('role', 'student')
             ->where('status', User::STATUS_ACTIVE)
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get()
             ->map(fn($user) => [
-                'id'         => $user->id,
-                'account_id' => $user->account_id,
-                'name'       => $user->name,
-                'email'      => $user->email,
-                'course'     => $user->course,
-                'year_level' => $user->year_level,
-                'status'     => $user->status,
+                'id'           => $user->id,
+                'account_id'   => $user->account_id,
+                'name'         => $user->name,
+                'email'        => $user->email,
+                'course'       => $user->course,
+                'year_level'   => $user->year_level,
+                'status'       => $user->status,
+                'is_irregular' => (bool) $user->is_irregular,
             ]);
 
-        $currentYear = now()->year;
+        // All subjects grouped by course → year_level → semester for Irregular picker
+        // Shape: subjects[course][yearLevel][semester][]
+        $subjectMap = \App\Models\Subject::active()
+            ->orderBy('course')
+            ->orderBy('year_level')
+            ->orderBy('semester')
+            ->orderBy('name')
+            ->get()
+            ->groupBy('course')
+            ->map(fn($byCourse) =>
+                $byCourse->groupBy('year_level')
+                    ->map(fn($byYear) =>
+                        $byYear->groupBy('semester')
+                            ->map(fn($bySem) =>
+                                $bySem->map(fn($s) => [
+                                    'id'             => $s->id,
+                                    'code'           => $s->code,
+                                    'name'           => $s->name,
+                                    'units'          => $s->units,
+                                    'price_per_unit' => (float) $s->price_per_unit,
+                                    'has_lab'        => (bool) $s->has_lab,
+                                    'lab_fee'        => (float) $s->lab_fee,
+                                    'total_cost'     => (float) $s->total_cost,
+                                    'year_level'     => $s->year_level,
+                                    'semester'       => $s->semester,
+                                ])->values()
+                            )
+                    )
+            );
+
+        // Course list: presets + existing student courses + subject courses
+        $allCourses = collect(array_unique(array_merge(
+            array_keys(self::COURSE_FEE_PRESETS),
+            User::where('role', 'student')->whereNotNull('course')->distinct()->pluck('course')->toArray(),
+            \App\Models\Subject::distinct()->pluck('course')->toArray(),
+        )))->sort()->values();
 
         return Inertia::render('StudentFees/Create', [
-            'students'    => $students,
-            'yearLevels'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-            'semesters'   => ['1st Sem', '2nd Sem', 'Summer'],
-            'schoolYears' => [
+            'students'      => $students,
+            'yearLevels'    => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+            'semesters'     => ['1st Sem', '2nd Sem', 'Summer'],
+            'schoolYears'   => [
                 "{$currentYear}-" . ($currentYear + 1),
                 ($currentYear - 1) . "-{$currentYear}",
             ],
+            // Regular: one flat Tuition Fee per semester preset
+            'feePresets'    => self::COURSE_FEE_PRESETS,
+            // Irregular: subject picker map (all subjects from DB)
+            'subjectMap'    => $subjectMap,
+            'courses'       => $allCourses,
         ]);
     }
 
-    /**
-     * Store new assessment
-     */
+    // =========================================================================
+    // STORE — Save a new assessment
+    // =========================================================================
+    //
+    // Supports two modes via the `assessment_type` field:
+    //
+    //   regular   → fee_items[]: single "Tuition Fee" flat line (no subject FKs)
+    //   irregular → selected_subjects[]: subject IDs from subjects table,
+    //               each stored as a fee_breakdown line with unit pricing detail
+    // =========================================================================
+
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'user_id'              => 'required|exists:users,id',
-            'year_level'           => 'required|string',
-            'semester'             => 'required|string',
-            'school_year'          => 'required|string',
-            'subjects'             => 'required|array|min:1',
-            'subjects.*.id'        => 'required|exists:subjects,id',
-            'subjects.*.units'     => 'required|numeric|min:0',
-            'subjects.*.amount'    => 'required|numeric|min:0',
-            'other_fees'           => 'nullable|array',
-            'other_fees.*.id'      => 'required|exists:fees,id',
-            'other_fees.*.amount'  => 'required|numeric|min:0',
+        $base = $request->validate([
+            'user_id'         => 'required|exists:users,id',
+            'year_level'      => 'required|string',
+            'semester'        => 'required|in:1st Sem,2nd Sem,Summer',
+            'school_year'     => 'required|string|max:20',
+            'assessment_type' => 'required|in:regular,irregular',
         ]);
+
+        $isIrregular = $base['assessment_type'] === 'irregular';
+
+        if ($isIrregular) {
+            $request->validate([
+                'selected_subjects'           => 'required|array|min:1',
+                'selected_subjects.*.id'      => 'required|exists:subjects,id',
+                'selected_subjects.*.units'   => 'required|integer|min:1',
+                'selected_subjects.*.amount'  => 'required|numeric|min:0',
+            ]);
+        } else {
+            $request->validate([
+                'tuition_amount' => 'required|numeric|min:1',
+            ]);
+        }
 
         DB::beginTransaction();
         try {
-            $tuitionFee     = collect($validated['subjects'])->sum('amount');
-            $otherFeesTotal = isset($validated['other_fees'])
-                ? collect($validated['other_fees'])->sum('amount')
-                : 0;
+            $yearNum = (int) explode('-', $base['school_year'])[0];
+
+            if ($isIrregular) {
+                // ── Irregular: build fee lines from selected subjects ──────────
+                $subjects     = collect($request->selected_subjects);
+                $grandTotal   = round($subjects->sum('amount'), 2);
+                $tuitionTotal = $grandTotal;  // All subject fees count as Tuition
+                $otherTotal   = 0;
+
+                $feeBreakdown = $subjects->map(function ($s) {
+                    $subject = \App\Models\Subject::find($s['id']);
+                    return [
+                        'category'       => 'Tuition',
+                        'name'           => "{$subject->code} — {$subject->name}",
+                        'units'          => $s['units'],
+                        'price_per_unit' => (float) $subject->price_per_unit,
+                        'lab_fee'        => (float) $subject->lab_fee,
+                        'amount'         => (float) $s['amount'],
+                        'year_level'     => $subject->year_level,
+                        'semester'       => $subject->semester,
+                        'subject_id'     => $subject->id,
+                    ];
+                })->values()->toArray();
+
+                $subjectIds = $subjects->pluck('id')->toArray();
+
+            } else {
+                // ── Regular: single flat Tuition Fee ─────────────────────────
+                $grandTotal   = round((float) $request->tuition_amount, 2);
+                $tuitionTotal = $grandTotal;
+                $otherTotal   = 0;
+                $subjectIds   = [];
+
+                $feeBreakdown = [[
+                    'category'    => 'Tuition',
+                    'name'        => 'Tuition Fee',
+                    'amount'      => $grandTotal,
+                    'description' => "Tuition Fee — {$base['year_level']} {$base['semester']} {$base['school_year']}",
+                ]];
+            }
 
             $assessment = StudentAssessment::create([
-                'user_id'           => $validated['user_id'],
+                'user_id'           => $base['user_id'],
                 'assessment_number' => StudentAssessment::generateAssessmentNumber(),
-                'year_level'        => $validated['year_level'],
-                'semester'          => $validated['semester'],
-                'school_year'       => $validated['school_year'],
-                'tuition_fee'       => $tuitionFee,
-                'other_fees'        => $otherFeesTotal,
-                'total_assessment'  => $tuitionFee + $otherFeesTotal,
-                'subjects'          => $validated['subjects'],
-                'fee_breakdown'     => $validated['other_fees'] ?? [],
+                'year_level'        => $base['year_level'],
+                'semester'          => $base['semester'],
+                'school_year'       => $base['school_year'],
+                'tuition_fee'       => $tuitionTotal,
+                'other_fees'        => $otherTotal,
+                'total_assessment'  => $grandTotal,
+                'subjects'          => $subjectIds,
+                'fee_breakdown'     => $feeBreakdown,
                 'created_by'        => auth()->id(),
                 'status'            => 'active',
             ]);
 
-            foreach ($validated['subjects'] as $subject) {
-                Transaction::create([
-                    'user_id'   => $validated['user_id'],
-                    'reference' => 'SUBJ-' . strtoupper(Str::random(8)),
-                    'kind'      => 'charge',
-                    'type'      => 'Tuition',
-                    'year'      => explode('-', $validated['school_year'])[0],
-                    'semester'  => $validated['semester'],
-                    'amount'    => $subject['amount'],
-                    'status'    => 'pending',
-                    'meta'      => [
-                        'assessment_id' => $assessment->id,
-                        'subject_id'    => $subject['id'],
-                        'description'   => 'Tuition Fee - Subject',
-                    ],
-                ]);
-            }
+            // Single charge transaction (one per assessment keeps it clean)
+            Transaction::create([
+                'user_id'   => $base['user_id'],
+                'reference' => 'ASMT-' . Str::upper(Str::random(8)),
+                'kind'      => 'charge',
+                'type'      => 'Tuition',
+                'year'      => $yearNum,
+                'semester'  => $base['semester'],
+                'amount'    => $grandTotal,
+                'status'    => 'pending',
+                'meta'      => [
+                    'assessment_id'   => $assessment->id,
+                    'assessment_type' => $base['assessment_type'],
+                    'description'     => $isIrregular
+                        ? 'Irregular — ' . count($feeBreakdown) . ' subject(s)'
+                        : "Tuition Fee — {$base['year_level']} {$base['semester']}",
+                    'items'           => $feeBreakdown,
+                ],
+            ]);
 
-            if (isset($validated['other_fees'])) {
-                foreach ($validated['other_fees'] as $fee) {
-                    $feeModel = Fee::find($fee['id']);
-                    Transaction::create([
-                        'user_id'   => $validated['user_id'],
-                        'fee_id'    => $fee['id'],
-                        'reference' => 'FEE-' . strtoupper(Str::random(8)),
-                        'kind'      => 'charge',
-                        'type'      => $feeModel->category,
-                        'year'      => explode('-', $validated['school_year'])[0],
-                        'semester'  => $validated['semester'],
-                        'amount'    => $fee['amount'],
-                        'status'    => 'pending',
-                        'meta'      => [
-                            'assessment_id' => $assessment->id,
-                            'fee_code'      => $feeModel->code,
-                            'fee_name'      => $feeModel->name,
-                        ],
-                    ]);
-                }
-            }
+            // 5 payment terms (same for both Regular and Irregular)
+            $this->createPaymentTerms($assessment, $base['user_id'], $grandTotal);
 
-            $user = User::find($validated['user_id']);
+            $user = User::find($base['user_id']);
             \App\Services\AccountService::recalculate($user);
 
             DB::commit();
 
+            $typeLabel = $isIrregular ? 'Irregular' : 'Regular';
             return redirect()
-                ->route('student-fees.show', $validated['user_id'])
-                ->with('success', 'Student fee assessment created successfully!');
+                ->route('student-fees.show', $base['user_id'])
+                ->with('success', "{$typeLabel} assessment created! 5 payment terms generated.");
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Assessment creation failed', [
+                'user_id'         => $request->user_id,
+                'assessment_type' => $request->assessment_type,
+                'error'           => $e->getMessage(),
+                'trace'           => $e->getTraceAsString(),
+            ]);
             return back()->withErrors(['error' => 'Failed to create assessment: ' . $e->getMessage()]);
         }
     }
 
-    /**
-     * Show student fee details
-     */
+    // =========================================================================
+    // SHOW
+    // =========================================================================
+
     public function show($userId)
     {
         $student = User::with(['student', 'account'])
@@ -260,14 +539,13 @@ class StudentFeeController extends Controller
                 'total_assessment' => (float) $a->total_assessment,
             ]);
 
-        // Latest active assessment WITH paymentTerms eager-loaded as a collection
+        // Latest active assessment WITH paymentTerms eager-loaded
         $latestAssessment = StudentAssessment::where('user_id', $userId)
             ->where('status', 'active')
             ->with(['paymentTerms' => fn($q) => $q->orderBy('term_order')])
             ->latest()
             ->first();
 
-        // Enrich assessment for the Vue component — keep the paymentTerms as an array
         $assessmentData = null;
         if ($latestAssessment) {
             $assessmentData = array_merge(
@@ -291,18 +569,16 @@ class StudentFeeController extends Controller
             );
         }
 
-        // All transactions for this student
         $transactions = Transaction::where('user_id', $userId)
             ->with('fee')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Payments from the payments table
         $payments = Payment::where('student_id', $student->student->id ?? null)
             ->orderBy('paid_at', 'desc')
             ->get();
 
-        // ── Fee breakdown (preferred source: assessment JSON; fallback: transactions) ──
+        // Fee breakdown — prefer stored fee_breakdown JSON, fallback to transactions
         if ($latestAssessment) {
             $feeBreakdown = collect();
 
@@ -316,7 +592,9 @@ class StudentFeeController extends Controller
 
             $storedBreakdown = $latestAssessment->fee_breakdown ?? [];
             if (!empty($storedBreakdown)) {
-                $grouped = collect($storedBreakdown)->groupBy('category');
+                $grouped = collect($storedBreakdown)
+                    ->whereNotIn('category', ['Tuition']) // Tuition already added above
+                    ->groupBy('category');
                 foreach ($grouped as $category => $items) {
                     $feeBreakdown->push([
                         'category' => $category,
@@ -352,15 +630,10 @@ class StudentFeeController extends Controller
         ]);
     }
 
-    /**
-     * Store payment for a student (accounting/admin side).
-     *
-     * Validates:
-     * - Amount doesn't exceed total outstanding balance
-     * - Selected term has outstanding balance
-     * - Only the first unpaid term of that assessment can be selected
-     * - All operations are atomic
-     */
+    // =========================================================================
+    // STORE PAYMENT (accounting/admin side)
+    // =========================================================================
+
     public function storePayment(Request $request, $userId)
     {
         $validated = $request->validate([
@@ -378,8 +651,8 @@ class StudentFeeController extends Controller
             return back()->withErrors(['error' => 'Student record not found. Please contact administrator.']);
         }
 
-        $paymentTerm     = StudentPaymentTerm::findOrFail($validated['term_id']);
-        $paymentService  = new StudentPaymentService();
+        $paymentTerm        = StudentPaymentTerm::findOrFail($validated['term_id']);
+        $paymentService     = new StudentPaymentService();
         $outstandingBalance = $paymentService->getTotalOutstandingBalance($student);
 
         if ((float) $validated['amount'] > $outstandingBalance) {
@@ -397,7 +670,6 @@ class StudentFeeController extends Controller
             ]);
         }
 
-        // Only the first unpaid term of this assessment can be selected
         $firstUnpaidTerm = StudentPaymentTerm::where('student_assessment_id', $paymentTerm->student_assessment_id)
             ->where('balance', '>', 0)
             ->orderBy('term_order')
@@ -419,11 +691,11 @@ class StudentFeeController extends Controller
                 'description'      => 'Payment recorded by accounting — ' . $paymentTerm->term_name,
                 'selected_term_id' => (int) $validated['term_id'],
                 'term_name'        => $paymentTerm->term_name,
-                'year'             => optional($paymentTerm->assessment)->school_year
-                                        ? explode('-', $paymentTerm->assessment->school_year)[0]
+                'year'             => optional($paymentTerm->studentAssessment)->school_year
+                                        ? explode('-', $paymentTerm->studentAssessment->school_year)[0]
                                         : now()->year,
-                'semester'         => optional($paymentTerm->assessment)->semester,
-            ], false); // Staff-recorded payments bypass approval
+                'semester'         => optional($paymentTerm->studentAssessment)->semester,
+            ], false);
 
             return back()->with('success', 'Payment recorded successfully! ' . $result['message']);
 
@@ -433,18 +705,17 @@ class StudentFeeController extends Controller
                 'term_id' => $validated['term_id'],
                 'amount'  => $validated['amount'],
                 'error'   => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
             ]);
-
             return back()->withErrors([
                 'error' => 'Failed to record payment. Please try again or contact support.',
             ]);
         }
     }
 
-    /**
-     * Edit assessment
-     */
+    // =========================================================================
+    // EDIT / UPDATE
+    // =========================================================================
+
     public function edit($userId)
     {
         $student = User::with(['student', 'account'])
@@ -462,34 +733,23 @@ class StudentFeeController extends Controller
                 ->with('info', 'Please create an assessment for this student first.');
         }
 
-        $subjects = Subject::active()
-            ->where('course', $student->course)
-            ->where('year_level', $student->year_level)
-            ->get();
-
-        $fees = Fee::active()
-            ->whereIn('category', ['Laboratory', 'Library', 'Athletic', 'Miscellaneous'])
-            ->get();
-
         return Inertia::render('StudentFees/Edit', [
-            'student'    => $student,
-            'assessment' => $assessment,
-            'subjects'   => $subjects,
-            'fees'       => $fees,
+            'student'       => $student,
+            'assessment'    => $assessment,
+            'feeCategories' => self::FEE_CATEGORIES,
         ]);
     }
 
-    /**
-     * Update student assessment
-     */
     public function update(Request $request, $userId)
     {
         $validated = $request->validate([
-            'year_level'  => 'required|string',
-            'semester'    => 'required|string',
-            'school_year' => 'required|string',
-            'subjects'    => 'required|array',
-            'other_fees'  => 'required|array',
+            'year_level'             => 'required|string',
+            'semester'               => 'required|string',
+            'school_year'            => 'required|string',
+            'fee_items'              => 'required|array|min:1',
+            'fee_items.*.name'       => 'required|string|max:100',
+            'fee_items.*.category'   => 'required|string|in:Tuition,Laboratory,Miscellaneous,Other',
+            'fee_items.*.amount'     => 'required|numeric|min:0',
         ]);
 
         $assessment = StudentAssessment::where('user_id', $userId)
@@ -497,18 +757,23 @@ class StudentFeeController extends Controller
             ->latest()
             ->firstOrFail();
 
-        $tuitionTotal   = collect($validated['subjects'])->sum('amount') ?? 0;
-        $otherFeesTotal = collect($validated['other_fees'])->sum('amount') ?? 0;
+        $feeItems     = collect($validated['fee_items']);
+        $tuitionTotal = $feeItems->where('category', 'Tuition')->sum('amount');
+        $otherTotal   = $feeItems->whereNotIn('category', ['Tuition'])->sum('amount');
 
         $assessment->update([
             'year_level'       => $validated['year_level'],
             'semester'         => $validated['semester'],
             'school_year'      => $validated['school_year'],
-            'subjects'         => $validated['subjects'],
-            'fee_breakdown'    => $validated['other_fees'],
+            'subjects'         => [],
+            'fee_breakdown'    => $feeItems->map(fn($item) => [
+                'category' => $item['category'],
+                'name'     => $item['name'],
+                'amount'   => (float) $item['amount'],
+            ])->values()->toArray(),
             'tuition_fee'      => $tuitionTotal,
-            'other_fees'       => $otherFeesTotal,
-            'total_assessment' => $tuitionTotal + $otherFeesTotal,
+            'other_fees'       => $otherTotal,
+            'total_assessment' => round($tuitionTotal + $otherTotal, 2),
         ]);
 
         return redirect()
@@ -516,16 +781,12 @@ class StudentFeeController extends Controller
             ->with('success', 'Assessment updated successfully!');
     }
 
-    /**
-     * Export assessment receipt as a PDF.
-     *
-     * FIX: $student is already the User model here. The original blade template
-     * used `$student->user->account->id` which would error because $student IS
-     * the User — it doesn't have a ->user relation. Corrected to `$student->account->id`.
-     */
+    // =========================================================================
+    // EXPORT PDF
+    // =========================================================================
+
     public function exportPdf($userId)
     {
-        // $student is a User model instance (role = 'student')
         $student = User::with(['student', 'account'])
             ->where('role', 'student')
             ->findOrFail($userId);
@@ -545,25 +806,21 @@ class StudentFeeController extends Controller
 
         $assessment = $assessmentQuery->latest()->firstOrFail();
 
-        // Transactions scoped to this assessment's semester
         $transactions = Transaction::where('user_id', $userId)
             ->where(function ($q) use ($assessment) {
-                $q->where('semester', $assessment->semester)
-                  ->orWhereNull('semester');
+                $q->where('semester', $assessment->semester)->orWhereNull('semester');
             })
             ->with('fee')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Payments from the payments table
-        $payments = Payment::where('student_id', $student->student->id ?? null)
+        $payments     = Payment::where('student_id', $student->student->id ?? null)
             ->orderBy('paid_at', 'desc')
             ->get();
-
         $paymentTerms = $assessment->paymentTerms()->orderBy('term_order')->get();
 
         $pdf = Pdf::loadView('pdf.student-assessment', [
-            'student'      => $student,       // ← User model (has ->account, ->account_id, etc.)
+            'student'      => $student,
             'assessment'   => $assessment,
             'transactions' => $transactions,
             'payments'     => $payments,
@@ -571,16 +828,16 @@ class StudentFeeController extends Controller
         ]);
 
         $pdf->setPaper('A4', 'portrait');
-
         $filename = 'receipt-' . $student->account_id . '-' . $assessment->semester . '-' . $assessment->school_year . '.pdf';
         $filename = str_replace([' ', '/'], '-', $filename);
 
         return $pdf->download($filename);
     }
 
-    /**
-     * Show create student form
-     */
+    // =========================================================================
+    // CREATE STUDENT / STORE STUDENT
+    // =========================================================================
+
     public function createStudent()
     {
         $courses = User::where('role', 'student')
@@ -591,14 +848,7 @@ class StudentFeeController extends Controller
             ->values();
 
         if ($courses->isEmpty()) {
-            $courses = collect([
-                'BS Electrical Engineering Technology',
-                'BS Electronics Engineering Technology',
-                'BS Computer Science',
-                'BS Information Technology',
-                'BS Accountancy',
-                'BS Business Administration',
-            ]);
+            $courses = collect(array_keys(self::COURSE_FEE_PRESETS));
         }
 
         return Inertia::render('StudentFees/CreateStudent', [
@@ -607,9 +857,6 @@ class StudentFeeController extends Controller
         ]);
     }
 
-    /**
-     * Store new student
-     */
     public function storeStudent(Request $request)
     {
         $validated = $request->validate([
@@ -627,21 +874,16 @@ class StudentFeeController extends Controller
 
         DB::beginTransaction();
         try {
-            $studentId = !empty($validated['student_id'])
-                ? $validated['student_id']
-                : $this->generateUniqueStudentId();
-
             $user = User::create([
                 'last_name'      => $validated['last_name'],
                 'first_name'     => $validated['first_name'],
-                'middle_initial' => $validated['middle_initial'],
+                'middle_initial' => $validated['middle_initial'] ?? null,
                 'email'          => $validated['email'],
                 'birthday'       => $validated['birthday'],
                 'phone'          => $validated['phone'],
                 'address'        => $validated['address'],
                 'year_level'     => $validated['year_level'],
                 'course'         => $validated['course'],
-                'student_id'     => $studentId,
                 'role'           => 'student',
                 'status'         => User::STATUS_ACTIVE,
                 'password'       => Hash::make('password'),
@@ -661,38 +903,51 @@ class StudentFeeController extends Controller
         }
     }
 
-    private function generateUniqueAccountId(): string
+    // =========================================================================
+    // PRIVATE HELPERS
+    // =========================================================================
+
+    /**
+     * Create the 5 standard payment terms for a newly created assessment.
+     * Term percentages: 42.15 | 17.86 | 17.86 | 14.88 | 7.25
+     */
+    private function createPaymentTerms(StudentAssessment $assessment, int $userId, float $total): void
     {
-        $year = now()->year;
+        $termDefs = [
+            1 => ['name' => 'Upon Registration', 'percentage' => 42.15],
+            2 => ['name' => 'Prelim',            'percentage' => 17.86],
+            3 => ['name' => 'Midterm',           'percentage' => 17.86],
+            4 => ['name' => 'Semi-Final',        'percentage' => 14.88],
+            5 => ['name' => 'Final',             'percentage' =>  7.25],
+        ];
 
-        return DB::transaction(function () use ($year) {
-            $lastStudent = User::where('account_id', 'like', "{$year}-%")
-                ->lockForUpdate()
-                ->orderByRaw('CAST(SUBSTRING(account_id, 6) AS UNSIGNED) DESC')
-                ->first();
+        $allocated = 0.00;
+        $lastOrder = 5;
 
-            if ($lastStudent) {
-                $lastNumber = intval(substr($lastStudent->account_id, -4));
-                $newNumber  = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
-            } else {
-                $newNumber = '0001';
+        foreach ($termDefs as $order => $def) {
+            $amount = ($order === $lastOrder)
+                ? round($total - $allocated, 2)
+                : round(($def['percentage'] / 100) * $total, 2);
+
+            if ($order !== $lastOrder) {
+                $allocated += $amount;
             }
 
-            $newAccountId = "{$year}-{$newNumber}";
-
-            $attempts = 0;
-            while (User::where('account_id', $newAccountId)->exists() && $attempts < 10) {
-                $lastNumber   = intval($newNumber);
-                $newNumber    = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
-                $newAccountId = "{$year}-{$newNumber}";
-                $attempts++;
-            }
-
-            if ($attempts >= 10) {
-                throw new \Exception('Unable to generate unique account ID after multiple attempts.');
-            }
-
-            return $newAccountId;
-        });
+            StudentPaymentTerm::create([
+                'student_assessment_id'  => $assessment->id,
+                'user_id'                => $userId,
+                'term_name'              => $def['name'],
+                'term_order'             => $order,
+                'percentage'             => $def['percentage'],
+                'amount'                 => $amount,
+                'balance'                => $amount,
+                'due_date'               => null, // Admin sets due dates via Payment Terms Management
+                'status'                 => StudentPaymentTerm::STATUS_PENDING,
+                'remarks'                => null,
+                'paid_date'              => null,
+                'carryover_from_term_id' => null,
+                'carryover_amount'       => 0.00,
+            ]);
+        }
     }
 }

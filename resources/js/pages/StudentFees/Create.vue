@@ -1,4 +1,3 @@
-<!-- resources/js/Pages/StudentFees/Create.vue -->
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import { Button } from '@/components/ui/button';
@@ -6,20 +5,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Search, Trash2, User } from 'lucide-vue-next';
+import { ArrowLeft, BookOpen, ChevronDown, ChevronRight, Search, Trash2, User } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Student {
     id: number;
     account_id: string;
     name: string;
     email: string;
-    course: string;
-    year_level: string;
+    course: string | null;
+    year_level: string | null;
     status: string;
+    is_irregular: boolean;
 }
 
-interface Subject {
+interface SubjectItem {
     id: number;
     code: string;
     name: string;
@@ -28,342 +30,354 @@ interface Subject {
     has_lab: boolean;
     lab_fee: number;
     total_cost: number;
+    year_level: string;
+    semester: string;
 }
 
-interface Fee {
-    id: number;
-    name: string;
-    category: string;
-    amount: number;
-}
+// subjectMap[course][yearLevel][semester] = SubjectItem[]
+type SubjectMap = Record<string, Record<string, Record<string, SubjectItem[]>>>;
+
+// feePresets[course][yearLevel][semester] = number  (flat total)
+type FeePresets = Record<string, Record<string, Record<string, number>>>;
 
 interface SelectedSubject {
     id: number;
+    code: string;
+    name: string;
     units: number;
+    price_per_unit: number;
+    has_lab: boolean;
+    lab_fee: number;
     amount: number;
-}
-
-interface SelectedFee {
-    id: number;
-    amount: number;
+    year_level: string;
+    semester: string;
 }
 
 interface Props {
-    students: Student[];
-    yearLevels: string[];
-    semesters: string[];
+    students:    Student[];
+    yearLevels:  string[];
+    semesters:   string[];
     schoolYears: string[];
+    feePresets:  FeePresets;
+    subjectMap:  SubjectMap;
+    courses:     string[];
 }
 
 const props = defineProps<Props>();
 
+// ─── Breadcrumbs ──────────────────────────────────────────────────────────────
+
 const breadcrumbs = [
-    { title: 'Dashboard', href: route('dashboard') },
+    { title: 'Dashboard',              href: route('dashboard') },
     { title: 'Student Fee Management', href: route('student-fees.index') },
     { title: 'Create Assessment' },
 ];
 
-// Step management
-const currentStep = ref<1 | 2>(1);
+// ─── Step & Student ───────────────────────────────────────────────────────────
+
+const currentStep     = ref<1 | 2>(1);
 const selectedStudent = ref<Student | null>(null);
-const studentSearch = ref('');
+const studentSearch   = ref('');
 
-// Available subjects and fees (loaded after student selection)
-const availableSubjects = ref<Subject[]>([]);
-const availableFees = ref<Fee[]>([]);
-const isLoadingData = ref(false);
+// ─── Assessment type — admin can override the student's is_irregular flag ─────
 
-// Selected items
+const assessmentType = ref<'regular' | 'irregular'>('regular');
+
+// ─── Term fields ──────────────────────────────────────────────────────────────
+
+const yearLevel  = ref('');
+const semester   = ref('');
+const schoolYear = ref(props.schoolYears[0] || '');
+
+// ─── REGULAR: single flat Tuition Fee ────────────────────────────────────────
+
+const tuitionAmount = ref<number | string>('');
+
+// ─── IRREGULAR: subject picker ────────────────────────────────────────────────
+
 const selectedSubjects = ref<SelectedSubject[]>([]);
-const selectedFees = ref<SelectedFee[]>([]);
+const subjectSearch    = ref('');
+const expandedGroups   = ref<Set<string>>(new Set());
 
-// Filter students based on search
+function toggleGroup(key: string) {
+    expandedGroups.value.has(key)
+        ? expandedGroups.value.delete(key)
+        : expandedGroups.value.add(key);
+}
+
+// All subjects for the current student's course (any year/sem — Irregular picks freely)
+const allSubjectsForCourse = computed((): SubjectItem[] => {
+    const course = selectedStudent.value?.course;
+    if (!course || !props.subjectMap[course]) return [];
+    const result: SubjectItem[] = [];
+    for (const yl of Object.keys(props.subjectMap[course])) {
+        for (const sem of Object.keys(props.subjectMap[course][yl])) {
+            result.push(...props.subjectMap[course][yl][sem]);
+        }
+    }
+    return result;
+});
+
+// Grouped & filtered subjects for the browser panel
+const groupedSubjects = computed(() => {
+    const course = selectedStudent.value?.course;
+    if (!course || !props.subjectMap[course]) return {};
+    const search  = subjectSearch.value.toLowerCase();
+    const byYear  = props.subjectMap[course];
+    const result: Record<string, Record<string, SubjectItem[]>> = {};
+    for (const yl of Object.keys(byYear)) {
+        for (const sem of Object.keys(byYear[yl])) {
+            const items = byYear[yl][sem].filter(
+                (s) => !search || s.code.toLowerCase().includes(search) || s.name.toLowerCase().includes(search),
+            );
+            if (!items.length) continue;
+            if (!result[yl]) result[yl] = {};
+            result[yl][sem] = items;
+        }
+    }
+    return result;
+});
+
+function isSubjectSelected(id: number) {
+    return selectedSubjects.value.some((s) => s.id === id);
+}
+
+function toggleSubject(subject: SubjectItem) {
+    if (isSubjectSelected(subject.id)) {
+        selectedSubjects.value = selectedSubjects.value.filter((s) => s.id !== subject.id);
+    } else {
+        selectedSubjects.value.push({
+            id: subject.id, code: subject.code, name: subject.name,
+            units: subject.units, price_per_unit: subject.price_per_unit,
+            has_lab: subject.has_lab, lab_fee: subject.lab_fee,
+            amount: subject.total_cost,
+            year_level: subject.year_level, semester: subject.semester,
+        });
+    }
+}
+
+function removeSelectedSubject(id: number) {
+    selectedSubjects.value = selectedSubjects.value.filter((s) => s.id !== id);
+}
+
+// ─── Student list filtering ───────────────────────────────────────────────────
+
 const filteredStudents = computed(() => {
     if (!studentSearch.value) return props.students;
-
-    const search = studentSearch.value.toLowerCase();
+    const s = studentSearch.value.toLowerCase();
     return props.students.filter(
-        (student) =>
-            student.account_id.toLowerCase().includes(search) ||
-            student.name.toLowerCase().includes(search) ||
-            student.email.toLowerCase().includes(search) ||
-            student.course.toLowerCase().includes(search),
+        (st) =>
+            st.account_id.toLowerCase().includes(s) ||
+            st.name.toLowerCase().includes(s) ||
+            st.email.toLowerCase().includes(s) ||
+            (st.course ?? '').toLowerCase().includes(s),
     );
 });
 
-// Form for assessment data
-const form: any = useForm({
-    user_id: null,
-    year_level: '',
-    semester: '',
-    school_year: props.schoolYears[0] || '',
-    subjects: [],
-    other_fees: [],
+// ─── Preset amount for Regular mode ──────────────────────────────────────────
+
+const presetAmount = computed<number | null>(() => {
+    if (!selectedStudent.value?.course || !yearLevel.value || !semester.value) return null;
+    const val = props.feePresets?.[selectedStudent.value.course]?.[yearLevel.value]?.[semester.value];
+    return val != null ? Number(val) : null;
 });
 
-// Calculate totals
-const tuitionTotal = computed(() => {
-    return selectedSubjects.value.reduce((sum, s) => {
-        const amount = s.amount || 0;
-        return sum + amount;
-    }, 0);
-});
-
-const otherFeesTotal = computed(() => {
-    return selectedFees.value.reduce((sum, f) => {
-        const amount = f.amount || 0;
-        return sum + amount;
-    }, 0);
-});
-
-const grandTotal = computed(() => {
-    return tuitionTotal.value + otherFeesTotal.value;
-});
-
-// Select student and move to next step
-const selectStudent = async (student: Student) => {
-    selectedStudent.value = student;
-    form.user_id = student.id;
-    form.year_level = student.year_level;
-
-    // Load subjects and fees for this student
-    await loadStudentData(student);
-
-    currentStep.value = 2;
-};
-
-// Load subjects and fees based on student
-const loadStudentData = async (student: Student) => {
-    isLoadingData.value = true;
-
-    try {
-        // In a real scenario, you'd make an API call here
-        // For now, we'll simulate it with a route call
-        const response = await fetch(
-            route('student-fees.create', {
-                student_id: student.id,
-                get_data: true,
-            }),
-        );
-
-        if (response.ok) {
-            const data = await response.json();
-            availableSubjects.value = data.subjects || [];
-            availableFees.value = data.fees || [];
-        }
-    } catch (error) {
-        console.error('Failed to load student data:', error);
-    } finally {
-        isLoadingData.value = false;
+watch([yearLevel, semester], () => {
+    if (assessmentType.value === 'regular' && presetAmount.value !== null) {
+        tuitionAmount.value = presetAmount.value;
     }
-};
+});
 
-// Go back to student selection
-const backToStudentSelection = () => {
-    currentStep.value = 1;
-    selectedStudent.value = null;
-    selectedSubjects.value = [];
-    selectedFees.value = [];
-    form.user_id = null;
-    form.year_level = '';
-};
+// ─── Totals ───────────────────────────────────────────────────────────────────
 
-// Subject management
-const addSubject = (subject: Subject) => {
-    const exists = selectedSubjects.value.find((s) => s.id === subject.id);
-    if (!exists) {
-        selectedSubjects.value.push({
-            id: subject.id,
-            units: subject.units,
-            amount: parseFloat(String(subject.total_cost)) || 0,
-        });
-    }
-};
-
-const removeSubject = (subjectId: number) => {
-    selectedSubjects.value = selectedSubjects.value.filter((s) => s.id !== subjectId);
-};
-
-const getSubjectDetails = (subjectId: number) => {
-    return availableSubjects.value.find((s) => s.id === subjectId);
-};
-
-// Fee management
-const addFee = (fee: Fee) => {
-    const exists = selectedFees.value.find((f) => f.id === fee.id);
-    if (!exists) {
-        selectedFees.value.push({
-            id: fee.id,
-            amount: parseFloat(String(fee.amount)) || 0,
-        });
-    }
-};
-
-const removeFee = (feeId: number) => {
-    selectedFees.value = selectedFees.value.filter((f) => f.id !== feeId);
-};
-
-const getFeeDetails = (feeId: number) => {
-    return availableFees.value.find((f) => f.id === feeId);
-};
-
-// Watch for changes to update form
-watch(
-    [selectedSubjects, selectedFees],
-    () => {
-        form.subjects = selectedSubjects.value;
-        form.other_fees = selectedFees.value;
-    },
-    { deep: true },
+const grandTotal = computed(() =>
+    assessmentType.value === 'irregular'
+        ? selectedSubjects.value.reduce((sum, s) => sum + s.amount, 0)
+        : parseFloat(String(tuitionAmount.value)) || 0,
 );
 
-// Submit form
-const submit = () => {
-    form.post(route('student-fees.store'), {
-        preserveScroll: true,
-    });
-};
+// ─── Student selection ────────────────────────────────────────────────────────
 
-// Format currency
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP',
-    }).format(amount);
-};
+function selectStudent(student: Student) {
+    selectedStudent.value  = student;
+    yearLevel.value        = student.year_level || '';
+    assessmentType.value   = student.is_irregular ? 'irregular' : 'regular';
+    selectedSubjects.value = [];
+    tuitionAmount.value    = '';
+    expandedGroups.value   = new Set();
+    subjectSearch.value    = '';
+    currentStep.value      = 2;
+}
 
-// Get status color
-const getStatusColor = (status: string) => {
-    switch (status) {
-        case 'active':
-            return 'bg-green-100 text-green-800';
-        case 'graduated':
-            return 'bg-blue-100 text-blue-800';
-        case 'dropped':
-            return 'bg-red-100 text-red-800';
-        default:
-            return 'bg-gray-100 text-gray-800';
+function backToStudentSelection() {
+    currentStep.value      = 1;
+    selectedStudent.value  = null;
+    selectedSubjects.value = [];
+    tuitionAmount.value    = '';
+    yearLevel.value        = '';
+    semester.value         = '';
+    expandedGroups.value   = new Set();
+}
+
+// ─── Submit ───────────────────────────────────────────────────────────────────
+
+const form: any      = useForm({});
+const formErrors     = ref<Record<string, string>>({});
+
+function submit() {
+    formErrors.value = {};
+
+    if (!yearLevel.value || !semester.value) {
+        formErrors.value.term = 'Please select a year level and semester.';
+        return;
     }
-};
+    if (assessmentType.value === 'regular' && grandTotal.value <= 0) {
+        formErrors.value.tuition_amount = 'Please enter a tuition amount greater than zero.';
+        return;
+    }
+    if (assessmentType.value === 'irregular' && selectedSubjects.value.length === 0) {
+        formErrors.value.selected_subjects = 'Please select at least one subject.';
+        return;
+    }
+
+    const payload: Record<string, any> = {
+        user_id:         selectedStudent.value!.id,
+        year_level:      yearLevel.value,
+        semester:        semester.value,
+        school_year:     schoolYear.value,
+        assessment_type: assessmentType.value,
+    };
+
+    if (assessmentType.value === 'regular') {
+        payload.tuition_amount = parseFloat(String(tuitionAmount.value));
+    } else {
+        payload.selected_subjects = selectedSubjects.value.map((s) => ({
+            id: s.id, units: s.units, amount: s.amount,
+        }));
+    }
+
+    form.transform(() => payload).post(route('student-fees.store'), {
+        preserveScroll: true,
+        onError: (errors: any) => { formErrors.value = errors; },
+    });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const fmt = (n: number) =>
+    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n);
+
+function statusColor(status: string) {
+    return status === 'active'
+        ? 'bg-green-100 text-green-800'
+        : status === 'graduated'
+          ? 'bg-blue-100 text-blue-800'
+          : 'bg-gray-100 text-gray-800';
+}
 </script>
 
 <template>
     <Head title="Create Student Assessment" />
 
     <AppLayout>
-        <div class="mx-auto max-w-7xl space-y-6 p-6">
+        <div class="mx-auto max-w-6xl space-y-6 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
             <!-- Header -->
             <div class="flex items-center gap-4">
                 <Link :href="route('student-fees.index')">
                     <Button variant="outline" size="sm" class="flex items-center gap-2">
-                        <ArrowLeft class="h-4 w-4" />
-                        Back
+                        <ArrowLeft class="h-4 w-4" /> Back
                     </Button>
                 </Link>
                 <div>
                     <h1 class="text-3xl font-bold">Create Student Assessment</h1>
-                    <p class="mt-2 text-gray-600">
-                        {{ currentStep === 1 ? 'Step 1: Select Student' : 'Step 2: Create Assessment' }}
+                    <p class="mt-1 text-sm text-gray-500">
+                        {{ currentStep === 1 ? 'Step 1 of 2 — Select Student' : 'Step 2 of 2 — Configure Assessment' }}
                     </p>
                 </div>
             </div>
 
-            <!-- Step Indicator -->
+            <!-- Step indicator -->
             <div class="flex items-center justify-center gap-4">
                 <div class="flex items-center gap-2">
-                    <div
-                        :class="[
-                            'flex h-10 w-10 items-center justify-center rounded-full font-semibold',
-                            currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600',
-                        ]"
-                    >
-                        1
-                    </div>
-                    <span class="font-medium">Select Student</span>
+                    <div :class="['flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold',
+                                  currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500']">1</div>
+                    <span class="text-sm font-medium">Select Student</span>
                 </div>
-                <div class="h-1 w-24 bg-gray-200">
-                    <div :class="['h-full transition-all duration-300', currentStep >= 2 ? 'w-full bg-blue-600' : 'w-0']"></div>
+                <div class="h-px w-20 bg-gray-200">
+                    <div :class="['h-full transition-all duration-300', currentStep >= 2 ? 'w-full bg-blue-600' : 'w-0']" />
                 </div>
                 <div class="flex items-center gap-2">
-                    <div
-                        :class="[
-                            'flex h-10 w-10 items-center justify-center rounded-full font-semibold',
-                            currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600',
-                        ]"
-                    >
-                        2
-                    </div>
-                    <span class="font-medium">Create Assessment</span>
+                    <div :class="['flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold',
+                                  currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500']">2</div>
+                    <span class="text-sm font-medium">Configure Assessment</span>
                 </div>
             </div>
 
-            <!-- STEP 1: Student Selection -->
-            <div v-if="currentStep === 1" class="space-y-6">
-                <!-- Search Bar -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
+            <!-- ════════════════════════════════════════════════
+                 STEP 1 — Student Selection
+                 ════════════════════════════════════════════════ -->
+            <div v-if="currentStep === 1" class="space-y-4">
+
+                <div class="rounded-lg border bg-white p-4 shadow-sm">
                     <div class="relative">
-                        <Search class="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform text-gray-400" />
-                        <Input v-model="studentSearch" placeholder="Search by Account ID, Name, Email, or Course..." class="pl-10" />
+                        <Search class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Input v-model="studentSearch"
+                               placeholder="Search by ID, name, email, or course…"
+                               class="pl-9" />
                     </div>
                 </div>
 
-                <!-- Student List -->
                 <div class="overflow-hidden rounded-lg border bg-white shadow-sm">
-                    <div class="border-b p-6">
-                        <h2 class="text-lg font-semibold">Select a Student</h2>
-                        <p class="mt-1 text-sm text-gray-600">Choose an active student to create an assessment for</p>
+                    <div class="border-b px-6 py-4">
+                        <h2 class="font-semibold">Active Students</h2>
+                        <p class="mt-0.5 text-xs text-gray-500">Click a row to select</p>
                     </div>
-
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
+                        <table class="min-w-full divide-y divide-gray-100 text-sm">
+                            <thead class="bg-gray-50 text-xs font-medium uppercase text-gray-500">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account ID</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Year Level</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
+                                    <th class="px-5 py-3 text-left">Account ID</th>
+                                    <th class="px-5 py-3 text-left">Name</th>
+                                    <th class="px-5 py-3 text-left">Course</th>
+                                    <th class="px-5 py-3 text-left">Year</th>
+                                    <th class="px-5 py-3 text-left">Type</th>
+                                    <th class="px-5 py-3 text-left">Status</th>
+                                    <th class="px-5 py-3 text-right">Action</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
+                            <tbody class="divide-y divide-gray-100 bg-white">
                                 <tr v-if="filteredStudents.length === 0">
-                                    <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                                        <User class="mx-auto mb-3 h-12 w-12 text-gray-300" />
-                                        <p class="text-lg font-medium">No students found</p>
-                                        <p class="mt-1 text-sm">Try adjusting your search criteria</p>
+                                    <td colspan="7" class="px-5 py-12 text-center text-gray-400">
+                                        <User class="mx-auto mb-2 h-10 w-10 text-gray-300" />
+                                        <p>No students found</p>
                                     </td>
                                 </tr>
-                                <tr
-                                    v-for="student in filteredStudents"
-                                    :key="student.id"
-                                    class="cursor-pointer transition-colors hover:bg-gray-50"
-                                    @click="selectStudent(student)"
-                                >
-                                    <td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
-                                        {{ student.account_id }}
+                                <tr v-for="st in filteredStudents" :key="st.id"
+                                    class="cursor-pointer transition-colors hover:bg-blue-50"
+                                    @click="selectStudent(st)">
+                                    <td class="px-5 py-3 font-mono text-xs font-medium text-gray-900">{{ st.account_id }}</td>
+                                    <td class="px-5 py-3">
+                                        <div class="font-medium text-gray-900">{{ st.name }}</div>
+                                        <div class="text-xs text-gray-400">{{ st.email }}</div>
                                     </td>
-                                    <td class="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
-                                        <div>
-                                            <div class="font-medium">{{ student.name }}</div>
-                                            <div class="text-xs text-gray-500">{{ student.email }}</div>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                                        {{ student.course }}
-                                    </td>
-                                    <td class="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                                        {{ student.year_level }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="getStatusColor(student.status)">
-                                            {{ student.status }}
+                                    <td class="px-5 py-3 text-xs text-gray-600">{{ st.course || '—' }}</td>
+                                    <td class="px-5 py-3 text-xs text-gray-600">{{ st.year_level || '—' }}</td>
+                                    <td class="px-5 py-3">
+                                        <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold',
+                                                       st.is_irregular
+                                                         ? 'bg-amber-100 text-amber-700'
+                                                         : 'bg-blue-100 text-blue-700']">
+                                            {{ st.is_irregular ? 'Irregular' : 'Regular' }}
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
-                                        <Button size="sm" @click.stop="selectStudent(student)"> Select </Button>
+                                    <td class="px-5 py-3">
+                                        <span class="rounded-full px-2 py-0.5 text-xs font-semibold"
+                                              :class="statusColor(st.status)">{{ st.status }}</span>
+                                    </td>
+                                    <td class="px-5 py-3 text-right">
+                                        <Button size="sm" @click.stop="selectStudent(st)">Select</Button>
                                     </td>
                                 </tr>
                             </tbody>
@@ -372,260 +386,320 @@ const getStatusColor = (status: string) => {
                 </div>
             </div>
 
-            <!-- STEP 2: Assessment Form -->
-            <form v-if="currentStep === 2" @submit.prevent="submit" class="space-y-6">
-                <!-- Selected Student Info -->
-                <div class="rounded-lg border-2 border-blue-200 bg-blue-50 p-6">
-                    <div class="flex items-center justify-between">
+            <!-- ════════════════════════════════════════════════
+                 STEP 2 — Assessment Configuration
+                 ════════════════════════════════════════════════ -->
+            <div v-if="currentStep === 2" class="space-y-5">
+
+                <!-- Selected student banner -->
+                <div class="flex items-center justify-between rounded-lg border-2 border-blue-200 bg-blue-50 px-5 py-4">
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-4">
                         <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Selected Student</h3>
-                            <div class="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
-                                <div>
-                                    <span class="text-gray-600">Account ID:</span>
-                                    <p class="font-medium">{{ selectedStudent?.account_id }}</p>
-                                </div>
-                                <div>
-                                    <span class="text-gray-600">Name:</span>
-                                    <p class="font-medium">{{ selectedStudent?.name }}</p>
-                                </div>
-                                <div>
-                                    <span class="text-gray-600">Course:</span>
-                                    <p class="font-medium">{{ selectedStudent?.course }}</p>
-                                </div>
-                                <div>
-                                    <span class="text-gray-600">Year Level:</span>
-                                    <p class="font-medium">{{ selectedStudent?.year_level }}</p>
-                                </div>
-                            </div>
+                            <p class="text-xs text-gray-500">Account ID</p>
+                            <p class="font-semibold text-gray-900">{{ selectedStudent?.account_id }}</p>
                         </div>
-                        <Button type="button" variant="outline" size="sm" @click="backToStudentSelection"> Change Student </Button>
+                        <div>
+                            <p class="text-xs text-gray-500">Name</p>
+                            <p class="font-semibold text-gray-900">{{ selectedStudent?.name }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Course</p>
+                            <p class="font-semibold text-gray-900">{{ selectedStudent?.course || '—' }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Year Level</p>
+                            <p class="font-semibold text-gray-900">{{ selectedStudent?.year_level || '—' }}</p>
+                        </div>
                     </div>
+                    <Button type="button" variant="outline" size="sm" @click="backToStudentSelection">
+                        Change
+                    </Button>
                 </div>
 
                 <!-- Term Information -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
-                    <h2 class="mb-4 text-lg font-semibold">Term Information</h2>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="space-y-2">
-                            <Label for="year_level">Year Level</Label>
-                            <select
-                                id="year_level"
-                                v-model="form.year_level"
-                                required
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                            >
+                <div class="rounded-lg border bg-white p-5 shadow-sm">
+                    <h2 class="mb-4 font-semibold text-gray-900">Term Information</h2>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div class="space-y-1">
+                            <Label>Year Level</Label>
+                            <select v-model="yearLevel" required
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
                                 <option value="">Select year level</option>
-                                <option v-for="year in yearLevels" :key="year" :value="year">
-                                    {{ year }}
-                                </option>
+                                <option v-for="y in yearLevels" :key="y" :value="y">{{ y }}</option>
                             </select>
-                            <p v-if="form.errors?.year_level" class="text-sm text-red-500">
-                                {{ form.errors.year_level }}
-                            </p>
                         </div>
-
-                        <div class="space-y-2">
-                            <Label for="semester">Semester</Label>
-                            <select
-                                id="semester"
-                                v-model="form.semester"
-                                required
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                            >
+                        <div class="space-y-1">
+                            <Label>Semester</Label>
+                            <select v-model="semester" required
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
                                 <option value="">Select semester</option>
-                                <option v-for="sem in semesters" :key="sem" :value="sem">
-                                    {{ sem }}
-                                </option>
+                                <option v-for="s in semesters" :key="s" :value="s">{{ s }}</option>
                             </select>
-                            <p v-if="form.errors?.semester" class="text-sm text-red-500">
-                                {{ form.errors.semester }}
-                            </p>
                         </div>
+                        <div class="space-y-1">
+                            <Label>School Year</Label>
+                            <select v-model="schoolYear" required
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                                <option v-for="sy in schoolYears" :key="sy" :value="sy">{{ sy }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p v-if="formErrors.term" class="mt-2 text-xs text-red-500">{{ formErrors.term }}</p>
+                </div>
 
-                        <div class="space-y-2">
-                            <Label for="school_year">School Year</Label>
-                            <select
-                                id="school_year"
-                                v-model="form.school_year"
-                                required
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="">Select school year</option>
-                                <option v-for="sy in schoolYears" :key="sy" :value="sy">
-                                    {{ sy }}
-                                </option>
-                            </select>
-                            <p v-if="form.errors?.school_year" class="text-sm text-red-500">
-                                {{ form.errors.school_year }}
+                <!-- Assessment Type Toggle -->
+                <div class="rounded-lg border bg-white p-5 shadow-sm">
+                    <h2 class="mb-1 font-semibold text-gray-900">Assessment Type</h2>
+                    <p class="mb-4 text-xs text-gray-500">
+                        Pre-set from the student's record. You can override it here for this assessment only.
+                    </p>
+                    <div class="flex gap-3">
+                        <!-- Regular -->
+                        <button type="button"
+                                :class="['flex-1 rounded-lg border-2 px-5 py-4 text-left transition-all',
+                                         assessmentType === 'regular'
+                                           ? 'border-blue-500 bg-blue-50'
+                                           : 'border-gray-200 hover:border-gray-300']"
+                                @click="assessmentType = 'regular'; selectedSubjects = []">
+                            <p :class="['font-bold', assessmentType === 'regular' ? 'text-blue-700' : 'text-gray-700']">
+                                Regular
                             </p>
-                        </div>
+                            <p class="mt-0.5 text-xs text-gray-500">Single flat Tuition Fee per semester</p>
+                        </button>
+                        <!-- Irregular -->
+                        <button type="button"
+                                :class="['flex-1 rounded-lg border-2 px-5 py-4 text-left transition-all',
+                                         assessmentType === 'irregular'
+                                           ? 'border-amber-500 bg-amber-50'
+                                           : 'border-gray-200 hover:border-gray-300']"
+                                @click="assessmentType = 'irregular'; tuitionAmount = ''">
+                            <p :class="['font-bold', assessmentType === 'irregular' ? 'text-amber-700' : 'text-gray-700']">
+                                Irregular
+                            </p>
+                            <p class="mt-0.5 text-xs text-gray-500">
+                                Pick individual subjects from any year &amp; semester
+                            </p>
+                        </button>
                     </div>
                 </div>
 
-                <!-- Subjects Section -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
-                    <h2 class="mb-4 text-lg font-semibold">Subjects</h2>
+                <!-- ══════════════════════════════════════
+                     REGULAR PATH
+                     ══════════════════════════════════════ -->
+                <div v-if="assessmentType === 'regular'" class="rounded-lg border bg-white p-5 shadow-sm">
+                    <div class="mb-2 flex items-center gap-2">
+                        <BookOpen class="h-4 w-4 text-blue-500" />
+                        <h2 class="font-semibold text-gray-900">Tuition Fee</h2>
+                    </div>
 
-                    <!-- Available Subjects -->
-                    <div class="mb-4 space-y-2">
-                        <Label>Available Subjects</Label>
-                        <div v-if="isLoadingData" class="py-8 text-center">
-                            <p class="text-gray-500">Loading subjects...</p>
+                    <p v-if="presetAmount !== null" class="mb-4 text-xs text-green-600">
+                        ✓ Preset loaded for <strong>{{ selectedStudent?.course }}</strong>
+                        — {{ yearLevel }} {{ semester }}: {{ fmt(presetAmount) }}.
+                        You may edit the amount below.
+                    </p>
+                    <p v-else-if="yearLevel && semester" class="mb-4 text-xs text-amber-600">
+                        ⚠ No preset found for this course / term combination. Enter the amount manually.
+                    </p>
+                    <p v-else class="mb-4 text-xs text-gray-400">
+                        Select a year level and semester above to load the preset amount.
+                    </p>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl font-semibold text-gray-400">₱</span>
+                        <input v-model="tuitionAmount"
+                               type="number" min="0" step="0.01" placeholder="0.00"
+                               class="w-56 rounded-lg border border-gray-300 px-4 py-2.5 text-xl font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <p v-if="formErrors.tuition_amount" class="mt-2 text-xs text-red-500">
+                        {{ formErrors.tuition_amount }}
+                    </p>
+                </div>
+
+                <!-- ══════════════════════════════════════
+                     IRREGULAR PATH
+                     ══════════════════════════════════════ -->
+                <div v-if="assessmentType === 'irregular'" class="space-y-4">
+
+                    <!-- Subject browser -->
+                    <div class="rounded-lg border bg-white shadow-sm">
+                        <div class="border-b px-5 py-4">
+                            <h2 class="font-semibold text-gray-900">Subject Browser</h2>
+                            <p class="mt-0.5 text-xs text-gray-500">
+                                All subjects for <strong>{{ selectedStudent?.course || 'this course' }}</strong>.
+                                Irregular students can pick subjects from any year &amp; semester.
+                            </p>
                         </div>
-                        <div v-else class="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-lg border p-2">
-                            <div
-                                v-for="subject in availableSubjects"
-                                :key="subject.id"
-                                class="flex cursor-pointer items-center justify-between rounded border p-3 hover:bg-gray-50"
-                                @click="addSubject(subject)"
-                            >
-                                <div>
-                                    <p class="font-medium">{{ subject.code }} - {{ subject.name }}</p>
-                                    <p class="text-sm text-gray-600">
-                                        {{ subject.units }} units × {{ formatCurrency(subject.price_per_unit) }}
-                                        <span v-if="subject.has_lab">+ Lab Fee {{ formatCurrency(subject.lab_fee) }}</span>
-                                    </p>
-                                </div>
-                                <div class="font-medium text-blue-600">
-                                    {{ formatCurrency(subject.total_cost) }}
-                                </div>
+
+                        <!-- Subject search -->
+                        <div class="border-b px-5 py-3">
+                            <div class="relative">
+                                <Search class="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                                <input v-model="subjectSearch" type="text"
+                                       placeholder="Search by code or name…"
+                                       class="w-full rounded-lg border border-gray-200 py-1.5 pr-3 pl-8 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200" />
                             </div>
-                            <div v-if="availableSubjects.length === 0 && !isLoadingData" class="py-4 text-center text-gray-500">
-                                No subjects available for this student
-                            </div>
+                        </div>
+
+                        <!-- No subjects -->
+                        <div v-if="allSubjectsForCourse.length === 0"
+                             class="px-5 py-10 text-center text-sm text-gray-400">
+                            No subjects found for <strong>{{ selectedStudent?.course || 'this course' }}</strong>.
+                            Ask the admin to populate the subjects table for this course.
+                        </div>
+
+                        <!-- Grouped accordion -->
+                        <div v-else class="divide-y divide-gray-100">
+                            <template v-for="(bySem, yl) in groupedSubjects" :key="yl">
+                                <template v-for="(subjects, sem) in bySem" :key="sem">
+
+                                    <!-- Group header -->
+                                    <button type="button"
+                                            class="flex w-full items-center justify-between bg-gray-50 px-5 py-2.5 text-left transition-colors hover:bg-gray-100"
+                                            @click="toggleGroup(`${yl}||${sem}`)">
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                                            {{ yl }} — {{ sem }}
+                                            <span class="ml-2 font-normal text-gray-400">({{ subjects.length }})</span>
+                                        </span>
+                                        <ChevronDown v-if="expandedGroups.has(`${yl}||${sem}`)"
+                                                     class="h-4 w-4 text-gray-400" />
+                                        <ChevronRight v-else class="h-4 w-4 text-gray-400" />
+                                    </button>
+
+                                    <!-- Subject rows -->
+                                    <div v-if="expandedGroups.has(`${yl}||${sem}`)"
+                                         class="divide-y divide-gray-50">
+                                        <div v-for="subject in subjects" :key="subject.id"
+                                             :class="['flex cursor-pointer items-center justify-between px-5 py-3 transition-colors',
+                                                      isSubjectSelected(subject.id)
+                                                        ? 'bg-amber-50'
+                                                        : 'hover:bg-gray-50']"
+                                             @click="toggleSubject(subject)">
+                                            <div class="flex items-start gap-3">
+                                                <!-- Checkbox -->
+                                                <div :class="['mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-xs font-bold',
+                                                              isSubjectSelected(subject.id)
+                                                                ? 'border-amber-500 bg-amber-500 text-white'
+                                                                : 'border-gray-300 bg-white']">
+                                                    <span v-if="isSubjectSelected(subject.id)">✓</span>
+                                                </div>
+                                                <div>
+                                                    <p class="text-sm font-medium text-gray-900">
+                                                        {{ subject.code }} — {{ subject.name }}
+                                                    </p>
+                                                    <p class="text-xs text-gray-400">
+                                                        {{ subject.units }} units
+                                                        × {{ fmt(subject.price_per_unit) }}/unit
+                                                        <span v-if="subject.has_lab">
+                                                            + Lab {{ fmt(subject.lab_fee) }}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span class="ml-4 flex-shrink-0 text-sm font-semibold text-amber-600">
+                                                {{ fmt(subject.total_cost) }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                </template>
+                            </template>
                         </div>
                     </div>
 
-                    <!-- Selected Subjects -->
-                    <div class="space-y-2">
-                        <Label>Selected Subjects</Label>
-                        <div class="space-y-2">
-                            <div
-                                v-for="selected in selectedSubjects"
-                                :key="selected.id"
-                                class="flex items-center justify-between rounded-lg border bg-gray-50 p-3"
-                            >
-                                <div class="flex-1">
-                                    <p class="font-medium">
-                                        {{ getSubjectDetails(selected.id)?.code }} -
-                                        {{ getSubjectDetails(selected.id)?.name }}
+                    <!-- Selected subjects list -->
+                    <div class="rounded-lg border bg-white shadow-sm">
+                        <div class="border-b px-5 py-4">
+                            <h2 class="font-semibold text-gray-900">Selected Subjects</h2>
+                            <p class="mt-0.5 text-xs text-gray-500">
+                                {{ selectedSubjects.length }} subject{{ selectedSubjects.length !== 1 ? 's' : '' }} added
+                            </p>
+                        </div>
+
+                        <div v-if="selectedSubjects.length === 0"
+                             class="px-5 py-8 text-center text-sm text-gray-400">
+                            No subjects selected yet. Use the browser above to add subjects.
+                        </div>
+
+                        <div v-else class="divide-y divide-gray-100">
+                            <div v-for="s in selectedSubjects" :key="s.id"
+                                 class="flex items-center justify-between px-5 py-3">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">{{ s.code }} — {{ s.name }}</p>
+                                    <p class="text-xs text-gray-400">
+                                        {{ s.year_level }} · {{ s.semester }} ·
+                                        {{ s.units }} units × {{ fmt(s.price_per_unit) }}
+                                        <span v-if="s.has_lab">+ Lab {{ fmt(s.lab_fee) }}</span>
                                     </p>
-                                    <p class="text-sm text-gray-600">{{ selected.units }} units</p>
                                 </div>
                                 <div class="flex items-center gap-4">
-                                    <span class="font-medium">{{ formatCurrency(selected.amount) }}</span>
-                                    <button type="button" class="text-red-500 hover:text-red-700" @click="removeSubject(selected.id)">
+                                    <span class="font-semibold text-gray-900">{{ fmt(s.amount) }}</span>
+                                    <button type="button"
+                                            class="text-gray-300 transition-colors hover:text-red-500"
+                                            @click="removeSelectedSubject(s.id)">
                                         <Trash2 class="h-4 w-4" />
                                     </button>
                                 </div>
                             </div>
-                            <div v-if="selectedSubjects.length === 0" class="rounded-lg border bg-gray-50 py-8 text-center text-gray-500">
-                                No subjects selected. Click on subjects above to add them.
-                            </div>
                         </div>
-                        <p v-if="form.errors?.subjects" class="text-sm text-red-500">
-                            {{ form.errors.subjects }}
+
+                        <p v-if="formErrors.selected_subjects"
+                           class="px-5 pb-3 text-xs text-red-500">
+                            {{ formErrors.selected_subjects }}
                         </p>
-                    </div>
-
-                    <!-- Tuition Total -->
-                    <div class="mt-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
-                        <span class="text-lg font-medium">Total Tuition Fee</span>
-                        <span class="text-2xl font-bold text-blue-600">{{ formatCurrency(tuitionTotal) }}</span>
-                    </div>
-                </div>
-
-                <!-- Other Fees Section -->
-                <div class="rounded-lg border bg-white p-6 shadow-sm">
-                    <h2 class="mb-4 text-lg font-semibold">Other Fees</h2>
-
-                    <!-- Available Fees -->
-                    <div class="mb-4 space-y-2">
-                        <Label>Available Fees</Label>
-                        <div v-if="isLoadingData" class="py-8 text-center">
-                            <p class="text-gray-500">Loading fees...</p>
-                        </div>
-                        <div v-else class="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-lg border p-2">
-                            <div
-                                v-for="fee in availableFees"
-                                :key="fee.id"
-                                class="flex cursor-pointer items-center justify-between rounded border p-3 hover:bg-gray-50"
-                                @click="addFee(fee)"
-                            >
-                                <div>
-                                    <p class="font-medium">{{ fee.name }}</p>
-                                    <p class="text-sm text-gray-600">{{ fee.category }}</p>
-                                </div>
-                                <div class="font-medium text-blue-600">
-                                    {{ formatCurrency(fee.amount) }}
-                                </div>
-                            </div>
-                            <div v-if="availableFees.length === 0 && !isLoadingData" class="py-4 text-center text-gray-500">No fees available</div>
-                        </div>
-                    </div>
-
-                    <!-- Selected Fees -->
-                    <div class="space-y-2">
-                        <Label>Selected Fees</Label>
-                        <div class="space-y-2">
-                            <div
-                                v-for="selected in selectedFees"
-                                :key="selected.id"
-                                class="flex items-center justify-between rounded-lg border bg-gray-50 p-3"
-                            >
-                                <div class="flex-1">
-                                    <p class="font-medium">{{ getFeeDetails(selected.id)?.name }}</p>
-                                    <p class="text-sm text-gray-600">
-                                        {{ getFeeDetails(selected.id)?.category }}
-                                    </p>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <span class="font-medium">{{ formatCurrency(selected.amount) }}</span>
-                                    <button type="button" class="text-red-500 hover:text-red-700" @click="removeFee(selected.id)">
-                                        <Trash2 class="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
-                            <div v-if="selectedFees.length === 0" class="rounded-lg border bg-gray-50 py-8 text-center text-gray-500">
-                                No fees selected. Click on fees above to add them.
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Other Fees Total -->
-                    <div class="mt-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
-                        <span class="text-lg font-medium">Total Other Fees</span>
-                        <span class="text-2xl font-bold text-blue-600">{{ formatCurrency(otherFeesTotal) }}</span>
                     </div>
                 </div>
 
                 <!-- Grand Total -->
-                <div class="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white shadow-lg">
+                <div :class="['rounded-xl px-6 py-5 text-white shadow-lg',
+                              assessmentType === 'irregular'
+                                ? 'bg-gradient-to-r from-amber-500 to-amber-600'
+                                : 'bg-gradient-to-r from-blue-600 to-blue-700']">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="mb-1 text-sm tracking-wide text-blue-100 uppercase">Total Assessment Fee Amount</p>
-                            <p class="text-4xl font-bold">{{ formatCurrency(grandTotal) }}</p>
+                            <p class="mb-1 text-xs font-medium uppercase tracking-widest opacity-80">
+                                Total Assessment Amount
+                            </p>
+                            <p class="text-4xl font-bold tabular-nums">{{ fmt(grandTotal) }}</p>
                         </div>
-                        <div class="text-right">
-                            <p class="text-sm text-blue-100">Tuition: {{ formatCurrency(tuitionTotal) }}</p>
-                            <p class="text-sm text-blue-100">Other Fees: {{ formatCurrency(otherFeesTotal) }}</p>
+                        <div class="space-y-0.5 text-right text-xs opacity-75">
+                            <p>{{ assessmentType === 'irregular' ? 'Irregular' : 'Regular' }} Assessment</p>
+                            <p v-if="assessmentType === 'irregular'">
+                                {{ selectedSubjects.length }} subject{{ selectedSubjects.length !== 1 ? 's' : '' }}
+                            </p>
+                            <p>5 payment terms will be generated</p>
                         </div>
                     </div>
                 </div>
 
+                <!-- Global form error -->
+                <p v-if="formErrors.error" class="text-sm font-medium text-red-600">{{ formErrors.error }}</p>
+
                 <!-- Actions -->
-                <div class="flex items-center justify-between gap-4 pt-4">
-                    <Button type="button" variant="outline" @click="backToStudentSelection"> Back to Student Selection </Button>
-                    <div class="flex gap-4">
+                <div class="flex items-center justify-between pt-2">
+                    <Button type="button" variant="outline" @click="backToStudentSelection">
+                        ← Back to Student Selection
+                    </Button>
+                    <div class="flex gap-3">
                         <Link :href="route('student-fees.index')">
-                            <Button type="button" variant="outline"> Cancel </Button>
+                            <Button type="button" variant="outline">Cancel</Button>
                         </Link>
-                        <Button type="submit" :disabled="form.processing || !form.user_id || selectedSubjects.length === 0" class="min-w-[200px]">
-                            {{ form.processing ? 'Creating...' : 'Create Assessment' }}
+                        <Button
+                            type="button"
+                            :disabled="form.processing
+                                || !yearLevel
+                                || !semester
+                                || grandTotal <= 0
+                                || (assessmentType === 'irregular' && selectedSubjects.length === 0)"
+                            :class="[assessmentType === 'irregular'
+                                        ? 'bg-amber-500 hover:bg-amber-600 text-white border-0'
+                                        : '',
+                                     'min-w-[180px]']"
+                            @click="submit">
+                            {{ form.processing ? 'Creating…' : 'Create Assessment' }}
                         </Button>
                     </div>
                 </div>
-            </form>
+            </div>
         </div>
     </AppLayout>
 </template>
