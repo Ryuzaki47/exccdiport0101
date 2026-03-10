@@ -13,7 +13,7 @@ class Payment extends Model
     const STATUS_FAILED = 'failed';
 
     protected $fillable = [
-        'student_id', 'amount', 'description', 
+        'student_id', 'student_assessment_id', 'amount', 'description',
         'payment_method', 'reference_number', 'status', 'paid_at'
     ];
 
@@ -25,6 +25,11 @@ class Payment extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    public function assessment(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\StudentAssessment::class, 'student_assessment_id');
     }
 
     

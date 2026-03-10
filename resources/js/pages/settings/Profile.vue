@@ -30,10 +30,24 @@ type AppPageProps = Page['props'] & {
     auth: {
         user: StudentUser;
     };
+    latestAssessmentInfo?: {
+        year_level: string;
+        semester: string;
+        school_year: string;
+    } | null;
 };
 
 const page = usePage<AppPageProps>();
 const user = page.props.auth.user;
+
+// The year_level displayed on the Profile should reflect the student's LATEST ASSESSMENT
+// year_level (accurate), not users.year_level (may be stale after assessment progression).
+// latestAssessmentInfo is injected by HandleInertiaRequests for all authenticated students.
+const displayYearLevel = computed(() => {
+    const assessment = (page.props as any).latestAssessmentInfo;
+    if (assessment?.year_level) return assessment.year_level;
+    return (user as any).year_level ?? '';
+});
 
 // Determine user role
 const userRole = computed(() => {
@@ -328,7 +342,7 @@ const yearLevelOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
                     <div v-if="isStudent" class="grid gap-2">
                         <Label for="year_level">Year Level</Label>
                         <div class="flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-700">
-                            <span class="font-medium">{{ form.year_level || 'Not assigned' }}</span>
+                            <span class="font-medium">{{ displayYearLevel || 'Not assigned' }}</span>
                         </div>
                         <InputError class="mt-2" :message="errors.year_level" />
                     </div>

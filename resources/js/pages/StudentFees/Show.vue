@@ -180,23 +180,51 @@ const transactionsByTerm = computed((): TxGroup[] => {
     const groups: Record<string, any[]> = {};
 
     for (const t of props.transactions) {
-        const key = t.year && t.semester ? `${t.year} ${t.semester}` : 'Other';
+        // Build a full school-year key: "2025-2026 1st Sem" instead of "2025 1st Sem".
+        // Transactions store year as the start-year string (e.g. "2025").
+        let key: string;
+        if (t.year && t.semester) {
+            const startYear = parseInt(String(t.year), 10);
+            const schoolYear = isNaN(startYear) ? String(t.year) : `${startYear}-${startYear + 1}`;
+            key = `${schoolYear} ${t.semester}`;
+        } else {
+            key = 'Other';
+        }
         if (!groups[key]) groups[key] = [];
         groups[key].push(t);
     }
 
-    return Object.entries(groups).map(([key, txns]) => {
-        const totalCharges = txns.filter((t) => t.kind === 'charge').reduce((s, t) => s + parseFloat(t.amount), 0);
-        const totalPaidAmt = txns.filter((t) => t.kind === 'payment' && t.status === 'paid').reduce((s, t) => s + parseFloat(t.amount), 0);
-        return { key, transactions: txns, totalCharges, totalPaid: totalPaidAmt, balance: totalCharges - totalPaidAmt };
-    });
+    return Object.entries(groups)
+        .map(([key, txns]) => {
+            const totalCharges = txns.filter((t) => t.kind === 'charge').reduce((s, t) => s + parseFloat(t.amount), 0);
+            const totalPaidAmt = txns.filter((t) => t.kind === 'payment' && t.status === 'paid').reduce((s, t) => s + parseFloat(t.amount), 0);
+            return { key, transactions: txns, totalCharges, totalPaid: totalPaidAmt, balance: totalCharges - totalPaidAmt };
+        })
+        // Sort: most recent school year first
+        .sort((a, b) => {
+            const yearA = parseInt(a.key.split('-')[0] ?? '0', 10);
+            const yearB = parseInt(b.key.split('-')[0] ?? '0', 10);
+            return yearB - yearA;
+        });
 });
 
 const expandedTerms = ref<Record<string, boolean>>({});
-// Auto-expand first term
+
+// Auto-expand the term that matches the current (latest) assessment's school_year + semester.
+// e.g. if assessment is "2nd Year 1st Sem 2026-2027", expand "2026-2027 1st Sem".
+const currentAssessmentTermKey = computed<string | null>(() => {
+    if (!props.assessment?.school_year || !props.assessment?.semester) return null;
+    return `${props.assessment.school_year} ${props.assessment.semester}`;
+});
+
 if (transactionsByTerm.value.length > 0) {
-    expandedTerms.value[transactionsByTerm.value[0].key] = true;
+    const matchKey = currentAssessmentTermKey.value;
+    const autoKey  = matchKey && transactionsByTerm.value.some((g) => g.key === matchKey)
+        ? matchKey
+        : transactionsByTerm.value[0].key;
+    expandedTerms.value[autoKey] = true;
 }
+
 const toggleTerm = (key: string) => {
     expandedTerms.value[key] = !expandedTerms.value[key];
 };
@@ -207,6 +235,17 @@ const breadcrumbs = [
     { title: 'Student Fee Management', href: route('student-fees.index') },
     { title: props.student.name },
 ];
+
+// ─── Payment History pagination ────────────────────────────────────────────────
+const PAYMENT_PAGE_SIZE = 5;
+const paymentHistoryLimit = ref(PAYMENT_PAGE_SIZE);
+
+const visiblePayments = computed(() => props.payments.slice(0, paymentHistoryLimit.value));
+const hasMorePayments  = computed(() => props.payments.length > paymentHistoryLimit.value);
+
+const loadMorePayments = () => {
+    paymentHistoryLimit.value += PAYMENT_PAGE_SIZE;
+};
 
 // ─── Semester / Assessment selector ───────────────────────────────────────────
 // When a student has multiple assessments (e.g. 1st Sem + 2nd Sem), the accounting
@@ -301,6 +340,13 @@ const formatDate = (date: string) => new Date(date).toLocaleDateString('en-US', 
 
 const formatDateShort = (date: string) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
+/** Convert a start-year string/number ("2025") → full school year range ("2025-2026"). */
+const toYearRange = (year: string | number | null | undefined): string => {
+    if (!year) return '—';
+    const y = parseInt(String(year), 10);
+    return isNaN(y) ? String(year) : `${y}-${y + 1}`;
+};
+
 const getStudentStatusColor = (status: string) => {
     const map: Record<string, string> = {
         active: 'bg-green-100 text-green-800',
@@ -329,7 +375,12 @@ const getStudentStatusColor = (status: string) => {
                     </Link>
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">{{ student.name }}</h1>
-                        <p class="mt-0.5 text-sm text-gray-500">{{ student.account_id }} · {{ student.course }} · {{ student.year_level }}</p>
+                        <p class="mt-0.5 text-sm text-gray-500">
+                            {{ student.account_id }} &middot; {{ student.course }} &middot;
+                            <!-- Show assessment year_level (accurate) when available -->
+                            <span v-if="assessment?.year_level" class="font-medium text-blue-700">{{ assessment.year_level }}</span>
+                            <span v-else>{{ student.year_level }}</span>
+                        </p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -340,7 +391,9 @@ const getStudentStatusColor = (status: string) => {
                         class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                         title="Select semester to export"
                     >
-                        <option v-for="a in allAssessments" :key="a.id" :value="a.id">{{ a.semester }} {{ a.school_year }}</option>
+                        <option v-for="a in allAssessments" :key="a.id" :value="a.id">
+                            {{ a.year_level }} — {{ a.semester }} {{ a.school_year }}
+                        </option>
                     </select>
                     <a :href="exportUrl" target="_blank">
                         <Button variant="outline" size="sm">
@@ -533,7 +586,8 @@ const getStudentStatusColor = (status: string) => {
                         </div>
                         <div>
                             <Label class="text-xs text-gray-500">Year Level</Label>
-                            <p class="mt-0.5 font-medium">{{ student.year_level }}</p>
+                            <!-- assessment.year_level is always accurate; student.year_level may be stale -->
+                            <p class="mt-0.5 font-medium">{{ assessment?.year_level || student.year_level }}</p>
                         </div>
                         <div>
                             <Label class="text-xs text-gray-500">Status</Label>
@@ -676,7 +730,9 @@ const getStudentStatusColor = (status: string) => {
             <Card>
                 <CardHeader>
                     <CardTitle>Payment History</CardTitle>
-                    <CardDescription>All recorded payments ({{ payments.length }} total)</CardDescription>
+                    <CardDescription>
+                        Showing {{ visiblePayments.length }} of {{ payments.length }} payment(s)
+                    </CardDescription>
                 </CardHeader>
                 <CardContent class="p-0">
                     <div class="overflow-x-auto">
@@ -687,18 +743,19 @@ const getStudentStatusColor = (status: string) => {
                                     <th class="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Reference</th>
                                     <th class="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Method</th>
                                     <th class="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Description</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Year & Sem</th>
                                     <th class="px-6 py-3 text-right text-xs font-semibold tracking-wider text-gray-500 uppercase">Amount</th>
                                     <th class="px-6 py-3 text-center text-xs font-semibold tracking-wider text-gray-500 uppercase">Status</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
                                 <tr v-if="payments.length === 0">
-                                    <td colspan="6" class="px-6 py-10 text-center text-gray-400">
+                                    <td colspan="7" class="px-6 py-10 text-center text-gray-400">
                                         <CreditCard class="mx-auto mb-2 h-8 w-8 opacity-30" />
                                         <p>No payment history found</p>
                                     </td>
                                 </tr>
-                                <tr v-for="payment in payments" :key="payment.id" class="transition-colors hover:bg-gray-50">
+                                <tr v-for="payment in visiblePayments" :key="payment.id" class="transition-colors hover:bg-gray-50">
                                     <td class="px-6 py-3 text-sm whitespace-nowrap text-gray-600">
                                         {{ formatDateShort(payment.paid_at) }}
                                     </td>
@@ -711,6 +768,14 @@ const getStudentStatusColor = (status: string) => {
                                         </span>
                                     </td>
                                     <td class="px-6 py-3 text-sm text-gray-600">{{ payment.description }}</td>
+                                    <!-- Year & Sem: sourced from the linked StudentAssessment -->
+                                    <td class="px-6 py-3 text-sm whitespace-nowrap">
+                                        <div v-if="payment.school_year || payment.semester">
+                                            <p class="font-medium text-gray-800">{{ payment.school_year }}</p>
+                                            <p class="text-xs text-gray-500">{{ payment.semester }}</p>
+                                        </div>
+                                        <span v-else class="text-gray-400">—</span>
+                                    </td>
                                     <td class="px-6 py-3 text-right text-sm font-semibold whitespace-nowrap text-green-600">
                                         + {{ formatCurrency(payment.amount) }}
                                     </td>
@@ -725,6 +790,16 @@ const getStudentStatusColor = (status: string) => {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <!-- See More button -->
+                    <div v-if="hasMorePayments" class="border-t px-6 py-3 text-center">
+                        <button
+                            type="button"
+                            class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                            @click="loadMorePayments"
+                        >
+                            See More ({{ payments.length - paymentHistoryLimit }} remaining)
+                        </button>
                     </div>
                 </CardContent>
             </Card>
@@ -813,7 +888,8 @@ const getStudentStatusColor = (status: string) => {
                                         <td class="px-4 py-3 text-sm text-gray-700">{{ t.type }}</td>
                                         <td class="px-4 py-3 text-sm">
                                             <div v-if="t.year || t.semester">
-                                                <p class="font-medium text-gray-800">{{ t.year }}</p>
+                                                <!-- Convert start year "2025" → "2025-2026" full school year -->
+                                                <p class="font-medium text-gray-800">{{ toYearRange(t.year) }}</p>
                                                 <p class="text-xs text-gray-500">{{ t.semester }}</p>
                                             </div>
                                             <span v-else class="text-gray-400">—</span>

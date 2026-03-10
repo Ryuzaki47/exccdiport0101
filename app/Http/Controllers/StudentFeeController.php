@@ -306,22 +306,66 @@ class StudentFeeController extends Controller
     {
         $currentYear = now()->year;
 
+        // Semester progression map: completedYearLevel|completedSemester → [nextYearLevel, nextSemester]
+        $semesterProgression = [
+            '1st Year|1st Sem' => ['year_level' => '1st Year', 'semester' => '2nd Sem'],
+            '1st Year|2nd Sem' => ['year_level' => '2nd Year', 'semester' => '1st Sem'],
+            '2nd Year|1st Sem' => ['year_level' => '2nd Year', 'semester' => '2nd Sem'],
+            '2nd Year|2nd Sem' => ['year_level' => '3rd Year', 'semester' => '1st Sem'],
+            '3rd Year|1st Sem' => ['year_level' => '3rd Year', 'semester' => '2nd Sem'],
+            '3rd Year|2nd Sem' => ['year_level' => '4th Year', 'semester' => '1st Sem'],
+            '4th Year|1st Sem' => ['year_level' => '4th Year', 'semester' => '2nd Sem'],
+        ];
+
         // Students list for Step 1
         $students = User::where('role', 'student')
             ->where('status', User::STATUS_ACTIVE)
+            ->with(['latestAssessment'])
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get()
-            ->map(fn($user) => [
-                'id'           => $user->id,
-                'account_id'   => $user->account_id,
-                'name'         => $user->name,
-                'email'        => $user->email,
-                'course'       => $user->course,
-                'year_level'   => $user->year_level,
-                'status'       => $user->status,
-                'is_irregular' => (bool) $user->is_irregular,
-            ]);
+            ->map(function ($user) use ($semesterProgression) {
+                $latest = $user->latestAssessment;
+
+                // Determine suggested year level and semester for the NEXT assessment.
+                // If the student has a completed (all-terms-paid) assessment, suggest the
+                // next progression step. Otherwise, fall back to the student's stored year_level.
+                $suggestedYearLevel = $user->year_level;
+                $suggestedSemester  = null;
+
+                if ($latest) {
+                    $completedKey = "{$latest->year_level}|{$latest->semester}";
+                    if (isset($semesterProgression[$completedKey])) {
+                        $next               = $semesterProgression[$completedKey];
+                        $suggestedYearLevel = $next['year_level'];
+                        $suggestedSemester  = $next['semester'];
+                    } else {
+                        // Fallback: same year level, but let admin pick the semester
+                        $suggestedYearLevel = $latest->year_level;
+                        $suggestedSemester  = null;
+                    }
+                }
+
+                return [
+                    'id'                   => $user->id,
+                    'account_id'           => $user->account_id,
+                    'name'                 => $user->name,
+                    'email'                => $user->email,
+                    'course'               => $user->course,
+                    'year_level'           => $user->year_level,
+                    'status'               => $user->status,
+                    'is_irregular'         => (bool) $user->is_irregular,
+                    // These are the SUGGESTED values for the next assessment
+                    'suggested_year_level' => $suggestedYearLevel,
+                    'suggested_semester'   => $suggestedSemester,
+                    // Latest assessment info for the admin context label
+                    'latest_assessment'    => $latest ? [
+                        'year_level'  => $latest->year_level,
+                        'semester'    => $latest->semester,
+                        'school_year' => $latest->school_year,
+                    ] : null,
+                ];
+            });
 
         // All subjects grouped by course → year_level → semester for Irregular picker
         // Shape: subjects[course][yearLevel][semester][]
@@ -588,8 +632,22 @@ class StudentFeeController extends Controller
             ->get();
 
         $payments = Payment::where('student_id', $student->student->id ?? null)
+            ->with(['assessment:id,semester,school_year,year_level'])
             ->orderBy('paid_at', 'desc')
-            ->get();
+            ->get()
+            ->map(fn($p) => [
+                'id'               => $p->id,
+                'amount'           => (float) $p->amount,
+                'description'      => $p->description,
+                'payment_method'   => $p->payment_method,
+                'reference_number' => $p->reference_number,
+                'status'           => $p->status,
+                'paid_at'          => $p->paid_at,
+                // Derive Year & Sem from the linked assessment (most accurate)
+                'semester'         => $p->assessment?->semester ?? null,
+                'school_year'      => $p->assessment?->school_year ?? null,
+                'year_level'       => $p->assessment?->year_level ?? null,
+            ]);
 
         // Fee breakdown — prefer stored fee_breakdown JSON, fallback to transactions
         if ($latestAssessment) {
@@ -819,17 +877,46 @@ class StudentFeeController extends Controller
 
         $assessment = $assessmentQuery->latest()->firstOrFail();
 
+        // ── Derive the start-year integer from school_year (e.g. "2025-2026" → 2025) ──
+        $schoolYearStart = (int) explode('-', $assessment->school_year)[0];
+
+        // ── Scope transactions to THIS assessment only ────────────────────────
+        // Match on both year AND semester so 1st Sem 2025-2026 and 2nd Sem 2025-2026
+        // are never mixed together in the same PDF.
         $transactions = Transaction::where('user_id', $userId)
-            ->where(function ($q) use ($assessment) {
-                $q->where('semester', $assessment->semester)->orWhereNull('semester');
+            ->where(function ($q) use ($assessment, $schoolYearStart) {
+                // Primary: explicit year + semester match (set since Bug #4 fix)
+                $q->where(function ($inner) use ($assessment, $schoolYearStart) {
+                    $inner->where('year', (string) $schoolYearStart)
+                          ->where('semester', $assessment->semester);
+                })
+                // Secondary: meta contains the assessment_id (charge transaction created on assessment creation)
+                ->orWhere(function ($inner) use ($assessment) {
+                    $inner->whereJsonContains('meta->assessment_id', $assessment->id);
+                });
             })
             ->with('fee')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $payments     = Payment::where('student_id', $student->student->id ?? null)
+        // ── Scope payments to THIS assessment only ────────────────────────────
+        // After migration 2026_03_10_000001, new payments carry student_assessment_id.
+        // For legacy payments (no assessment_id), fall back to matching by reference
+        // against transactions that belong to this assessment.
+        $assessmentTransactionRefs = $transactions
+            ->where('kind', 'payment')
+            ->pluck('reference')
+            ->filter()
+            ->values();
+
+        $payments = Payment::where('student_id', $student->student->id ?? null)
+            ->where(function ($q) use ($assessment, $assessmentTransactionRefs) {
+                $q->where('student_assessment_id', $assessment->id)
+                  ->orWhereIn('reference_number', $assessmentTransactionRefs);
+            })
             ->orderBy('paid_at', 'desc')
             ->get();
+
         $paymentTerms = $assessment->paymentTerms()->orderBy('term_order')->get();
 
         $pdf = Pdf::loadView('pdf.student-assessment', [
@@ -841,8 +928,11 @@ class StudentFeeController extends Controller
         ]);
 
         $pdf->setPaper('A4', 'portrait');
-        $filename = 'receipt-' . $student->account_id . '-' . $assessment->semester . '-' . $assessment->school_year . '.pdf';
-        $filename = str_replace([' ', '/'], '-', $filename);
+        $filename = 'receipt-' . $student->account_id
+            . '-' . str_replace(' ', '-', $assessment->year_level)
+            . '-' . str_replace(' ', '-', $assessment->semester)
+            . '-' . $assessment->school_year . '.pdf';
+        $filename = str_replace(['/', ' '], '-', $filename);
 
         return $pdf->download($filename);
     }

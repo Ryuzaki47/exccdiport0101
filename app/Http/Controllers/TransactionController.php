@@ -36,6 +36,8 @@ class TransactionController extends Controller
                 ->orderByDesc('semester')
                 ->get()
                 ->groupBy(fn($txn) => $this->getTransactionGroupKey($txn));
+
+            $currentTerm = $this->getCurrentTerm();
         } else {
             $transactions = $user->transactions()
                 ->with('user')
@@ -43,13 +45,29 @@ class TransactionController extends Controller
                 ->orderByDesc('semester')
                 ->get()
                 ->groupBy(fn($txn) => $this->getTransactionGroupKey($txn));
+
+            // ── Bug #2 Fix: for students, resolve currentTerm from their ──────
+            // latest assessment so the correct term group is auto-expanded.
+            // This ensures newly-created assessments expand the right term even
+            // when the server-time semester differs from the assessment semester.
+            $latestAssessment = \App\Models\StudentAssessment::where('user_id', $user->id)
+                ->where('status', 'active')
+                ->latest()
+                ->first();
+
+            if ($latestAssessment) {
+                $yearNum     = explode('-', $latestAssessment->school_year)[0] ?? now()->year;
+                $currentTerm = trim("{$yearNum} {$latestAssessment->semester}");
+            } else {
+                $currentTerm = $this->getCurrentTerm();
+            }
         }
 
         return Inertia::render('Transactions/Index', [
             'auth'               => ['user' => $user],
             'transactionsByTerm' => $transactions,
             'account'            => $user->account,
-            'currentTerm'        => $this->getCurrentTerm(),
+            'currentTerm'        => $currentTerm,
         ]);
     }
 
@@ -265,10 +283,39 @@ class TransactionController extends Controller
         ]);
 
         try {
-            // ─────────────────────────────────────────────────────────────────────────────────
-            // SERVER-SIDE DEDUPLICATION: Prevent duplicate awaiting_approval submissions
-            // for the same term. This complements client-side validation.
-            // ─────────────────────────────────────────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────────────────
+            // SERVER-SIDE BALANCE GUARD (Bug Fix #6)
+            // The Vue client enforces a max but a user can bypass it via API.
+            // We must re-validate the amount against the term's actual balance.
+            // ─────────────────────────────────────────────────────────────────
+            $term = StudentPaymentTerm::findOrFail((int) $data['selected_term_id']);
+
+            // Ensure the term belongs to this user (security: prevent cross-user payment)
+            if ((int) $term->user_id !== (int) $user->id) {
+                return back()->withErrors(['payment' => 'Invalid payment term selected.']);
+            }
+
+            $termBalance = round((float) $term->balance, 2);
+            $paidAmount  = round((float) $data['amount'], 2);
+
+            if ($termBalance <= 0) {
+                return back()->withErrors(['payment' => 'This payment term has already been fully paid.']);
+            }
+
+            if ($paidAmount > $termBalance) {
+                return back()->withErrors([
+                    'amount' => sprintf(
+                        'Payment amount (₱%s) exceeds the outstanding balance for this term (₱%s).',
+                        number_format($paidAmount, 2),
+                        number_format($termBalance, 2)
+                    ),
+                ]);
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // SERVER-SIDE DEDUPLICATION: Prevent duplicate awaiting_approval
+            // submissions for the same term.
+            // ─────────────────────────────────────────────────────────────────
             if ($isStudent) {
                 $alreadyPending = Transaction::where('user_id', $user->id)
                     ->where('status', 'awaiting_approval')
@@ -284,16 +331,26 @@ class TransactionController extends Controller
             $paymentService   = new StudentPaymentService();
             $requiresApproval = $isStudent;
 
-            $term = StudentPaymentTerm::find($data['selected_term_id']);
+            // ─────────────────────────────────────────────────────────────────
+            // TERM KEY FIX (Bug Fix #4)
+            // Always derive year and semester from the term's own assessment so
+            // the transaction is grouped under the correct term in history.
+            // Fallback to server-time only if the assessment is missing.
+            // ─────────────────────────────────────────────────────────────────
+            $assessment       = $term->assessment;
+            $transactionYear  = $assessment
+                ? explode('-', $assessment->school_year)[0]
+                : (string) now()->year;
+            $transactionSem   = $assessment?->semester ?? $this->getCurrentSemesterLabel();
 
-            $result = $paymentService->processPayment($user, (float) $data['amount'], [
+            $result = $paymentService->processPayment($user, $paidAmount, [
                 'payment_method'   => $data['payment_method'],
                 'paid_at'          => $data['paid_at'],
                 'description'      => $data['description'] ?? null,
                 'selected_term_id' => (int) $data['selected_term_id'],
-                'term_name'        => $term?->term_name,
-                'year'             => (string) now()->year,
-                'semester'         => $this->getCurrentSemesterLabel(),
+                'term_name'        => $term->term_name,
+                'year'             => $transactionYear,
+                'semester'         => $transactionSem,
             ], $requiresApproval);
 
             // ── START APPROVAL WORKFLOW FOR STUDENT PAYMENTS ──────────────────

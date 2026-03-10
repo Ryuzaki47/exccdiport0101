@@ -184,6 +184,9 @@
     </p>
     <p class="doc-title">Certificate of Matriculation / Assessment Form</p>
     <p class="assessment-no">Assessment No: {{ $assessment->assessment_number }}</p>
+    <p class="assessment-no" style="font-size:11px; font-weight:bold; margin-top:4px;">
+        {{ $assessment->year_level }} &mdash; {{ $assessment->semester }} &middot; S.Y. {{ $assessment->school_year }}
+    </p>
 </div>
 
 {{-- ══ Student Information ══ --}}
@@ -205,7 +208,8 @@
         </tr>
         <tr>
             <td class="lbl">Year Level:</td>
-            <td class="val">{{ $student->year_level }}</td>
+            {{-- Use assessment year_level (accurate) not student.year_level (may be stale) --}}
+            <td class="val">{{ $assessment->year_level }}</td>
             <td class="lbl">Semester:</td>
             <td class="val">{{ $assessment->semester }}</td>
         </tr>

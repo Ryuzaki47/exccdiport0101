@@ -19,6 +19,14 @@ interface Student {
     year_level: string | null;
     status: string;
     is_irregular: boolean;
+    // Added by the controller for next-assessment pre-fill (Bug #3 fix)
+    suggested_year_level: string | null;
+    suggested_semester: string | null;
+    latest_assessment: {
+        year_level: string;
+        semester: string;
+        school_year: string;
+    } | null;
 }
 
 interface FeeLineItem {
@@ -271,7 +279,13 @@ const grandTotal = computed(() =>
 
 function selectStudent(student: Student) {
     selectedStudent.value  = student;
-    yearLevel.value        = student.year_level || '';
+    // Use the suggested (next-term) year level, not the current stored year_level.
+    // The controller computes this based on the student's last completed assessment.
+    yearLevel.value        = student.suggested_year_level || student.year_level || '';
+    // Pre-populate semester if the controller resolved a clear next step
+    if (student.suggested_semester) {
+        semester.value = student.suggested_semester;
+    }
     assessmentType.value   = student.is_irregular ? 'irregular' : 'regular';
     selectedSubjects.value = [];
     regularFeeRows.value   = [];
@@ -484,7 +498,17 @@ const categoryColor: Record<string, string> = {
                                         <div class="text-xs text-gray-400">{{ st.email }}</div>
                                     </td>
                                     <td class="px-5 py-3 text-xs text-gray-600">{{ st.course || '—' }}</td>
-                                    <td class="px-5 py-3 text-xs text-gray-600">{{ st.year_level || '—' }}</td>
+                                    <td class="px-5 py-3 text-xs">
+                                        <!-- Show the suggested next-term year level when available.
+                                             This reflects where the student is GOING, not where they were. -->
+                                        <span v-if="st.suggested_year_level && st.suggested_year_level !== st.year_level"
+                                              class="font-semibold text-blue-700">
+                                            {{ st.suggested_year_level }}
+                                        </span>
+                                        <span v-else class="text-gray-600">
+                                            {{ st.year_level || '—' }}
+                                        </span>
+                                    </td>
                                     <td class="px-5 py-3">
                                         <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold',
                                                        st.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">
@@ -511,28 +535,53 @@ const categoryColor: Record<string, string> = {
             <div v-if="currentStep === 2" class="space-y-5">
 
                 <!-- Selected student banner -->
-                <div class="flex items-center justify-between rounded-lg border-2 border-blue-200 bg-blue-50 px-5 py-4">
-                    <div class="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-4">
-                        <div>
-                            <p class="text-xs text-gray-500">Account ID</p>
-                            <p class="font-semibold text-gray-900">{{ selectedStudent?.account_id }}</p>
+                <div class="rounded-lg border-2 border-blue-200 bg-blue-50 px-5 py-4">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-4">
+                            <div>
+                                <p class="text-xs text-gray-500">Account ID</p>
+                                <p class="font-semibold text-gray-900">{{ selectedStudent?.account_id }}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">Name</p>
+                                <p class="font-semibold text-gray-900">{{ selectedStudent?.name }}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">Course</p>
+                                <p class="font-semibold text-gray-900">{{ selectedStudent?.course || '—' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">Current Year Level</p>
+                                <!-- Show the CURRENT year level from the latest assessment (accurate),
+                                     not year_level from users table (may be stale). -->
+                                <p class="font-semibold text-gray-900">
+                                    {{ selectedStudent?.latest_assessment?.year_level || selectedStudent?.year_level || '—' }}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Name</p>
-                            <p class="font-semibold text-gray-900">{{ selectedStudent?.name }}</p>
+                        <Button type="button" variant="outline" size="sm" @click="backToStudentSelection" class="flex-shrink-0">
+                            Change
+                        </Button>
+                    </div>
+                    <!-- Last completed assessment context + auto-fill notice -->
+                    <div class="mt-3 border-t border-blue-200 pt-3 flex flex-wrap items-center gap-4 text-xs">
+                        <div v-if="selectedStudent?.latest_assessment">
+                            <span class="text-gray-500">Last Assessment: </span>
+                            <span class="font-semibold text-gray-700">
+                                {{ selectedStudent.latest_assessment.year_level }}
+                                {{ selectedStudent.latest_assessment.semester }}
+                                {{ selectedStudent.latest_assessment.school_year }}
+                            </span>
                         </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Course</p>
-                            <p class="font-semibold text-gray-900">{{ selectedStudent?.course || '—' }}</p>
+                        <div v-else>
+                            <span class="text-gray-400">No previous assessment on record.</span>
                         </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Year Level</p>
-                            <p class="font-semibold text-gray-900">{{ selectedStudent?.year_level || '—' }}</p>
+                        <div v-if="selectedStudent?.suggested_year_level"
+                             class="rounded-full bg-green-100 px-3 py-1 text-green-700 font-medium">
+                            ✓ Auto-filled: {{ selectedStudent.suggested_year_level }}
+                            <span v-if="selectedStudent.suggested_semester"> · {{ selectedStudent.suggested_semester }}</span>
                         </div>
                     </div>
-                    <Button type="button" variant="outline" size="sm" @click="backToStudentSelection">
-                        Change
-                    </Button>
                 </div>
 
                 <!-- ── Term Information ─────────────────────────────── -->

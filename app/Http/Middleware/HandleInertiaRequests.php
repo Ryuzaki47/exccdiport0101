@@ -48,6 +48,26 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            // ── Expose latest assessment data for the authenticated student ──
+            // Profile.vue reads auth.user.year_level which is the raw DB value and
+            // may be stale. Provide the assessment-derived year_level as a fallback
+            // so the Profile always shows the accurate academic year level.
+            'latestAssessmentInfo' => (function () use ($request) {
+                $user = $request->user();
+                if (!$user || $user->role->value !== 'student') {
+                    return null;
+                }
+                $assessment = \App\Models\StudentAssessment::where('user_id', $user->id)
+                    ->where('status', 'active')
+                    ->latest()
+                    ->first();
+                if (!$assessment) return null;
+                return [
+                    'year_level'  => $assessment->year_level,
+                    'semester'    => $assessment->semester,
+                    'school_year' => $assessment->school_year,
+                ];
+            })(),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'csrf_token' => $token,
         ];

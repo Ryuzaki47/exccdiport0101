@@ -264,9 +264,7 @@ const totalAssessmentFee = computed(() => {
     return props.fees.reduce((sum, fee) => sum + Number(fee.amount), 0);
 });
 
-const totalPaid = computed(() => {
-    return props.transactions.filter((t) => t.kind === 'payment' && t.status === 'paid').reduce((sum, t) => sum + Number(t.amount), 0);
-});
+
 
 // Calculate remaining balance from PAYMENT TERMS (not transactions)
 // Payment terms are the source of truth for student balances
@@ -355,12 +353,16 @@ const firstUnpaidTermId = computed(() => {
     return unpaid?.[0]?.id ?? null;
 });
 
-// All-time payment history — used for the "Total Paid" balance card
-const totalPaidTransactions = computed(() => {
-    return props.transactions.filter((t) => t.kind === 'payment' && t.status === 'paid');
+// ── Current-term helpers ──────────────────────────────────────────────────────
+// Derive the start-year string from the school_year field (e.g. "2025-2026" → "2025")
+const currentTermYear = computed<string | null>(() => {
+    if (!props.latestAssessment?.school_year) return null;
+    return String(props.latestAssessment.school_year).split('-')[0] ?? null;
 });
 
-// Current-term payment history — displayed in the Payment History tab
+const currentTermSem = computed<string | null>(() => props.latestAssessment?.semester ?? null);
+
+// Current-term payment history — displayed in the Payment History tab.
 // Filters to transactions that match the latest assessment's school_year and semester.
 // Falls back to all payment transactions if no assessment exists.
 const paymentHistory = computed(() => {
@@ -368,24 +370,56 @@ const paymentHistory = computed(() => {
         .filter((t) => t.kind === 'payment')
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    if (!props.latestAssessment) {
+    if (!props.latestAssessment || !currentTermYear.value || !currentTermSem.value) {
         // No assessment on record — show everything
         return allPayments;
     }
 
-    const { school_year, semester } = props.latestAssessment;
+    const termYear = currentTermYear.value;
+    const termSem  = currentTermSem.value;
 
     return allPayments.filter((t) => {
-        // Prefer explicit semester/year columns on the transaction
-        if (t.semester && t.year) {
-            const txYear = String(t.year);
-            const schoolYearStart = school_year ? String(school_year).split('-')[0] : '';
-            return t.semester === semester && txYear === schoolYearStart;
+        // Primary: match using the explicit year + semester columns on the transaction.
+        // These are now correctly populated from the assessment (Bug #4 fix).
+        if (t.year != null && t.semester != null) {
+            return String(t.year) === termYear && t.semester === termSem;
         }
-        // Fallback: check meta.description or meta.term_name for a semester mention
-        const desc = (t.meta?.description ?? '') + (t.meta?.term_name ?? '');
-        return desc.includes(semester) || desc.includes(school_year ?? '');
+        // Fallback for older records: check meta description/term_name
+        const desc = ((t.meta?.description ?? '') + ' ' + (t.meta?.term_name ?? '')).toLowerCase();
+        const schoolYear = props.latestAssessment!.school_year ?? '';
+        return desc.includes(termSem.toLowerCase()) || desc.includes(schoolYear.toLowerCase());
     });
+});
+
+// All-time payment history — used for the "Total Paid" balance card (legacy, kept for fallback)
+const totalPaidTransactions = computed(() => {
+    return props.transactions.filter((t) => t.kind === 'payment' && t.status === 'paid');
+});
+
+// Total paid for the CURRENT TERM only (matches the latestAssessment)
+// This drives the "Total Paid" card on the dashboard.
+const totalPaid = computed(() => {
+    if (!props.latestAssessment || !currentTermYear.value || !currentTermSem.value) {
+        // No assessment — sum all confirmed payments
+        return props.transactions
+            .filter((t) => t.kind === 'payment' && t.status === 'paid')
+            .reduce((sum, t) => sum + Number(t.amount), 0);
+    }
+
+    const termYear = currentTermYear.value;
+    const termSem  = currentTermSem.value;
+
+    return props.transactions
+        .filter((t) => {
+            if (t.kind !== 'payment' || t.status !== 'paid') return false;
+            if (t.year != null && t.semester != null) {
+                return String(t.year) === termYear && t.semester === termSem;
+            }
+            const desc = ((t.meta?.description ?? '') + ' ' + (t.meta?.term_name ?? '')).toLowerCase();
+            const schoolYear = props.latestAssessment!.school_year ?? '';
+            return desc.includes(termSem.toLowerCase()) || desc.includes(schoolYear.toLowerCase());
+        })
+        .reduce((sum, t) => sum + Number(t.amount), 0);
 });
 
 const selectedTermInfo = computed(() => {
@@ -606,7 +640,13 @@ const accountBalance = computed(() => {
                     </div>
                     <h3 class="mb-2 text-sm font-medium text-gray-600">Total Paid</h3>
                     <p class="text-3xl font-bold text-green-600">{{ formatCurrency(totalPaid) }}</p>
-                    <p class="mt-2 text-xs text-gray-500">{{ paymentHistory.length }} payment(s) made</p>
+                    <p class="mt-2 text-xs text-gray-500">
+                        <span v-if="latestAssessment">
+                            {{ latestAssessment.semester }} {{ latestAssessment.school_year }}
+                        </span>
+                        <span v-else>All payments</span>
+                        &mdash; {{ paymentHistory.filter(t => t.status === 'paid').length }} payment(s)
+                    </p>
                 </div>
 
                 <!-- Current Balance -->
