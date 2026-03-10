@@ -120,6 +120,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->group(fu
     Route::resource('notifications', NotificationController::class);
     Route::get('/payment-terms', [PaymentTermsController::class, 'index'])->name('admin.payment-terms.index');
     Route::post('/payment-terms/{paymentTerm}/due-date', [PaymentTermsController::class, 'updateDueDate'])->name('admin.payment-terms.update-due-date');
+    Route::post('/payment-terms/bulk-due-date', [PaymentTermsController::class, 'bulkUpdateDueDate'])->name('admin.payment-terms.bulk-due-date');
 });
 
 // ============================================

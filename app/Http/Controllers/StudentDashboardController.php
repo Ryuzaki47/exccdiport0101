@@ -69,6 +69,7 @@ class StudentDashboardController extends Controller
         $notifications = Notification::active()
             ->forUser($user->id)
             ->withinDateRange()
+            ->forDueDateTrigger($user)
             ->orderByDesc('created_at')
             ->take(5)
             ->get()

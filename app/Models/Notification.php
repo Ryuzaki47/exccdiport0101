@@ -13,78 +13,77 @@ class Notification extends Model
     protected $fillable = [
         'title',
         'message',
-        'type', // general | payment_due | payment_approved | payment_rejected
+        'type',
         'start_date',
         'end_date',
-        'target_role', // student | accounting | admin | all
-        'user_id', // Specific student (nullable)
-        'is_active', // Whether notification is enabled
-        'is_complete', // Auto-set when payment is complete
-        'dismissed_at', // When user dismissed the notification
-        'term_ids', // JSON array of specific term IDs to target
-        'target_term_name', // Target by term name (e.g., "Upon Registration")
-        'trigger_days_before_due', // Show N days before due date
+        'target_role',
+        'user_id',
+        'is_active',
+        'is_complete',
+        'dismissed_at',
+        'term_ids',
+        'target_term_name',
+        'trigger_days_before_due',
     ];
 
     protected $casts = [
-        'start_date' => 'date',
-        'end_date'   => 'date',
-        'is_active' => 'boolean',
-        'is_complete' => 'boolean',
+        'start_date'   => 'date',
+        'end_date'     => 'date',
+        'is_active'    => 'boolean',
+        'is_complete'  => 'boolean',
         'dismissed_at' => 'datetime',
-        'term_ids' => 'array', // Cast JSON to array
+        'term_ids'     => 'array',
     ];
 
-    /**
-     * Relationship to the user this notification is targeted to
-     */
+    // -------------------------------------------------------------------------
+    // Relationships
+    // -------------------------------------------------------------------------
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    // -------------------------------------------------------------------------
+    // Scopes
+    // -------------------------------------------------------------------------
+
     /**
-     * Scope to get only active notifications
+     * Scope: only non-dismissed, active, incomplete notifications.
      */
     public function scopeActive($query)
     {
-        return $query->where('is_active', true)
-                     ->where('is_complete', false);
+        return $query
+            ->where('is_active', true)
+            ->where('is_complete', false)
+            ->whereNull('dismissed_at');
     }
 
     /**
-     * Scope to get notifications for a specific user (by ID or email)
+     * Scope: notifications visible to a given user (by ID or email).
+     *
+     * Matches:
+     *   - Notifications targeted directly at this user (user_id = $user->id)
+     *   - Role-based notifications for this user's role (or 'all') with no specific user_id
      */
     public function scopeForUser($query, int|string $userIdentifier)
     {
-        // If it's an email, find the user first
         if (is_string($userIdentifier) && str_contains($userIdentifier, '@')) {
             $user = User::where('email', $userIdentifier)->first();
-            return $query->where(function ($q) use ($user) {
-                // Get both targeted notifications and role-based notifications
-                if ($user) {
-                    $q->where('user_id', $user->id)
-                      ->orWhere(function ($q2) use ($user) {
-                          $q2->where('target_role', $user->role)
-                             ->orWhere('target_role', 'all')
-                             ->whereNull('user_id');
-                      });
-                } else {
-                    $q->where('user_id', null)
-                      ->whereNull('target_role');
-                }
-            });
+        } else {
+            $user = User::find($userIdentifier);
         }
 
-        // If it's a user ID
-        $user = User::find($userIdentifier);
-        return $query->where(function ($q) use ($user, $userIdentifier) {
-            // Get both targeted notifications and role-based notifications
-            $q->where('user_id', $userIdentifier)
+        if (! $user) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query->where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)
               ->orWhere(function ($q2) use ($user) {
                   $q2->whereNull('user_id')
                      ->where(function ($q3) use ($user) {
-                         $q3->where('target_role', $user->role ?? 'student')
+                         $q3->where('target_role', $user->role)
                             ->orWhere('target_role', 'all');
                      });
               });
@@ -92,44 +91,79 @@ class Notification extends Model
     }
 
     /**
-     * Scope to get notifications within the active date range
+     * Scope: notifications within their active date window.
+     *
+     * FIX: Previous version had incorrectly nested clauses that could
+     * include notifications whose start_date was in the future.
+     * Both the start and end date gates must be separate where() calls.
      */
     public function scopeWithinDateRange($query)
     {
-        $now = now()->toDateString();
-        return $query->where(function ($q) use ($now) {
-            $q->whereNull('start_date')
-              ->orWhere('start_date', '<=', $now)
-              ->where(function ($q2) use ($now) {
-                  $q2->whereNull('end_date')
-                     ->orWhere('end_date', '>=', $now);
+        $today = now()->toDateString();
+
+        return $query
+            ->where(function ($q) use ($today) {
+                $q->whereNull('start_date')
+                  ->orWhere('start_date', '<=', $today);
+            })
+            ->where(function ($q) use ($today) {
+                $q->whereNull('end_date')
+                  ->orWhere('end_date', '>=', $today);
+            });
+    }
+
+    /**
+     * Scope: apply trigger_days_before_due filter for a specific student.
+     *
+     * Notifications without a trigger window are always shown.
+     * Notifications WITH a trigger window only show when the student has
+     * an unpaid payment term due within that many days.
+     */
+    public function scopeForDueDateTrigger($query, User $user)
+    {
+        return $query->where(function ($q) use ($user) {
+            $q->whereNull('trigger_days_before_due')
+              ->orWhere(function ($q2) use ($user) {
+                  $q2->whereNotNull('trigger_days_before_due')
+                     ->whereExists(function ($sub) use ($user) {
+                         $sub->from('student_payment_terms')
+                             ->join(
+                                 'student_assessments',
+                                 'student_assessments.id',
+                                 '=',
+                                 'student_payment_terms.student_assessment_id'
+                             )
+                             ->where('student_assessments.user_id', $user->id)
+                             ->whereRaw('student_payment_terms.balance > 0')
+                             ->whereNotNull('student_payment_terms.due_date')
+                             ->whereRaw(
+                                 'DATEDIFF(student_payment_terms.due_date, CURDATE()) BETWEEN 0 AND notifications.trigger_days_before_due'
+                             );
+                     });
               });
         });
     }
 
-    /**
-     * Check if notification is currently active and within date range
-     */
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     public function isCurrentlyActive(): bool
     {
-        return $this->is_active 
-            && !$this->is_complete 
-            && !$this->dismissed_at
-            && (!$this->start_date || $this->start_date <= now()->toDateString())
-            && (!$this->end_date || $this->end_date >= now()->toDateString());
+        $today = now()->toDateString();
+
+        return $this->is_active
+            && ! $this->is_complete
+            && ! $this->dismissed_at
+            && (! $this->start_date || $this->start_date->toDateString() <= $today)
+            && (! $this->end_date   || $this->end_date->toDateString()   >= $today);
     }
 
-    /**
-     * Mark notification as complete (e.g., when payment is done)
-     */
     public function markComplete(): void
     {
         $this->update(['is_complete' => true]);
     }
 
-    /**
-     * Mark notification as dismissed by user
-     */
     public function markDismissed(): void
     {
         $this->update(['dismissed_at' => now()]);
