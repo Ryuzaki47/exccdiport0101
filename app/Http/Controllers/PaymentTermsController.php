@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use Inertia\Inertia;
+use App\Events\DueAssigned;
+use App\Models\Notification;
+use App\Models\StudentPaymentTerm;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Models\StudentPaymentTerm;
-use App\Models\Notification;
+use Inertia\Inertia;
 
 class PaymentTermsController extends Controller
 {
@@ -22,7 +23,6 @@ class PaymentTermsController extends Controller
             ->orderBy('due_date')
             ->get()
             ->map(function ($term) {
-                // Guard: broken relationship chain must not crash the page
                 $user    = optional($term->assessment)->user;
                 $student = optional($user)->student;
 
@@ -43,7 +43,6 @@ class PaymentTermsController extends Controller
 
         $unsetDueDatesCount = StudentPaymentTerm::whereNull('due_date')->count();
 
-        // List of term names for the bulk-update selector
         $distinctTermNames = StudentPaymentTerm::query()
             ->select('term_name', 'term_order')
             ->distinct()
@@ -60,7 +59,8 @@ class PaymentTermsController extends Controller
 
     /**
      * Update the due date for a single payment term.
-     * Also creates/updates the student notification for this term.
+     * Creates/updates the admin notification AND dispatches DueAssigned event
+     * so the student receives a Laravel database notification + PaymentReminder.
      */
     public function updateDueDate(Request $request, StudentPaymentTerm $paymentTerm)
     {
@@ -72,11 +72,10 @@ class PaymentTermsController extends Controller
 
         DB::transaction(function () use ($paymentTerm, $validated) {
             $paymentTerm->update(['due_date' => $validated['due_date']]);
-
-            // Re-fetch to ensure Carbon cast is applied after the update
             $paymentTerm->refresh();
 
             $this->upsertDueDateNotification($paymentTerm);
+            $this->dispatchDueAssignedIfStudentExists($paymentTerm);
         });
 
         return back()->with('success', 'Due date updated. Student notification created.');
@@ -84,7 +83,6 @@ class PaymentTermsController extends Controller
 
     /**
      * Bulk-update due dates for ALL terms with the same term_name.
-     * Useful when admin wants to apply one deadline to all "Prelim" terms, etc.
      */
     public function bulkUpdateDueDate(Request $request)
     {
@@ -110,12 +108,13 @@ class PaymentTermsController extends Controller
 
                 try {
                     $this->upsertDueDateNotification($term);
+                    $this->dispatchDueAssignedIfStudentExists($term);
                 } catch (\Throwable $e) {
-                    Log::warning('Failed to create due date notification', [
+                    Log::warning('Failed to notify student of due date change', [
                         'term_id' => $term->id,
                         'error'   => $e->getMessage(),
                     ]);
-                    // Non-fatal: continue updating the rest
+                    // Non-fatal: continue processing the remaining terms
                 }
 
                 $updated++;
@@ -130,23 +129,17 @@ class PaymentTermsController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Create or update a payment_due notification for the student linked to
-     * the given payment term.
+     * Create or update the admin announcement notification for this payment term.
      *
-     * Strategy:
-     *   - One notification per (user_id + term_name) pair — uses updateOrCreate
-     *     so re-setting the due date updates the existing notification rather
-     *     than creating duplicates.
-     *   - end_date is set to 3 days AFTER the due date so the notification
-     *     stays visible a little while after the deadline (grace window).
-     *   - trigger_days_before_due is set to 7 days by default so the
-     *     notification surfaces one week before the deadline.
+     * This is the entry in admin_notifications — the persistent banner shown
+     * on the student's Account Overview page with date-window and trigger logic.
      *
-     * @throws \RuntimeException if the relationship chain is broken.
+     * Strategy: one notification per (user_id + type + title) — updateOrCreate
+     * so re-setting the due date refreshes the existing record instead of
+     * creating duplicates.
      */
     private function upsertDueDateNotification(StudentPaymentTerm $paymentTerm): void
     {
-        // Guard: ensure relationships exist before proceeding
         $assessment = $paymentTerm->assessment;
 
         if (! $assessment) {
@@ -161,21 +154,17 @@ class PaymentTermsController extends Controller
             return;
         }
 
-        $dueDateCarbon   = $paymentTerm->due_date; // Carbon (cast applied after refresh)
+        $dueDateCarbon    = $paymentTerm->due_date;
         $dueDateFormatted = $dueDateCarbon->format('F j, Y');
-        $amount          = number_format((float) $paymentTerm->amount, 2);
-
-        // end_date: 3-day grace window after due date
-        $endDate = $dueDateCarbon->copy()->addDays(3)->toDateString();
+        $amount           = number_format((float) $paymentTerm->amount, 2);
+        $endDate          = $dueDateCarbon->copy()->addDays(3)->toDateString();
 
         Notification::updateOrCreate(
-            // Unique match: one notification per student + term name
             [
-                'user_id'   => $user->id,
-                'type'      => 'payment_due',
-                'title'     => "Payment Due: {$paymentTerm->term_name}",
+                'user_id' => $user->id,
+                'type'    => 'payment_due',
+                'title'   => "Payment Due: {$paymentTerm->term_name}",
             ],
-            // Values to set (on create or update)
             [
                 'message'                 => "Your {$paymentTerm->term_name} payment of ₱{$amount} is due on {$dueDateFormatted}. Please settle your balance on or before the deadline.",
                 'target_role'             => 'student',
@@ -184,8 +173,23 @@ class PaymentTermsController extends Controller
                 'is_active'               => true,
                 'is_complete'             => false,
                 'dismissed_at'            => null,
-                'trigger_days_before_due' => 7, // Show 7 days before due
+                'trigger_days_before_due' => 7,
             ]
         );
+    }
+
+    /**
+     * Fire DueAssigned event if the payment term is linked to a student user.
+     * This triggers GenerateDueAssignedReminder and SendPaymentDueNotification.
+     */
+    private function dispatchDueAssignedIfStudentExists(StudentPaymentTerm $paymentTerm): void
+    {
+        $user = optional($paymentTerm->assessment)->user;
+
+        if (! $user) {
+            return;
+        }
+
+        event(new DueAssigned($user, $paymentTerm));
     }
 }

@@ -163,13 +163,6 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->prefix('accoun
 // });
 
 // ============================================
-// NOTIFICATION ROUTES (View Only for Accounting/Admin)
-// ============================================
-Route::middleware(['auth', 'verified', 'role:admin,accounting'])->prefix('admin')->group(function () {
-    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
-});
-
-// ============================================
 // WORKFLOW MANAGEMENT ROUTES
 // ============================================
 Route::middleware(['auth', 'verified', 'role:admin,accounting'])->group(function () {

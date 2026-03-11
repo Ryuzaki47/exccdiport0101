@@ -5,10 +5,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class Notification extends Model
 {
     use HasFactory;
+
+    /**
+     * The table used for custom admin announcements.
+     * Laravel's built-in database notification channel uses the `notifications`
+     * table (UUID-keyed). This model uses `admin_notifications` to avoid collision.
+     */
+    protected $table = 'admin_notifications';
 
     protected $fillable = [
         'title',
@@ -61,10 +69,6 @@ class Notification extends Model
 
     /**
      * Scope: notifications visible to a given user (by ID or email).
-     *
-     * Matches:
-     *   - Notifications targeted directly at this user (user_id = $user->id)
-     *   - Role-based notifications for this user's role (or 'all') with no specific user_id
      */
     public function scopeForUser($query, int|string $userIdentifier)
     {
@@ -92,10 +96,6 @@ class Notification extends Model
 
     /**
      * Scope: notifications within their active date window.
-     *
-     * FIX: Previous version had incorrectly nested clauses that could
-     * include notifications whose start_date was in the future.
-     * Both the start and end date gates must be separate where() calls.
      */
     public function scopeWithinDateRange($query)
     {
@@ -117,15 +117,21 @@ class Notification extends Model
      *
      * Notifications without a trigger window are always shown.
      * Notifications WITH a trigger window only show when the student has
-     * an unpaid payment term due within that many days.
+     * an unpaid payment term whose due date is within that many days from today.
+     *
+     * FIXED: Replaced MySQL-only DATEDIFF/CURDATE() with a driver-agnostic
+     * date range check that works in both MySQL (production) and SQLite (testing).
      */
     public function scopeForDueDateTrigger($query, User $user)
     {
-        return $query->where(function ($q) use ($user) {
+        $today        = now()->toDateString();
+        $maxLookahead = now()->addDays(90)->toDateString(); // Widest supported trigger window
+
+        return $query->where(function ($q) use ($user, $today, $maxLookahead) {
             $q->whereNull('trigger_days_before_due')
-              ->orWhere(function ($q2) use ($user) {
+              ->orWhere(function ($q2) use ($user, $today, $maxLookahead) {
                   $q2->whereNotNull('trigger_days_before_due')
-                     ->whereExists(function ($sub) use ($user) {
+                     ->whereExists(function ($sub) use ($user, $today, $maxLookahead) {
                          $sub->from('student_payment_terms')
                              ->join(
                                  'student_assessments',
@@ -134,10 +140,12 @@ class Notification extends Model
                                  'student_payment_terms.student_assessment_id'
                              )
                              ->where('student_assessments.user_id', $user->id)
-                             ->whereRaw('student_payment_terms.balance > 0')
+                             ->where('student_payment_terms.balance', '>', 0)
                              ->whereNotNull('student_payment_terms.due_date')
+                             ->where('student_payment_terms.due_date', '>=', $today)
+                             ->where('student_payment_terms.due_date', '<=', $maxLookahead)
                              ->whereRaw(
-                                 'DATEDIFF(student_payment_terms.due_date, CURDATE()) BETWEEN 0 AND notifications.trigger_days_before_due'
+                                 'student_payment_terms.due_date <= ' . self::addDaysExpression('admin_notifications.trigger_days_before_due')
                              );
                      });
               });
@@ -167,5 +175,24 @@ class Notification extends Model
     public function markDismissed(): void
     {
         $this->update(['dismissed_at' => now()]);
+    }
+
+    /**
+     * Returns a driver-agnostic SQL expression: today + N days.
+     *
+     * MySQL:  DATE_ADD(CURDATE(), INTERVAL <column> DAY)
+     * SQLite: DATE('now', '+' || <column> || ' days')
+     *
+     * @param string $columnExpression  SQL column or expression holding the number of days
+     */
+    public static function addDaysExpression(string $columnExpression): string
+    {
+        $driver = \Illuminate\Support\Facades\Schema::getConnection()->getDriverName();
+
+        if ($driver === 'sqlite') {
+            return "DATE('now', '+' || {$columnExpression} || ' days')";
+        }
+
+        return "DATE_ADD(CURDATE(), INTERVAL {$columnExpression} DAY)";
     }
 }
