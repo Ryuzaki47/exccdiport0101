@@ -11,16 +11,16 @@ class Notification extends Model
     use HasFactory;
 
     /**
-     * Explicitly declare the table name.
+     * Points to `admin_notifications` — the custom admin announcements table.
      *
-     * The physical table is `notifications` (custom admin announcements).
-     * The rename migration (2026_03_11_182805) must be run BEFORE changing
-     * this to `admin_notifications`. Until then, this stays as `notifications`.
+     * The rename migration (2026_03_11_182805_rename_custom_notifications...)
+     * renames `notifications` → `admin_notifications` and creates a fresh
+     * `notifications` table for Laravel's internal Notifiable channel.
      *
-     * Run: php artisan migrate
-     * Then change this value to: 'admin_notifications'
+     * IMPORTANT: Run `php artisan migrate` before deploying this model change.
+     * After migration runs, this value must be 'admin_notifications'.
      */
-    protected $table = 'notifications';
+    protected $table = 'admin_notifications';
 
     protected $fillable = [
         'title',
