@@ -59,8 +59,9 @@ class PaymentTermsController extends Controller
 
     /**
      * Update the due date for a single payment term.
-     * Creates/updates the admin notification AND dispatches DueAssigned event
-     * so the student receives a Laravel database notification + PaymentReminder.
+     *
+     * Creates/updates the notification banner AND dispatches DueAssigned event
+     * so the student also receives a PaymentReminder feed entry.
      */
     public function updateDueDate(Request $request, StudentPaymentTerm $paymentTerm)
     {
@@ -78,11 +79,11 @@ class PaymentTermsController extends Controller
             $this->dispatchDueAssignedIfStudentExists($paymentTerm);
         });
 
-        return back()->with('success', 'Due date updated. Student notification created.');
+        return back()->with('success', 'Due date updated. Student has been notified.');
     }
 
     /**
-     * Bulk-update due dates for ALL terms with the same term_name.
+     * Bulk-update due dates for ALL terms sharing the same term_name.
      */
     public function bulkUpdateDueDate(Request $request)
     {
@@ -110,11 +111,11 @@ class PaymentTermsController extends Controller
                     $this->upsertDueDateNotification($term);
                     $this->dispatchDueAssignedIfStudentExists($term);
                 } catch (\Throwable $e) {
-                    Log::warning('Failed to notify student of due date change', [
+                    Log::warning('PaymentTermsController: failed to notify student of due date change', [
                         'term_id' => $term->id,
                         'error'   => $e->getMessage(),
                     ]);
-                    // Non-fatal: continue processing the remaining terms
+                    // Non-fatal — continue processing remaining terms
                 }
 
                 $updated++;
@@ -129,14 +130,19 @@ class PaymentTermsController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Create or update the admin announcement notification for this payment term.
+     * Create or update the persistent notification banner for this payment term.
      *
-     * This is the entry in admin_notifications — the persistent banner shown
-     * on the student's Account Overview page with date-window and trigger logic.
+     * One record per (user_id + type + title) — updateOrCreate prevents duplicates
+     * when the admin re-sets a due date on the same term.
      *
-     * Strategy: one notification per (user_id + type + title) — updateOrCreate
-     * so re-setting the due date refreshes the existing record instead of
-     * creating duplicates.
+     * Key decisions:
+     *   - trigger_days_before_due = NULL  → notification is visible immediately
+     *     (no "only show 7 days before" gate — the student sees it right away)
+     *   - end_date = due_date + 14 days   → gives a 2-week grace window after the
+     *     deadline before the banner disappears (MarkNotificationCompleteOnPayment
+     *     closes it early if the student pays)
+     *   - dismissed_at is reset to NULL   → re-opens the banner if admin updates
+     *     the due date after a student already dismissed it
      */
     private function upsertDueDateNotification(StudentPaymentTerm $paymentTerm): void
     {
@@ -154,13 +160,17 @@ class PaymentTermsController extends Controller
             return;
         }
 
-        $dueDateCarbon    = $paymentTerm->due_date;
-        $dueDateFormatted = $dueDateCarbon->format('F j, Y');
+        $dueDate          = $paymentTerm->due_date;
+        $dueDateFormatted = $dueDate->format('F j, Y');
         $amount           = number_format((float) $paymentTerm->amount, 2);
-        $endDate          = $dueDateCarbon->copy()->addDays(3)->toDateString();
+
+        // Grace window: banner stays visible for 14 days past the due date
+        // so overdue students still see the reminder.
+        $endDate = $dueDate->copy()->addDays(14)->toDateString();
 
         Notification::updateOrCreate(
             [
+                // Match key: one banner per student per term name
                 'user_id' => $user->id,
                 'type'    => 'payment_due',
                 'title'   => "Payment Due: {$paymentTerm->term_name}",
@@ -172,15 +182,17 @@ class PaymentTermsController extends Controller
                 'end_date'                => $endDate,
                 'is_active'               => true,
                 'is_complete'             => false,
-                'dismissed_at'            => null,
-                'trigger_days_before_due' => 7,
+                'dismissed_at'            => null,   // Re-open if admin updates due date
+                'trigger_days_before_due' => null,   // Show immediately, no day-gate
             ]
         );
     }
 
     /**
-     * Fire DueAssigned event if the payment term is linked to a student user.
-     * This triggers GenerateDueAssignedReminder and SendPaymentDueNotification.
+     * Fire DueAssigned event if the payment term is linked to a real student user.
+     * This triggers:
+     *   1. GenerateDueAssignedReminder  → creates a PaymentReminder feed entry
+     *   2. SendPaymentDueNotification   → sends a queued mail notification
      */
     private function dispatchDueAssignedIfStudentExists(StudentPaymentTerm $paymentTerm): void
     {

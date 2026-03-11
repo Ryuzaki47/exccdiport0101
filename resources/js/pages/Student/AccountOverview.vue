@@ -181,17 +181,12 @@ const activeNotifications = computed(() => {
 // Track notifications that are auto-hidden
 const hiddenNotifications = ref<Set<number>>(new Set());
 
-// Dismiss notification (can be manual or auto)
+// Dismiss notification — only triggered by the student clicking ✕
+// Notifications are never auto-dismissed; they persist until the student
+// explicitly closes them or the backend marks them complete/expired.
 const dismissNotification = (notificationId: number) => {
     hiddenNotifications.value.add(notificationId);
     router.post(route('notifications.dismiss', notificationId));
-};
-
-// Auto-dismiss notification after 5 seconds
-const autoDismissNotification = (notificationId: number) => {
-    setTimeout(() => {
-        dismissNotification(notificationId);
-    }, 5000);
 };
 
 onMounted(() => {
@@ -222,13 +217,6 @@ onMounted(() => {
 
     // Start auto-refresh if needed
     startAutoRefresh();
-
-    // Auto-dismiss notifications after 5 seconds
-    props.notifications.forEach((notification) => {
-        if (!notification.dismissed_at && !hiddenNotifications.value.has(notification.id)) {
-            autoDismissNotification(notification.id);
-        }
-    });
 
     // Watch for changes in awaiting approvals status
     watch(hasAwaitingApprovals, (newVal) => {
@@ -576,21 +564,58 @@ const accountBalance = computed(() => {
             <Breadcrumbs :items="breadcrumbs" />
 
             <!-- Active Notifications -->
+            <!-- These banners are created by PaymentTermsController when an admin sets a due date. -->
+            <!-- They persist until the student dismisses them or pays in full. -->
             <div
                 v-for="notification in activeNotifications"
                 :key="notification.id"
-                class="mb-4 flex items-start justify-between rounded-lg border p-4"
-                :class="notification.type === 'payment_due' ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'"
+                class="mb-4 flex items-start gap-3 rounded-lg border p-4"
+                :class="notification.type === 'payment_due'
+                    ? 'border-amber-300 bg-amber-50'
+                    : 'border-blue-200 bg-blue-50'"
             >
-                <div class="flex-1">
-                    <h3 class="mb-1 font-semibold" :class="notification.type === 'payment_due' ? 'text-amber-900' : 'text-blue-900'">
+                <!-- Icon -->
+                <div
+                    class="mt-0.5 flex-shrink-0 rounded-full p-1"
+                    :class="notification.type === 'payment_due' ? 'bg-amber-100' : 'bg-blue-100'"
+                >
+                    <AlertCircle
+                        :size="18"
+                        :class="notification.type === 'payment_due' ? 'text-amber-600' : 'text-blue-600'"
+                    />
+                </div>
+
+                <!-- Content -->
+                <div class="flex-1 min-w-0">
+                    <h3
+                        class="mb-0.5 text-sm font-semibold"
+                        :class="notification.type === 'payment_due' ? 'text-amber-900' : 'text-blue-900'"
+                    >
                         {{ notification.title }}
                     </h3>
-                    <p :class="notification.type === 'payment_due' ? 'text-sm text-amber-800' : 'text-sm text-blue-800'">
+                    <p
+                        class="text-sm leading-relaxed"
+                        :class="notification.type === 'payment_due' ? 'text-amber-800' : 'text-blue-800'"
+                    >
                         {{ notification.message }}
                     </p>
+                    <p
+                        v-if="notification.end_date"
+                        class="mt-1 text-xs"
+                        :class="notification.type === 'payment_due' ? 'text-amber-600' : 'text-blue-600'"
+                    >
+                        Visible until: {{ formatDate(notification.end_date) }}
+                    </p>
                 </div>
-                <button @click="dismissNotification(notification.id)" class="ml-4 flex-shrink-0 text-gray-400 hover:text-gray-600">✕</button>
+
+                <!-- Dismiss button -->
+                <button
+                    @click="dismissNotification(notification.id)"
+                    class="ml-2 flex-shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+                    title="Dismiss notification"
+                >
+                    ✕
+                </button>
             </div>
 
             <!-- Auto-Refresh Status Indicator -->

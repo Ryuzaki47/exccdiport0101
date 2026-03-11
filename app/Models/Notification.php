@@ -5,18 +5,22 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\DB;
 
 class Notification extends Model
 {
     use HasFactory;
 
     /**
-     * The table used for custom admin announcements.
-     * Laravel's built-in database notification channel uses the `notifications`
-     * table (UUID-keyed). This model uses `admin_notifications` to avoid collision.
+     * Explicitly declare the table name.
+     *
+     * The physical table is `notifications` (custom admin announcements).
+     * The rename migration (2026_03_11_182805) must be run BEFORE changing
+     * this to `admin_notifications`. Until then, this stays as `notifications`.
+     *
+     * Run: php artisan migrate
+     * Then change this value to: 'admin_notifications'
      */
-    protected $table = 'admin_notifications';
+    protected $table = 'notifications';
 
     protected $fillable = [
         'title',
@@ -69,6 +73,10 @@ class Notification extends Model
 
     /**
      * Scope: notifications visible to a given user (by ID or email).
+     *
+     * Matches:
+     *   - Notifications targeted directly at this user  (user_id = $user->id)
+     *   - Role-based broadcasts for this user's role (or 'all') with no user_id
      */
     public function scopeForUser($query, int|string $userIdentifier)
     {
@@ -115,23 +123,27 @@ class Notification extends Model
     /**
      * Scope: apply trigger_days_before_due filter for a specific student.
      *
-     * Notifications without a trigger window are always shown.
-     * Notifications WITH a trigger window only show when the student has
-     * an unpaid payment term whose due date is within that many days from today.
+     * - Notifications with trigger_days_before_due = NULL always pass through
+     *   (no due-date gate — they show within their date window unconditionally).
+     * - Notifications WITH a trigger value only show when the student has
+     *   an unpaid term due within that many days from today.
      *
-     * FIXED: Replaced MySQL-only DATEDIFF/CURDATE() with a driver-agnostic
-     * date range check that works in both MySQL (production) and SQLite (testing).
+     * Uses $this->getTable() so the raw SQL reference is always correct
+     * regardless of whether the table is 'notifications' or 'admin_notifications'.
+     *
+     * Driver-agnostic: works on MySQL (production) and SQLite (tests).
      */
     public function scopeForDueDateTrigger($query, User $user)
     {
         $today        = now()->toDateString();
-        $maxLookahead = now()->addDays(90)->toDateString(); // Widest supported trigger window
+        $maxLookahead = now()->addDays(90)->toDateString();
+        $table        = $this->getTable();
 
-        return $query->where(function ($q) use ($user, $today, $maxLookahead) {
+        return $query->where(function ($q) use ($user, $today, $maxLookahead, $table) {
             $q->whereNull('trigger_days_before_due')
-              ->orWhere(function ($q2) use ($user, $today, $maxLookahead) {
+              ->orWhere(function ($q2) use ($user, $today, $maxLookahead, $table) {
                   $q2->whereNotNull('trigger_days_before_due')
-                     ->whereExists(function ($sub) use ($user, $today, $maxLookahead) {
+                     ->whereExists(function ($sub) use ($user, $today, $maxLookahead, $table) {
                          $sub->from('student_payment_terms')
                              ->join(
                                  'student_assessments',
@@ -145,7 +157,8 @@ class Notification extends Model
                              ->where('student_payment_terms.due_date', '>=', $today)
                              ->where('student_payment_terms.due_date', '<=', $maxLookahead)
                              ->whereRaw(
-                                 'student_payment_terms.due_date <= ' . self::addDaysExpression('admin_notifications.trigger_days_before_due')
+                                 'student_payment_terms.due_date <= ' .
+                                 self::addDaysExpression("{$table}.trigger_days_before_due")
                              );
                      });
               });
@@ -182,8 +195,6 @@ class Notification extends Model
      *
      * MySQL:  DATE_ADD(CURDATE(), INTERVAL <column> DAY)
      * SQLite: DATE('now', '+' || <column> || ' days')
-     *
-     * @param string $columnExpression  SQL column or expression holding the number of days
      */
     public static function addDaysExpression(string $columnExpression): string
     {

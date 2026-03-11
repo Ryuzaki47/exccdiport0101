@@ -9,38 +9,32 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 class MarkNotificationCompleteOnPayment implements ShouldQueue
 {
     /**
-     * Create the event listener.
-     */
-    public function __construct()
-    {
-        //
-    }
-
-    /**
-     * Handle the event.
+     * When a payment is recorded, check if the student has fully cleared their
+     * balance. If so, mark their payment_due notification banners as complete
+     * so they stop appearing on the dashboard.
+     *
+     * Scoped to type = 'payment_due' only — general announcements are NOT
+     * auto-closed when a payment is made.
      */
     public function handle(PaymentRecorded $event): void
     {
-        $user = $event->user;
+        $user              = $event->user;
         $studentAssessment = $user->assessments()->latest('created_at')->first();
 
-        // Check if student has fully paid their assessment
-        if ($studentAssessment) {
-            $totalBalance = $studentAssessment->paymentTerms()
-                ->where('balance', '>', 0)
-                ->sum('balance');
+        if (! $studentAssessment) {
+            return;
+        }
 
-            // If balance is 0 (or very close due to rounding), mark notifications as complete
-            if ($totalBalance <= 0) {
-                // Mark all active notifications for this user as complete
-                Notification::where('user_id', $user->id)
-                    ->where('is_complete', false)
-                    ->update(['is_complete' => true]);
+        $totalBalance = $studentAssessment->paymentTerms()
+            ->where('balance', '>', 0)
+            ->sum('balance');
 
-                // Also mark role-based student notifications as complete for this user
-                // (but only if they were created for payment reminders, not general announcements)
-                // This is optional - modify based on your business logic
-            }
+        // Only mark complete when the entire assessment balance is cleared
+        if ($totalBalance <= 0) {
+            Notification::where('user_id', $user->id)
+                ->where('type', 'payment_due')   // Only close payment_due banners
+                ->where('is_complete', false)
+                ->update(['is_complete' => true]);
         }
     }
 }
