@@ -54,7 +54,7 @@ class HandleInertiaRequests extends Middleware
             // so the Profile always shows the accurate academic year level.
             'latestAssessmentInfo' => (function () use ($request) {
                 $user = $request->user();
-                if (!$user || $user->role->value !== 'student') {
+                if (!$user || !$user->role || $user->role->value !== 'student') {
                     return null;
                 }
                 $assessment = \App\Models\StudentAssessment::where('user_id', $user->id)
