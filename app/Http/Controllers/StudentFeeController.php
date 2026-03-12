@@ -1079,7 +1079,7 @@ class StudentFeeController extends Controller
             'last_name'      => 'required|string|max:255',
             'first_name'     => 'required|string|max:255',
             'middle_initial' => 'nullable|string|max:10',
-            'email'          => 'required|email|unique:users,email',
+            'email'          => 'required|email|unique:users,email|unique:students,email',
             'birthday'       => 'required|date',
             'phone'          => 'required|string|max:20',
             'address'        => 'required|string|max:255',
@@ -1090,6 +1090,17 @@ class StudentFeeController extends Controller
 
         DB::beginTransaction();
         try {
+            // Generate unique student_id in format: YYYY-NNNN
+            $currentYear = date('Y');
+            $randomNum = str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+            $studentId = "{$currentYear}-{$randomNum}";
+            
+            // Ensure studentId is unique
+            while (Student::where('student_id', $studentId)->exists()) {
+                $randomNum = str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+                $studentId = "{$currentYear}-{$randomNum}";
+            }
+
             $user = User::create([
                 'last_name'      => $validated['last_name'],
                 'first_name'     => $validated['first_name'],
@@ -1105,7 +1116,20 @@ class StudentFeeController extends Controller
                 'password'       => Hash::make('password'),
             ]);
 
-            Student::create(['user_id' => $user->id]);
+            // Create Student record with all required fields
+            Student::create([
+                'user_id'        => $user->id,
+                'student_id'     => $studentId,
+                'last_name'      => $validated['last_name'],
+                'first_name'     => $validated['first_name'],
+                'middle_initial' => $validated['middle_initial'] ?? null,
+                'email'          => $validated['email'],
+                'phone'          => $validated['phone'],
+                'address'        => $validated['address'],
+                'birthday'       => $validated['birthday'],
+                'course'         => $validated['course'],
+                'year_level'     => $validated['year_level'],
+            ]);
 
             DB::commit();
 
@@ -1115,6 +1139,10 @@ class StudentFeeController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Student creation failed: ' . $e->getMessage(), [
+                'email' => $validated['email'] ?? null,
+                'trace' => $e->getTraceAsString(),
+            ]);
             return back()->withErrors(['error' => 'Failed to create student: ' . $e->getMessage()]);
         }
     }

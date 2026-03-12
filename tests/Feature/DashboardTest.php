@@ -22,6 +22,25 @@ class DashboardTest extends TestCase
         $this->actingAs($user);
 
         $response = $this->get(route('dashboard'));
-        $response->assertStatus(200);
+        // Student users are redirected to their role-specific dashboard
+        $response->assertRedirect(route('student.dashboard'));
+    }
+
+    public function test_admin_users_are_redirected_to_admin_dashboard()
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($user);
+
+        $response = $this->get(route('dashboard'));
+        $response->assertRedirect(route('admin.dashboard'));
+    }
+
+    public function test_accounting_users_are_redirected_to_accounting_dashboard()
+    {
+        $user = User::factory()->create(['role' => 'accounting']);
+        $this->actingAs($user);
+
+        $response = $this->get(route('dashboard'));
+        $response->assertRedirect(route('accounting.dashboard'));
     }
 }

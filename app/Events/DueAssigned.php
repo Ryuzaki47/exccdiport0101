@@ -14,5 +14,6 @@ class DueAssigned
     public function __construct(
         public User $user,
         public StudentPaymentTerm $term,
+        public ?int $triggeredBy = null,  // ← carry admin ID safely
     ) {}
 }

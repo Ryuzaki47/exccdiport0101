@@ -16,6 +16,7 @@ use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentTermsController;
+use App\Http\Controllers\PaymentReminderController;
 // NEW: Workflow Controllers
 use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\WorkflowApprovalController;
@@ -46,6 +47,10 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->grou
     Route::get('/account', [StudentAccountController::class, 'index'])->name('student.account');
     Route::get('/payment', [PaymentController::class, 'create'])->name('payment.create');
     Route::get('/my-profile', [StudentController::class, 'studentProfile'])->name('my-profile');
+    Route::post('reminders/{reminder}/read', [PaymentReminderController::class, 'markRead'])
+        ->name('reminders.read');
+    Route::post('reminders/{reminder}/dismiss', [PaymentReminderController::class, 'dismiss'])
+        ->name('reminders.dismiss');
 });
 
 // ============================================

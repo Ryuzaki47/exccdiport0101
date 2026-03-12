@@ -18,6 +18,7 @@ class PaymentRecorded implements ShouldBroadcast
         public int $transactionId,
         public float $amount,
         public string $reference,
+        public ?int $triggeredBy = null,  // ← carry admin ID safely
     ) {}
 
     public function broadcastOn(): PrivateChannel
@@ -34,9 +35,9 @@ class PaymentRecorded implements ShouldBroadcast
     {
         return [
             'transaction_id' => $this->transactionId,
-            'amount' => $this->amount,
-            'reference' => $this->reference,
-            'timestamp' => now(),
+            'amount'         => $this->amount,
+            'reference'      => $this->reference,
+            'timestamp'      => now(),
         ];
     }
 }

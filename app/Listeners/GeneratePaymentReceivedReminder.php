@@ -4,62 +4,69 @@ namespace App\Listeners;
 
 use App\Events\PaymentRecorded;
 use App\Models\PaymentReminder;
-use App\Models\StudentPaymentTerm;
-use Illuminate\Support\Facades\Auth;
+use App\Models\StudentAssessment;
 
 class GeneratePaymentReceivedReminder
 {
-    /**
-     * Handle the event.
-     */
     public function handle(PaymentRecorded $event): void
     {
         $user = $event->user;
-        
-        // Get the latest assessment
-        $latestAssessment = $user->assessments()
-            ->latest('created_at')
-            ->first();
-        
-        if (!$latestAssessment) {
+
+        // Resolve the correct assessment via transaction meta, not just "latest"
+        $assessment = $this->resolveAssessment($user, $event->transactionId);
+
+        if (! $assessment) {
             return;
         }
-        
-        // Get payment terms to calculate remaining balance
-        $paymentTerms = $latestAssessment->paymentTerms()
+
+        $paymentTerms = $assessment->paymentTerms()
             ->where('balance', '>', 0)
             ->orderBy('term_order')
             ->get();
-        
+
         $remainingBalance = $paymentTerms->sum('balance');
-        
-        // Build message
+
         if ($remainingBalance > 0) {
-            $message = "Payment of ₱" . number_format($event->amount, 2) . " received. Outstanding balance: ₱" . number_format($remainingBalance, 2);
+            $message = "Payment of ₱" . number_format($event->amount, 2)
+                     . " received. Outstanding balance: ₱" . number_format($remainingBalance, 2);
             $type = PaymentReminder::TYPE_PARTIAL_PAYMENT;
         } else {
-            $message = "Payment of ₱" . number_format($event->amount, 2) . " received. Account balance fully paid!";
+            $message = "Payment of ₱" . number_format($event->amount, 2)
+                     . " received. Account balance fully paid!";
             $type = PaymentReminder::TYPE_PAYMENT_RECEIVED;
         }
-        
-        // Create payment received reminder
+
         PaymentReminder::create([
-            'user_id' => $user->id,
-            'student_assessment_id' => $latestAssessment->id,
+            'user_id'                 => $user->id,
+            'student_assessment_id'   => $assessment->id,
             'student_payment_term_id' => $paymentTerms->first()?->id,
-            'type' => $type,
-            'message' => $message,
-            'outstanding_balance' => $remainingBalance,
-            'status' => PaymentReminder::STATUS_SENT,
-            'in_app_sent' => true,
-            'sent_at' => now(),
-            'trigger_reason' => PaymentReminder::TRIGGER_ADMIN_UPDATE,
-            'triggered_by' => Auth::id(),
-            'metadata' => [
+            'type'                    => $type,
+            'message'                 => $message,
+            'outstanding_balance'     => $remainingBalance,
+            'status'                  => PaymentReminder::STATUS_SENT,
+            'in_app_sent'             => true,
+            'sent_at'                 => now(),
+            'trigger_reason'          => PaymentReminder::TRIGGER_ADMIN_UPDATE,
+            'triggered_by'            => $event->triggeredBy,  // ← use event payload
+            'metadata'                => [
                 'transaction_id' => $event->transactionId,
-                'reference' => $event->reference,
+                'reference'      => $event->reference,
                 'payment_amount' => $event->amount,
             ],
         ]);
+    }
+
+    private function resolveAssessment(\App\Models\User $user, int $transactionId): ?StudentAssessment
+    {
+        $transaction = $user->transactions()->find($transactionId);
+
+        if ($transaction && ! empty($transaction->meta['assessment_id'])) {
+            $assessment = StudentAssessment::find($transaction->meta['assessment_id']);
+            if ($assessment && $assessment->user_id === $user->id) {
+                return $assessment;
+            }
+        }
+
+        return $user->assessments()->latest('created_at')->first();
     }
 }
