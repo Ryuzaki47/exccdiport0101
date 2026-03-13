@@ -46,12 +46,16 @@ class StudentDashboardController extends Controller
             ->where('status', 'pending')
             ->count();
 
+        // ── Notifications ─────────────────────────────────────────────────────
+        // Raised from take(5) to take(10) so general announcements aren't
+        // crowded out by payment_due banners. Vue's visibleNotifications
+        // already handles slice(0,3) + "View More" on the frontend.
         $notifications = Notification::active()
             ->forUser($user->id)
             ->withinDateRange()
             ->forDueDateTrigger($user)
             ->orderByDesc('created_at')
-            ->take(5)
+            ->take(10)
             ->get()
             ->map(fn ($n) => [
                 'id'              => $n->id,
@@ -60,8 +64,8 @@ class StudentDashboardController extends Controller
                 'type'            => $n->type,
                 'start_date'      => $n->start_date,
                 'end_date'        => $n->end_date,
-                'due_date'        => $n->due_date,          // ← the actual payment deadline
-                'payment_term_id' => $n->payment_term_id,  // ← links to the term for Pay Now
+                'due_date'        => $n->due_date,
+                'payment_term_id' => $n->payment_term_id,
                 'target_role'     => $n->target_role,
                 'is_active'       => $n->is_active,
                 'is_complete'     => $n->is_complete,
@@ -86,7 +90,9 @@ class StudentDashboardController extends Controller
             ? (float) $latestAssessment->total_assessment
             : (float) $totalCharges;
 
-        $unreadReminders = PaymentReminder::where('user_id', $user->id)
+        // ── Payment Reminders ─────────────────────────────────────────────────
+        // Excludes dismissed reminders. Ordered by most recent first.
+        $paymentReminders = PaymentReminder::where('user_id', $user->id)
             ->where('status', '!=', PaymentReminder::STATUS_DISMISSED)
             ->orderByDesc('created_at')
             ->limit(10)
@@ -135,7 +141,7 @@ class StudentDashboardController extends Controller
                 'remaining_balance'     => (float) $remainingBalance,
                 'pending_charges_count' => $pendingChargesCount,
             ],
-            'paymentReminders'    => $unreadReminders,
+            'paymentReminders'    => $paymentReminders,
             'unreadReminderCount' => $unreadReminderCount,
         ]);
     }

@@ -15,8 +15,8 @@ type Notification = {
     type: string | null;
     start_date: string | null;
     end_date: string | null;
-    due_date: string | null;         // actual payment deadline
-    payment_term_id: number | null;  // links to pay-now flow
+    due_date: string | null;
+    payment_term_id: number | null;
     target_role: string;
     is_active: boolean;
     is_complete: boolean;
@@ -162,25 +162,15 @@ const nextPaymentDue = computed(() => {
 
 // ── Notification due-date helpers ─────────────────────────────────────────────
 
-/**
- * Compute urgency colour for a notification's due_date field.
- * Red   = overdue or ≤ 7 days
- * Amber = 8–14 days
- * Green = > 14 days
- */
 const getNotifDueDateColor = (dueDateStr: string | null): 'red' | 'amber' | 'green' => {
     if (!dueDateStr) return 'amber';
     return getDueDateColor(dueDateStr);
 };
 
-/**
- * Human-readable urgency label for the due-date chip inside a notification banner.
- * Examples: "Overdue", "Due today", "Due in 3 days", "Due Apr 20, 2026"
- */
 const dueDateLabel = (dueDateStr: string | null): string => {
     if (!dueDateStr) return '';
     const diffDays = Math.ceil((new Date(dueDateStr).getTime() - Date.now()) / 86_400_000);
-    if (diffDays < 0)  return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
+    if (diffDays < 0)   return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
     if (diffDays === 0) return 'Due today';
     if (diffDays === 1) return 'Due tomorrow';
     if (diffDays <= 14) return `Due in ${diffDays} days`;
@@ -203,7 +193,6 @@ const activeNotifications = computed(() => {
             return true;
         })
         .sort((a, b) => {
-            // payment_due banners first, then by urgency (soonest due date first)
             if (a.type === 'payment_due' && b.type !== 'payment_due') return -1;
             if (a.type !== 'payment_due' && b.type === 'payment_due') return 1;
             if (a.due_date && b.due_date) {
@@ -222,6 +211,30 @@ const hasMoreNotifications = computed(() => activeNotifications.value.length > 3
 const dismissNotification = (id: number) => {
     hiddenNotifications.value.add(id);
     router.post(route('notifications.dismiss', id), {}, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
+// ── Payment Reminder actions ──────────────────────────────────────────────────
+
+// Optimistically hide a dismissed reminder immediately, then sync to server.
+const hiddenReminders = ref<Set<number>>(new Set());
+
+const visibleReminders = computed(() =>
+    (props.paymentReminders ?? []).filter((r) => !hiddenReminders.value.has(r.id)),
+);
+
+const markReminderRead = (id: number) => {
+    router.post(route('reminders.read', id), {}, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
+const dismissReminder = (id: number) => {
+    hiddenReminders.value.add(id);
+    router.post(route('reminders.dismiss', id), {}, {
         preserveScroll: true,
         preserveState: true,
     });
@@ -320,8 +333,10 @@ const dismissNotification = (id: number) => {
                 <!-- Left Column -->
                 <div class="space-y-6 lg:col-span-2">
 
-                    <!-- Payment Reminders -->
-                    <div v-if="props.paymentReminders && props.paymentReminders.length > 0" class="rounded-lg bg-white p-6 shadow-md">
+                    <!-- ── Payment Reminders ────────────────────────────────────────── -->
+                    <!-- Routes: reminders.read, reminders.dismiss (PaymentReminderController) -->
+                    <!-- Buttons are now wired — previously only showed a static badge.  -->
+                    <div v-if="visibleReminders.length > 0" class="rounded-lg bg-white p-6 shadow-md">
                         <div class="mb-4 flex items-center gap-2">
                             <h2 class="text-xl font-semibold">Payment Reminders</h2>
                             <span v-if="props.unreadReminderCount && props.unreadReminderCount > 0"
@@ -330,24 +345,50 @@ const dismissNotification = (id: number) => {
                             </span>
                         </div>
                         <div class="space-y-3">
-                            <div v-for="reminder in props.paymentReminders" :key="reminder.id"
+                            <div v-for="reminder in visibleReminders" :key="reminder.id"
                                 :class="['rounded-lg border-l-4 p-4',
-                                    reminder.type === 'overdue' || reminder.type === 'approaching_due' ? 'border-red-400 bg-red-50'
-                                    : reminder.type === 'partial_payment' ? 'border-yellow-400 bg-yellow-50'
-                                    : 'border-blue-400 bg-blue-50']">
-                                <div class="flex items-start justify-between">
+                                    reminder.type === 'overdue' || reminder.type === 'approaching_due'
+                                        ? 'border-red-400 bg-red-50'
+                                        : reminder.type === 'partial_payment'
+                                            ? 'border-yellow-400 bg-yellow-50'
+                                            : 'border-blue-400 bg-blue-50']">
+                                <div class="flex items-start justify-between gap-2">
                                     <div class="flex-1">
                                         <h4 :class="['text-sm font-semibold',
-                                            reminder.type === 'overdue' || reminder.type === 'approaching_due' ? 'text-red-900'
-                                            : reminder.type === 'partial_payment' ? 'text-yellow-900' : 'text-blue-900']">
+                                            reminder.type === 'overdue' || reminder.type === 'approaching_due'
+                                                ? 'text-red-900'
+                                                : reminder.type === 'partial_payment'
+                                                    ? 'text-yellow-900'
+                                                    : 'text-blue-900']">
                                             {{ reminder.message }}
                                         </h4>
-                                        <p class="mt-1 text-xs text-gray-600">{{ formatDate(reminder.sent_at) }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">{{ formatDate(reminder.sent_at) }}</p>
                                     </div>
-                                    <span :class="['ml-2 rounded px-2 py-1 text-xs font-medium whitespace-nowrap',
-                                        reminder.status === 'read' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700']">
-                                        {{ reminder.status === 'read' ? 'Read' : 'Unread' }}
-                                    </span>
+
+                                    <!-- Status + action buttons -->
+                                    <div class="flex flex-shrink-0 items-center gap-2">
+                                        <!-- Unread badge + Mark as Read button -->
+                                        <span v-if="reminder.status !== 'read'"
+                                            class="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700">
+                                            Unread
+                                        </span>
+                                        <button v-if="reminder.status !== 'read'"
+                                            @click="markReminderRead(reminder.id)"
+                                            class="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-200"
+                                            title="Mark as read">
+                                            ✓ Mark Read
+                                        </button>
+                                        <span v-else class="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                                            Read
+                                        </span>
+
+                                        <!-- Dismiss button -->
+                                        <button @click="dismissReminder(reminder.id)"
+                                            class="rounded p-1 text-gray-400 transition hover:bg-gray-200 hover:text-gray-600"
+                                            title="Dismiss reminder">
+                                            ✕
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -473,10 +514,6 @@ const dismissNotification = (id: number) => {
                         <div class="mb-4 rounded-lg border border-green-200 bg-white/60 p-4">
                             <p class="text-sm text-green-800">Your account balance is fully paid. No payment action is required at this time.</p>
                         </div>
-                        <div class="space-y-1 text-xs text-green-700">
-                            <p><span class="font-semibold">📌 Reminder:</span> Check your dashboard regularly for new assessment notices.</p>
-                            <p><span class="font-semibold">📧 Questions?</span> Contact the Office of the Registrar to verify your account status.</p>
-                        </div>
                     </div>
 
                     <!-- Data integrity warning -->
@@ -486,14 +523,7 @@ const dismissNotification = (id: number) => {
                         </p>
                     </div>
 
-                    <!-- ── Notification Banners ──────────────────────────────────────────
-                         Each payment_due banner now shows a dedicated due-date chip that
-                         is colour-coded by urgency (red/amber/green) and displays a
-                         human-readable label ("Due in 3 days", "Overdue by 2 days", etc.)
-                         The chip is built from the structured `due_date` column — not
-                         parsed from the message text.
-                         A "Pay Now" button is also shown when payment_term_id is set.
-                    ─────────────────────────────────────────────────────────────────── -->
+                    <!-- ── Notification Banners ──────────────────────────────────────── -->
                     <div v-if="activeNotifications.length">
                         <div class="mb-4 flex items-center gap-2">
                             <Bell class="h-6 w-6 text-blue-600" />
@@ -507,15 +537,15 @@ const dismissNotification = (id: number) => {
                                         ? 'border-amber-500 hover:bg-amber-50'
                                         : 'border-blue-500 hover:bg-blue-50']">
 
-                                <!-- Header row: title + dismiss -->
+                                <!-- Header: title + dismiss -->
                                 <div class="mb-2 flex items-start justify-between gap-2">
                                     <h3 class="flex-1 text-base font-bold text-gray-900">{{ notification.title }}</h3>
                                     <button @click="dismissNotification(notification.id)"
                                         class="flex-shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
-                                        title="Dismiss notification" aria-label="Dismiss notification">✕</button>
+                                        title="Dismiss notification">✕</button>
                                 </div>
 
-                                <!-- Due date chip — shown for payment_due when due_date is set -->
+                                <!-- Due date chip -->
                                 <div v-if="notification.type === 'payment_due' && notification.due_date" class="mb-3">
                                     <span :class="['inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
                                         getNotifDueDateColor(notification.due_date) === 'red'
@@ -532,14 +562,12 @@ const dismissNotification = (id: number) => {
                                 <!-- Message body -->
                                 <p class="mb-3 text-sm leading-relaxed text-gray-700">{{ notification.message }}</p>
 
-                                <!-- Footer: date window + pay now button -->
+                                <!-- Footer: date window + pay now -->
                                 <div class="flex items-center justify-between gap-2 border-t border-gray-200 pt-3">
                                     <div class="space-y-0.5 text-xs text-gray-500">
                                         <p v-if="notification.start_date">📅 From: {{ formatDate(notification.start_date) }}</p>
                                         <p v-if="notification.end_date">📅 Until: {{ formatDate(notification.end_date) }}</p>
                                     </div>
-
-                                    <!-- Pay Now button — only for payment_due with a linked term -->
                                     <Link v-if="notification.type === 'payment_due' && notification.payment_term_id"
                                         :href="route('student.account', { tab: 'payment', term_id: notification.payment_term_id })"
                                         class="flex-shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700">
