@@ -10,9 +10,6 @@ use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
-    /**
-     * Display all notifications (admin sees all; others see their own active ones).
-     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -33,9 +30,6 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Show create notification form.
-     */
     public function create()
     {
         $this->authorize('create', Notification::class);
@@ -56,9 +50,6 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Store a new notification.
-     */
     public function store(Request $request)
     {
         $this->authorize('create', Notification::class);
@@ -69,6 +60,8 @@ class NotificationController extends Controller
             'type'                    => 'nullable|string|in:general,payment_due,payment_approved,payment_rejected',
             'start_date'              => 'required|date',
             'end_date'                => 'nullable|date|after_or_equal:start_date',
+            'due_date'                => 'nullable|date',   // ← NEW
+            'payment_term_id'         => 'nullable|integer|exists:student_payment_terms,id', // ← NEW
             'target_role'             => 'required|string|in:student,accounting,admin,all',
             'user_id'                 => 'nullable|integer|exists:users,id',
             'is_active'               => 'boolean',
@@ -88,9 +81,6 @@ class NotificationController extends Controller
             ->with('success', 'Notification created successfully.');
     }
 
-    /**
-     * Show a specific notification.
-     */
     public function show(Notification $notification)
     {
         $this->authorize('view', $notification);
@@ -100,9 +90,6 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Show edit notification form.
-     */
     public function edit(Notification $notification)
     {
         $this->authorize('update', $notification);
@@ -124,9 +111,6 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Update a notification.
-     */
     public function update(Request $request, Notification $notification)
     {
         $this->authorize('update', $notification);
@@ -137,6 +121,8 @@ class NotificationController extends Controller
             'type'                    => 'nullable|string|in:general,payment_due,payment_approved,payment_rejected',
             'start_date'              => 'required|date',
             'end_date'                => 'nullable|date|after_or_equal:start_date',
+            'due_date'                => 'nullable|date',   // ← NEW
+            'payment_term_id'         => 'nullable|integer|exists:student_payment_terms,id', // ← NEW
             'target_role'             => 'required|string|in:student,accounting,admin,all',
             'user_id'                 => 'nullable|integer|exists:users,id',
             'is_active'               => 'boolean',
@@ -156,9 +142,6 @@ class NotificationController extends Controller
             ->with('success', 'Notification updated successfully.');
     }
 
-    /**
-     * Delete a notification.
-     */
     public function destroy(Notification $notification)
     {
         $this->authorize('delete', $notification);
@@ -170,22 +153,7 @@ class NotificationController extends Controller
     }
 
     /**
-     * Mark a notification as dismissed by the currently authenticated user.
-     *
-     * Bug 1 fix — ownership check:
-     *   The previous implementation called markDismissed() with NO authorization.
-     *   Any authenticated user could POST /notifications/{any_id}/dismiss and
-     *   silently wipe another student's banner. We now enforce ownership:
-     *     (a) Notification directly addressed to this user  (user_id match), OR
-     *     (b) Broadcast notification this user's role can receive (user_id = null).
-     *   Admins may dismiss any notification for testing/management purposes.
-     *
-     * Bug 2 fix — Enum-safe role comparison:
-     *   $user->role is a UserRoleEnum instance, NOT a plain string.
-     *   The previous code used in_array($target_role, [$user->role, 'all']).
-     *   Since UserRoleEnum::STUDENT !== 'student' (object vs string), the
-     *   comparison always returned false and students could never dismiss
-     *   broadcast notifications.  We now compare against ->value explicitly.
+     * Dismiss a notification for the current user.
      */
     public function dismiss(Request $request, Notification $notification)
     {
@@ -194,13 +162,10 @@ class NotificationController extends Controller
         if (! $user->isAdmin()) {
             $canDismiss = false;
 
-            // Case A: notification is addressed directly to this user
             if ($notification->user_id !== null && $notification->user_id === $user->id) {
                 $canDismiss = true;
             }
 
-            // Case B: broadcast notification for this user's role
-            // Bug 2 fix: use ->value to get the plain string from the Enum
             if ($notification->user_id === null) {
                 $roleString = $user->role instanceof \BackedEnum
                     ? $user->role->value

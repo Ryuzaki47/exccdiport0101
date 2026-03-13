@@ -12,10 +12,6 @@ class Notification extends Model
 
     /**
      * Points to `admin_notifications` — the custom admin announcements table.
-     *
-     * The rename migration (2026_03_11_182805_rename_custom_notifications...)
-     * renames `notifications` → `admin_notifications` and creates a fresh
-     * `notifications` table for Laravel's internal Notifiable channel.
      */
     protected $table = 'admin_notifications';
 
@@ -25,8 +21,8 @@ class Notification extends Model
         'type',
         'start_date',
         'end_date',
-        'due_date',           // ← NEW: actual payment deadline displayed in the UI
-        'payment_term_id',    // ← NEW: links back to the originating payment term
+        'due_date',
+        'payment_term_id',
         'target_role',
         'user_id',
         'is_active',
@@ -40,7 +36,7 @@ class Notification extends Model
     protected $casts = [
         'start_date'   => 'date',
         'end_date'     => 'date',
-        'due_date'     => 'date',   // ← NEW
+        'due_date'     => 'date',
         'is_active'    => 'boolean',
         'is_complete'  => 'boolean',
         'dismissed_at' => 'datetime',
@@ -56,7 +52,6 @@ class Notification extends Model
         return $this->belongsTo(User::class);
     }
 
-    /** The payment term this notification was generated for (nullable). */
     public function paymentTerm(): BelongsTo
     {
         return $this->belongsTo(StudentPaymentTerm::class, 'payment_term_id');
@@ -66,9 +61,6 @@ class Notification extends Model
     // Scopes
     // -------------------------------------------------------------------------
 
-    /**
-     * Scope: only non-dismissed, active, incomplete notifications.
-     */
     public function scopeActive($query)
     {
         return $query
@@ -78,11 +70,17 @@ class Notification extends Model
     }
 
     /**
-     * Scope: notifications visible to a given user (by ID or email).
+     * Scope: notifications visible to a given user.
      *
      * Matches:
-     *   - Notifications targeted directly at this user  (user_id = $user->id)
-     *   - Role-based broadcasts for this user's role (or 'all') with no user_id
+     *   1. Notifications directly addressed to this user (user_id = $user->id)
+     *   2. Role/broadcast notifications for this user's role — with optional
+     *      term-name or term-ID filtering:
+     *        a. target_term_name is set → student must have an unpaid term
+     *           with that name in their latest assessment
+     *        b. term_ids is set → student must have an unpaid term whose ID
+     *           is in the term_ids JSON array
+     *        c. Neither set → visible to all students of the matching role
      */
     public function scopeForUser($query, int|string $userIdentifier)
     {
@@ -97,20 +95,65 @@ class Notification extends Model
         }
 
         return $query->where(function ($q) use ($user) {
+            // Case 1: directly addressed to this specific user
             $q->where('user_id', $user->id)
+
+            // Case 2: broadcast notification for this role
               ->orWhere(function ($q2) use ($user) {
+                  $roleString = $user->role instanceof \BackedEnum
+                      ? $user->role->value
+                      : (string) $user->role;
+
                   $q2->whereNull('user_id')
-                     ->where(function ($q3) use ($user) {
-                         $q3->where('target_role', $user->role)
+                     ->where(function ($q3) use ($user, $roleString) {
+                         $q3->where('target_role', $roleString)
                             ->orWhere('target_role', 'all');
+                     })
+                     // Apply term-name filter if set
+                     ->where(function ($q4) use ($user) {
+                         $q4->whereNull('target_term_name')
+                            ->orWhereExists(function ($sub) use ($user) {
+                                $sub->from('student_payment_terms')
+                                    ->join(
+                                        'student_assessments',
+                                        'student_assessments.id',
+                                        '=',
+                                        'student_payment_terms.student_assessment_id'
+                                    )
+                                    ->where('student_assessments.user_id', $user->id)
+                                    ->whereColumn(
+                                        'student_payment_terms.term_name',
+                                        'admin_notifications.target_term_name'
+                                    );
+                            });
+                     })
+                     // Apply term-IDs filter if set
+                     ->where(function ($q5) use ($user) {
+                         $table = (new self())->getTable();
+                         $driver = \Illuminate\Support\Facades\DB::getDriverName();
+
+                         $q5->whereNull('term_ids')
+                            ->orWhereRaw("JSON_LENGTH({$table}.term_ids) = 0")
+                            ->orWhereExists(function ($sub) use ($user, $table, $driver) {
+                                $sub->from('student_payment_terms')
+                                    ->join(
+                                        'student_assessments',
+                                        'student_assessments.id',
+                                        '=',
+                                        'student_payment_terms.student_assessment_id'
+                                    )
+                                    ->where('student_assessments.user_id', $user->id)
+                                    ->whereRaw(
+                                        $driver === 'sqlite'
+                                            ? "EXISTS (SELECT 1 FROM json_each({$table}.term_ids) WHERE json_each.value = student_payment_terms.id)"
+                                            : "JSON_CONTAINS({$table}.term_ids, CAST(student_payment_terms.id AS JSON))"
+                                    );
+                            });
                      });
               });
         });
     }
 
-    /**
-     * Scope: notifications within their active date window.
-     */
     public function scopeWithinDateRange($query)
     {
         $today = now()->toDateString();
@@ -126,13 +169,6 @@ class Notification extends Model
             });
     }
 
-    /**
-     * Scope: apply trigger_days_before_due filter for a specific student.
-     *
-     * - Notifications with trigger_days_before_due = NULL always pass through.
-     * - Notifications WITH a trigger value only show when the student has
-     *   an unpaid term due within that many days from today.
-     */
     public function scopeForDueDateTrigger($query, User $user)
     {
         $today        = now()->toDateString();
@@ -190,12 +226,6 @@ class Notification extends Model
         $this->update(['dismissed_at' => now()]);
     }
 
-    /**
-     * Returns a driver-agnostic SQL expression: today + N days.
-     *
-     * MySQL:  DATE_ADD(CURDATE(), INTERVAL <column> DAY)
-     * SQLite: DATE('now', '+' || <column> || ' days')
-     */
     public static function addDaysExpression(string $columnExpression): string
     {
         $driver = \Illuminate\Support\Facades\Schema::getConnection()->getDriverName();
