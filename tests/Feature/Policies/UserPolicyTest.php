@@ -22,23 +22,23 @@ class UserPolicyTest extends TestCase
         parent::setUp();
 
         $this->superAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
-            'is_active' => true,
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'super',
+            'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
         $this->manager = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
-            'is_active' => true,
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'manager',
+            'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
         $this->operator = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
-            'is_active' => true,
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'operator',
+            'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
@@ -47,9 +47,9 @@ class UserPolicyTest extends TestCase
         ]);
 
         $this->targetAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
     }
 
@@ -148,8 +148,8 @@ class UserPolicyTest extends TestCase
     {
         $data = [
             'first_name' => 'Updated',
-            'last_name' => 'Admin',
-            'email' => $this->targetAdmin->email,
+            'last_name'  => 'Admin',
+            'email'      => $this->targetAdmin->email,
             'admin_type' => 'manager',
             'department' => 'Updated Department',
         ];
@@ -158,7 +158,7 @@ class UserPolicyTest extends TestCase
             ->put(route('users.update', $this->targetAdmin->id), $data);
 
         $this->assertDatabaseHas('users', [
-            'id' => $this->targetAdmin->id,
+            'id'         => $this->targetAdmin->id,
             'department' => 'Updated Department',
         ]);
     }
@@ -168,8 +168,8 @@ class UserPolicyTest extends TestCase
     {
         $data = [
             'first_name' => 'Updated',
-            'last_name' => 'Operator',
-            'email' => $this->operator->email,
+            'last_name'  => 'Operator',
+            'email'      => $this->operator->email,
             'admin_type' => 'operator',
             'department' => 'Self Updated',
         ];
@@ -178,7 +178,7 @@ class UserPolicyTest extends TestCase
             ->put(route('users.update', $this->operator->id), $data);
 
         $this->assertDatabaseHas('users', [
-            'id' => $this->operator->id,
+            'id'         => $this->operator->id,
             'department' => 'Self Updated',
         ]);
     }
@@ -188,8 +188,8 @@ class UserPolicyTest extends TestCase
     {
         $data = [
             'first_name' => 'Hacked',
-            'last_name' => 'Admin',
-            'email' => $this->targetAdmin->email,
+            'last_name'  => 'Admin',
+            'email'      => $this->targetAdmin->email,
             'admin_type' => 'manager',
         ];
 
@@ -204,8 +204,8 @@ class UserPolicyTest extends TestCase
     {
         $data = [
             'first_name' => 'Hacked',
-            'last_name' => 'Admin',
-            'email' => $this->targetAdmin->email,
+            'last_name'  => 'Admin',
+            'email'      => $this->targetAdmin->email,
             'admin_type' => 'manager',
         ];
 
@@ -219,14 +219,14 @@ class UserPolicyTest extends TestCase
     public function only_super_admin_can_delete_admin(): void
     {
         $adminToDelete = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
         ]);
 
         $response = $this->actingAs($this->superAdmin)
             ->delete(route('users.destroy', $adminToDelete->id));
 
-        $response->assertStatus(403); // Soft delete not harddelete enforced
+        $response->assertStatus(403);
     }
 
     /** @test */
@@ -260,14 +260,13 @@ class UserPolicyTest extends TestCase
     public function admin_can_accept_own_terms(): void
     {
         $unacceptedAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'operator',
             'terms_accepted_at' => null,
         ]);
 
         $this->assertNull($unacceptedAdmin->terms_accepted_at);
 
-        // Simulate acceptance (in real app, this would be a form submission)
         $unacceptedAdmin->acceptTerms();
         $unacceptedAdmin->save();
 
@@ -278,15 +277,12 @@ class UserPolicyTest extends TestCase
     public function admin_cannot_accept_terms_for_another_user(): void
     {
         $unacceptedAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'operator',
             'terms_accepted_at' => null,
         ]);
 
-        // The policy should prevent one user from accepting terms on behalf of another
-        // This would be tested at the controller/endpoint level
         $this->assertNull($unacceptedAdmin->terms_accepted_at);
-        // Only the user themselves can accept their own terms
     }
 
     /** @test */
@@ -302,7 +298,7 @@ class UserPolicyTest extends TestCase
     public function manager_cannot_manage_admins(): void
     {
         $response = $this->actingAs($this->manager)
-            ->post(route('users.deactivate', $this->targetAdmin->id));
+            ->post(route('admin.users.deactivate', $this->targetAdmin->id));
 
         $response->assertStatus(403);
     }
@@ -311,7 +307,7 @@ class UserPolicyTest extends TestCase
     public function operator_cannot_manage_admins(): void
     {
         $response = $this->actingAs($this->operator)
-            ->post(route('users.deactivate', $this->targetAdmin->id));
+            ->post(route('admin.users.deactivate', $this->targetAdmin->id));
 
         $response->assertStatus(403);
     }
@@ -320,9 +316,9 @@ class UserPolicyTest extends TestCase
     public function inactive_admin_cannot_perform_admin_actions(): void
     {
         $inactiveAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'manager',
-            'is_active' => false,
+            'is_active'  => false,
         ]);
 
         $response = $this->actingAs($inactiveAdmin)
@@ -335,9 +331,9 @@ class UserPolicyTest extends TestCase
     public function inactive_admin_cannot_create_users(): void
     {
         $inactiveAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'super',
-            'is_active' => false,
+            'is_active'  => false,
         ]);
 
         $response = $this->actingAs($inactiveAdmin)
@@ -350,24 +346,20 @@ class UserPolicyTest extends TestCase
     public function deactivated_admin_loses_access(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'manager',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
-        // First verify they have access
         $response = $this->actingAs($admin)
             ->get(route('users.show', $admin->id));
         $response->assertStatus(200);
 
-        // Deactivate them
         $admin->update(['is_active' => false]);
         $admin->refresh();
 
-        // Now verify they don't have access
         $response = $this->actingAs($admin)
             ->get(route('users.index'));
-
         $response->assertStatus(403);
     }
 
@@ -388,13 +380,13 @@ class UserPolicyTest extends TestCase
     public function super_admin_can_restore_deactivated_admin(): void
     {
         $deactivatedAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => false,
+            'is_active'  => false,
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->post(route('users.reactivate', $deactivatedAdmin->id));
+            ->post(route('admin.users.reactivate', $deactivatedAdmin->id));
 
         $this->assertTrue($deactivatedAdmin->refresh()->is_active);
     }
@@ -403,13 +395,13 @@ class UserPolicyTest extends TestCase
     public function manager_cannot_restore_deactivated_admin(): void
     {
         $deactivatedAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => false,
+            'is_active'  => false,
         ]);
 
         $response = $this->actingAs($this->manager)
-            ->post(route('users.reactivate', $deactivatedAdmin->id));
+            ->post(route('admin.users.reactivate', $deactivatedAdmin->id));
 
         $response->assertStatus(403);
     }
@@ -418,7 +410,7 @@ class UserPolicyTest extends TestCase
     public function operator_cannot_deactivate_admin(): void
     {
         $response = $this->actingAs($this->operator)
-            ->post(route('users.deactivate', $this->manager->id));
+            ->post(route('admin.users.deactivate', $this->manager->id));
 
         $response->assertStatus(403);
     }
@@ -427,7 +419,7 @@ class UserPolicyTest extends TestCase
     public function manager_cannot_deactivate_admin(): void
     {
         $response = $this->actingAs($this->manager)
-            ->post(route('users.deactivate', $this->targetAdmin->id));
+            ->post(route('admin.users.deactivate', $this->targetAdmin->id));
 
         $response->assertStatus(403);
     }
@@ -436,13 +428,13 @@ class UserPolicyTest extends TestCase
     public function super_admin_can_deactivate_other_super_admin(): void
     {
         $otherSuperAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'super',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->post(route('users.deactivate', $otherSuperAdmin->id));
+            ->post(route('admin.users.deactivate', $otherSuperAdmin->id));
 
         $this->assertFalse($otherSuperAdmin->refresh()->is_active);
     }
@@ -450,11 +442,10 @@ class UserPolicyTest extends TestCase
     /** @test */
     public function super_admin_cannot_deactivate_themselves_if_only_super_admin(): void
     {
-        // Make this super admin the only super admin
         User::query()->where('admin_type', 'super')->where('id', '!=', $this->superAdmin->id)->update(['is_active' => false]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->post(route('users.deactivate', $this->superAdmin->id));
+            ->post(route('admin.users.deactivate', $this->superAdmin->id));
 
         $response->assertStatus(403);
         $this->assertTrue($this->superAdmin->refresh()->is_active);

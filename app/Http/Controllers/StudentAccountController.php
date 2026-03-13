@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\StudentAssessment;
 use App\Models\Notification;
 
@@ -30,14 +31,15 @@ class StudentAccountController extends Controller
             $semester = 'Summer';
         }
 
-        // Fees are managed through StudentAssessment fee_breakdown JSON
-        // If no assessment exists yet, use hardcoded fee structure as fallback
+        // Fees are managed through StudentAssessment fee_breakdown JSON.
+        // This hardcoded structure is a fallback for display when no assessment exists yet.
+        // It is NOT sourced from the Fee model (fee management is disabled).
         $fees = collect([
             ['name' => 'Registration Fee', 'amount' => 200.0,  'category' => 'Miscellaneous'],
-            ['name' => 'Tuition Fee',       'amount' => 5000.0, 'category' => 'Tuition'],
-            ['name' => 'Lab Fee',            'amount' => 2000.0, 'category' => 'Laboratory'],
-            ['name' => 'Library Fee',        'amount' => 500.0,  'category' => 'Library'],
-            ['name' => 'Misc. Fee',          'amount' => 1200.0, 'category' => 'Miscellaneous'],
+            ['name' => 'Tuition Fee',      'amount' => 5000.0, 'category' => 'Tuition'],
+            ['name' => 'Lab Fee',          'amount' => 2000.0, 'category' => 'Laboratory'],
+            ['name' => 'Library Fee',      'amount' => 500.0,  'category' => 'Library'],
+            ['name' => 'Misc. Fee',        'amount' => 1200.0, 'category' => 'Miscellaneous'],
         ]);
 
         $latestAssessment = StudentAssessment::where('user_id', $user->id)
@@ -78,8 +80,8 @@ class StudentAccountController extends Controller
                 'type'            => $n->type,
                 'start_date'      => $n->start_date,
                 'end_date'        => $n->end_date,
-                'due_date'        => $n->due_date,          // ← the actual payment deadline
-                'payment_term_id' => $n->payment_term_id,  // ← links to the term for Pay Now
+                'due_date'        => $n->due_date,
+                'payment_term_id' => $n->payment_term_id,
                 'target_role'     => $n->target_role,
                 'user_id'         => $n->user_id,
                 'is_active'       => $n->is_active,

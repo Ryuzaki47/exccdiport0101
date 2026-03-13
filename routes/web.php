@@ -113,6 +113,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->group(fu
         'update'  => 'users.update',
         'destroy' => 'users.destroy',
     ]);
+    // NOTE: These two routes MUST use the admin.users.* name — no aliases.
     Route::post('users/{user}/deactivate', [AdminController::class, 'deactivate'])
         ->name('admin.users.deactivate');
     Route::post('users/{user}/reactivate', [AdminController::class, 'reactivate'])

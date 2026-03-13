@@ -23,19 +23,18 @@ class AdminControllerTest extends TestCase
 
         $this->adminService = app(AdminService::class);
 
-        // Create test admins
         $this->superAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
-            'is_active' => true,
-            'terms_accepted_at' => now(),
+            'role'               => UserRoleEnum::ADMIN,
+            'admin_type'         => 'super',
+            'is_active'          => true,
+            'terms_accepted_at'  => now(),
         ]);
 
         $this->manager = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
-            'is_active' => true,
-            'terms_accepted_at' => now(),
+            'role'               => UserRoleEnum::ADMIN,
+            'admin_type'         => 'manager',
+            'is_active'          => true,
+            'terms_accepted_at'  => now(),
         ]);
     }
 
@@ -52,9 +51,9 @@ class AdminControllerTest extends TestCase
     public function admin_index_page_returns_admin_list(): void
     {
         User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
         $response = $this->actingAs($this->superAdmin)->get(route('users.index'));
@@ -102,19 +101,19 @@ class AdminControllerTest extends TestCase
     public function admin_can_be_stored_with_valid_data(): void
     {
         $data = [
-            'first_name' => 'New',
-            'last_name' => 'Admin',
-            'email' => 'newadmin@test.com',
-            'password' => 'SecurePassword123!',
+            'first_name'            => 'New',
+            'last_name'             => 'Admin',
+            'email'                 => 'newadmin@test.com',
+            'password'              => 'SecurePassword123!',
             'password_confirmation' => 'SecurePassword123!',
-            'admin_type' => 'manager',
-            'department' => 'Operations',
+            'admin_type'            => 'manager',
+            'department'            => 'Operations',
         ];
 
         $response = $this->actingAs($this->superAdmin)->post(route('users.store'), $data);
 
         $this->assertDatabaseHas('users', [
-            'email' => 'newadmin@test.com',
+            'email'      => 'newadmin@test.com',
             'admin_type' => 'manager',
             'department' => 'Operations',
         ]);
@@ -128,14 +127,14 @@ class AdminControllerTest extends TestCase
     public function admin_cannot_be_created_without_terms_acceptance(): void
     {
         $data = [
-            'first_name' => 'New',
-            'last_name' => 'Admin',
-            'email' => 'newadmin@test.com',
-            'password' => 'SecurePassword123!',
+            'first_name'            => 'New',
+            'last_name'             => 'Admin',
+            'email'                 => 'newadmin@test.com',
+            'password'              => 'SecurePassword123!',
             'password_confirmation' => 'SecurePassword123!',
-            'admin_type' => 'manager',
-            'department' => 'Operations',
-            'accept_terms' => false, // Not accepted
+            'admin_type'            => 'manager',
+            'department'            => 'Operations',
+            'accept_terms'          => false,
         ];
 
         $response = $this->actingAs($this->superAdmin)->post(route('users.store'), $data);
@@ -150,13 +149,13 @@ class AdminControllerTest extends TestCase
         $existing = User::factory()->create(['email' => 'taken@test.com']);
 
         $data = [
-            'first_name' => 'New',
-            'last_name' => 'Admin',
-            'email' => 'taken@test.com',
-            'password' => 'SecurePassword123!',
+            'first_name'            => 'New',
+            'last_name'             => 'Admin',
+            'email'                 => 'taken@test.com',
+            'password'              => 'SecurePassword123!',
             'password_confirmation' => 'SecurePassword123!',
-            'admin_type' => 'manager',
-            'department' => 'Operations',
+            'admin_type'            => 'manager',
+            'department'            => 'Operations',
         ];
 
         $response = $this->actingAs($this->superAdmin)->post(route('users.store'), $data);
@@ -168,13 +167,13 @@ class AdminControllerTest extends TestCase
     public function admin_creation_validates_password_strength(): void
     {
         $data = [
-            'first_name' => 'New',
-            'last_name' => 'Admin',
-            'email' => 'newadmin@test.com',
-            'password' => 'weak', // Too weak
+            'first_name'            => 'New',
+            'last_name'             => 'Admin',
+            'email'                 => 'newadmin@test.com',
+            'password'              => 'weak',
             'password_confirmation' => 'weak',
-            'admin_type' => 'manager',
-            'department' => 'Operations',
+            'admin_type'            => 'manager',
+            'department'            => 'Operations',
         ];
 
         $response = $this->actingAs($this->superAdmin)->post(route('users.store'), $data);
@@ -186,7 +185,7 @@ class AdminControllerTest extends TestCase
     public function show_page_displays_admin_details(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
             'created_by' => $this->superAdmin->id,
         ]);
@@ -201,7 +200,7 @@ class AdminControllerTest extends TestCase
     public function edit_page_returns_successful_response(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
         ]);
 
@@ -215,17 +214,17 @@ class AdminControllerTest extends TestCase
     public function admin_can_be_updated_with_valid_data(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'manager',
             'department' => 'Finance',
         ]);
 
         $data = [
             'first_name' => 'Updated',
-            'last_name' => 'Name',
-            'email' => $admin->email, // Keep existing
-            'admin_type' => 'operator', // Change type
-            'department' => 'Operations', // Change department
+            'last_name'  => 'Name',
+            'email'      => $admin->email,
+            'admin_type' => 'operator',
+            'department' => 'Operations',
         ];
 
         $response = $this->actingAs($this->superAdmin)->put(route('users.update', $admin->id), $data);
@@ -240,18 +239,18 @@ class AdminControllerTest extends TestCase
     public function admin_password_can_be_updated_optionally(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'manager',
         ]);
 
         $oldPassword = $admin->password;
 
         $data = [
-            'first_name' => 'Updated',
-            'last_name' => 'Name',
-            'email' => $admin->email,
-            'admin_type' => 'manager',
-            'password' => 'NewSecurePassword123!',
+            'first_name'            => 'Updated',
+            'last_name'             => 'Name',
+            'email'                 => $admin->email,
+            'admin_type'            => 'manager',
+            'password'              => 'NewSecurePassword123!',
             'password_confirmation' => 'NewSecurePassword123!',
         ];
 
@@ -268,8 +267,8 @@ class AdminControllerTest extends TestCase
 
         $data = [
             'first_name' => 'Updated',
-            'last_name' => 'Name',
-            'email' => $admin->email,
+            'last_name'  => 'Name',
+            'email'      => $admin->email,
             'admin_type' => 'manager',
         ];
 
@@ -282,12 +281,12 @@ class AdminControllerTest extends TestCase
     public function deactivate_action_sets_is_active_to_false(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
-        $response = $this->actingAs($this->superAdmin)->post(route('users.deactivate', $admin->id));
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.users.deactivate', $admin->id));
 
         $admin->refresh();
         $this->assertFalse($admin->is_active);
@@ -296,15 +295,14 @@ class AdminControllerTest extends TestCase
     /** @test */
     public function cannot_deactivate_last_super_admin(): void
     {
-        // Create scenario with only one super admin
-        User::query()->update(['is_active' => false]); // Deactivate all
+        User::query()->update(['is_active' => false]);
         $lastSuperAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'super',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
-        $response = $this->actingAs($lastSuperAdmin)->post(route('users.deactivate', $lastSuperAdmin->id));
+        $response = $this->actingAs($lastSuperAdmin)->post(route('admin.users.deactivate', $lastSuperAdmin->id));
 
         $response->assertStatus(403);
         $lastSuperAdmin->refresh();
@@ -315,12 +313,12 @@ class AdminControllerTest extends TestCase
     public function reactivate_action_sets_is_active_to_true(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => false,
+            'is_active'  => false,
         ]);
 
-        $response = $this->actingAs($this->superAdmin)->post(route('users.reactivate', $admin->id));
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.users.reactivate', $admin->id));
 
         $admin->refresh();
         $this->assertTrue($admin->is_active);
@@ -330,14 +328,14 @@ class AdminControllerTest extends TestCase
     public function deactivated_admin_cannot_login(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'manager',
-            'is_active' => false,
-            'password' => bcrypt('password123'),
+            'is_active'  => false,
+            'password'   => bcrypt('password123'),
         ]);
 
         $response = $this->post('/login', [
-            'email' => $admin->email,
+            'email'    => $admin->email,
             'password' => 'password123',
         ]);
 
@@ -348,7 +346,7 @@ class AdminControllerTest extends TestCase
     public function delete_admin_is_forbidden(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
         ]);
 
@@ -362,13 +360,13 @@ class AdminControllerTest extends TestCase
     public function audit_fields_are_populated_on_creation(): void
     {
         $data = [
-            'first_name' => 'Audit',
-            'last_name' => 'Test',
-            'email' => 'audit@test.com',
-            'password' => 'SecurePassword123!',
+            'first_name'            => 'Audit',
+            'last_name'             => 'Test',
+            'email'                 => 'audit@test.com',
+            'password'              => 'SecurePassword123!',
             'password_confirmation' => 'SecurePassword123!',
-            'admin_type' => 'manager',
-            'department' => 'Operations',
+            'admin_type'            => 'manager',
+            'department'            => 'Operations',
         ];
 
         $response = $this->actingAs($this->superAdmin)->post(route('users.store'), $data);
@@ -382,7 +380,7 @@ class AdminControllerTest extends TestCase
     public function audit_fields_are_updated_on_modification(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
         ]);
 
@@ -390,20 +388,18 @@ class AdminControllerTest extends TestCase
 
         $data = [
             'first_name' => 'Updated',
-            'last_name' => 'Admin',
-            'email' => $admin->email,
+            'last_name'  => 'Admin',
+            'email'      => $admin->email,
             'admin_type' => 'manager',
         ];
 
-        // Simulate update by another admin
         $updatingAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
-            'is_active' => true,
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'super',
+            'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
-        // Travel 1 second so updated_at is guaranteed to differ from originalUpdatedAt
         $this->travel(1)->seconds();
 
         $this->actingAs($updatingAdmin)->put(route('users.update', $admin->id), $data);
@@ -417,13 +413,13 @@ class AdminControllerTest extends TestCase
     public function admin_creation_logs_action(): void
     {
         $data = [
-            'first_name' => 'Log',
-            'last_name' => 'Test',
-            'email' => 'log@test.com',
-            'password' => 'SecurePassword123!',
+            'first_name'            => 'Log',
+            'last_name'             => 'Test',
+            'email'                 => 'log@test.com',
+            'password'              => 'SecurePassword123!',
             'password_confirmation' => 'SecurePassword123!',
-            'admin_type' => 'manager',
-            'department' => 'Operations',
+            'admin_type'            => 'manager',
+            'department'            => 'Operations',
         ];
 
         $this->actingAs($this->superAdmin)->post(route('users.store'), $data);
@@ -436,13 +432,11 @@ class AdminControllerTest extends TestCase
     public function inactive_admin_cannot_access_admin_pages(): void
     {
         $inactiveAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'super',
-            'is_active' => false,
+            'is_active'  => false,
         ]);
 
-        // While logged in (though in real scenario they'd be logged out after deactivation)
-        // they shouldn't be able to perform admin actions
         $response = $this->actingAs($inactiveAdmin)->get(route('users.index'));
 
         $response->assertStatus(403);

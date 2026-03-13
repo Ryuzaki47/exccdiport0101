@@ -25,10 +25,9 @@ class StudentController extends Controller
     {
         $query = Student::with(['payments', 'transactions', 'account', 'workflowInstances.workflow']);
 
-        // Enhanced search functionality
         if ($request->filled('search')) {
             $searchTerm = $request->search;
-            
+
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('first_name', 'like', '%' . $searchTerm . '%')
                   ->orWhere('last_name', 'like', '%' . $searchTerm . '%')
@@ -42,25 +41,25 @@ class StudentController extends Controller
             });
         }
 
-        // NEW: Filter by enrollment status (for workflow integration)
         if ($request->filled('status')) {
             $query->where('enrollment_status', $request->status);
         }
 
         $students = $query->orderBy('created_at', 'desc')->paginate(10);
 
-        // Fees are now managed through StudentAssessment fee_breakdown JSON
-        // Default fee structure for display purposes only
+        // Fee management has been disabled. Fees are now managed through
+        // StudentAssessment fee_breakdown JSON. This hardcoded structure is
+        // used only for display context in the Students archive view.
         $fees = collect([
             ['name' => 'Registration Fee', 'amount' => 0.0],
-            ['name' => 'Tuition Fee', 'amount' => 1092.0],
-            ['name' => 'Lab Fee', 'amount' => 2256.0],
-            ['name' => 'Misc. Fee', 'amount' => 4700.0],
+            ['name' => 'Tuition Fee',      'amount' => 0.0],
+            ['name' => 'Lab Fee',          'amount' => 0.0],
+            ['name' => 'Misc. Fee',        'amount' => 0.0],
         ]);
 
         return Inertia::render('Students/Index', [
             'students' => $students,
-            'filters'  => $request->only(['search', 'status']), // Include status filter
+            'filters'  => $request->only(['search', 'status']),
             'fees'     => $fees->values(),
         ]);
     }
@@ -79,41 +78,35 @@ class StudentController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'student_id' => 'required|unique:students',
-            'last_name' => 'required|string|max:255',
-            'first_name' => 'required|string|max:255',
-            'middle_initial' => 'nullable|string|max:10',
-            'email' => 'required|email|unique:students',
-            'course' => 'required|string',
-            'year_level' => 'required|string',
-            'birthday' => 'nullable|date',
-            'phone' => 'nullable|string',
-            'address' => 'nullable|string',
-            'total_balance' => 'nullable|numeric',
+            'student_id'        => 'required|unique:students',
+            'last_name'         => 'required|string|max:255',
+            'first_name'        => 'required|string|max:255',
+            'middle_initial'    => 'nullable|string|max:10',
+            'email'             => 'required|email|unique:students',
+            'course'            => 'required|string',
+            'year_level'        => 'required|string',
+            'birthday'          => 'nullable|date',
+            'phone'             => 'nullable|string',
+            'address'           => 'nullable|string',
+            'total_balance'     => 'nullable|numeric',
             'enrollment_status' => 'sometimes|in:pending,active,suspended,graduated',
-            'user_id' => 'nullable|exists:users,id', // If linking to user account
+            'user_id'           => 'nullable|exists:users,id',
         ]);
 
-        // Auto-generate student_number if not provided
         if (!isset($validated['student_number'])) {
             $validated['student_number'] = 'STU-' . strtoupper(uniqid());
         }
 
-        // Set default enrollment status
         if (!isset($validated['enrollment_status'])) {
             $validated['enrollment_status'] = 'pending';
         }
 
-        // Set default total_balance if not provided
-        // Balance will be recalculated from StudentAssessment after creation
-        if (!isset($validated['total_balance'])) {
-            $validated['total_balance'] = 0;
-        }
+        // Balance is set to 0 and will be recalculated from StudentAssessment after creation
+        $validated['total_balance'] = 0.0;
 
-        // Create student
         $student = Student::create($validated);
 
-        // 🔥 AUTO-START ENROLLMENT WORKFLOW if status is pending
+        // Auto-start enrollment workflow if status is pending
         if ($student->enrollment_status === 'pending') {
             $workflow = Workflow::active()
                 ->where('type', 'student')
@@ -122,18 +115,13 @@ class StudentController extends Controller
 
             if ($workflow) {
                 try {
-                    $this->workflowService->startWorkflow(
-                        $workflow,
-                        $student,
-                        auth()->id()
-                    );
-                    
+                    $this->workflowService->startWorkflow($workflow, $student, auth()->id());
+
                     return redirect()->route('students.show', $student)
                         ->with('success', 'Student created and enrollment workflow started');
                 } catch (\Exception $e) {
-                    // Log error but don't fail student creation
                     logger()->error('Failed to start workflow: ' . $e->getMessage());
-                    
+
                     return redirect()->route('students.show', $student)
                         ->with('warning', 'Student created but workflow failed to start');
                 }
@@ -150,22 +138,21 @@ class StudentController extends Controller
     public function show($id)
     {
         $student = Student::with([
-            'payments', 
+            'payments',
             'user.account',
             'workflowInstances.workflow',
             'workflowInstances.approvals.approver',
-            'accountingTransactions'
+            'accountingTransactions',
         ])->findOrFail($id);
 
-        // Get active workflow instance if exists
         $activeWorkflow = $student->workflowInstances()
             ->whereIn('status', ['pending', 'in_progress'])
             ->with(['workflow', 'approvals'])
             ->first();
 
         return Inertia::render('Students/StudentProfile', [
-            'student' => $student,
-            'activeWorkflow' => $activeWorkflow, // NEW: Pass workflow data to frontend
+            'student'       => $student,
+            'activeWorkflow' => $activeWorkflow,
         ]);
     }
 
@@ -175,12 +162,12 @@ class StudentController extends Controller
     public function storePayment(Request $request, Student $student)
     {
         $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-            'description' => 'required|string|max:255',
-            'payment_method' => 'required|string',
+            'amount'           => 'required|numeric|min:0.01',
+            'description'      => 'required|string|max:255',
+            'payment_method'   => 'required|string',
             'reference_number' => 'nullable|string',
-            'status' => 'required|string',
-            'paid_at' => 'required|date',
+            'status'           => 'required|string',
+            'paid_at'          => 'required|date',
         ]);
 
         $user = $request->user();
@@ -193,7 +180,7 @@ class StudentController extends Controller
         }
 
         $student->payments()->create($request->only([
-            'amount', 'description', 'payment_method', 'reference_number', 'status', 'paid_at'
+            'amount', 'description', 'payment_method', 'reference_number', 'status', 'paid_at',
         ]));
 
         return back()->with('success', 'Payment recorded successfully!');
@@ -215,34 +202,32 @@ class StudentController extends Controller
     public function update(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'student_id' => 'required|string|unique:students,student_id,' . $student->id,
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'middle_initial' => 'nullable|string|max:10',
-            'email' => 'required|email|unique:students,email,' . $student->id,
-            'course' => 'required|string|max:255',
-            'year_level' => 'required|string',
-            'birthday' => 'nullable|date',
-            'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string|max:500',
-            'total_balance' => 'required|numeric|min:0',
+            'student_id'        => 'required|string|unique:students,student_id,' . $student->id,
+            'first_name'        => 'required|string|max:255',
+            'last_name'         => 'required|string|max:255',
+            'middle_initial'    => 'nullable|string|max:10',
+            'email'             => 'required|email|unique:students,email,' . $student->id,
+            'course'            => 'required|string|max:255',
+            'year_level'        => 'required|string',
+            'birthday'          => 'nullable|date',
+            'phone'             => 'nullable|string|max:20',
+            'address'           => 'nullable|string|max:500',
+            'total_balance'     => 'required|numeric|min:0',
             'enrollment_status' => 'sometimes|in:pending,active,suspended,graduated',
         ]);
 
-        // Check if enrollment status changed to active
-        $statusChanged = $student->enrollment_status !== $validated['enrollment_status'] ?? $student->enrollment_status;
+        $statusChanged = $student->enrollment_status !== ($validated['enrollment_status'] ?? $student->enrollment_status);
 
         $student->update($validated);
 
-        // If status manually changed to active, complete any pending workflows
         if ($statusChanged && $student->enrollment_status === 'active') {
             $activeWorkflow = $student->workflowInstances()
                 ->where('status', 'in_progress')
                 ->first();
-                
+
             if ($activeWorkflow) {
                 $activeWorkflow->update([
-                    'status' => 'completed',
+                    'status'       => 'completed',
                     'completed_at' => now(),
                 ]);
             }
@@ -257,9 +242,8 @@ class StudentController extends Controller
     // ============================================
     public function destroy(Student $student)
     {
-        // Soft delete will preserve workflow history
         $student->delete();
-        
+
         return redirect()->route('students.index')
             ->with('success', 'Student deleted successfully!');
     }
@@ -272,39 +256,36 @@ class StudentController extends Controller
         $user = $request->user();
 
         if ($user->role === 'student') {
-            // Student sees their own profile
             $student = Student::where('email', $user->email)
                 ->orWhere('user_id', $user->id)
                 ->firstOrFail();
         } else {
-            // Admin/accounting can choose which student to view
-            $student = Student::with('payments')->first(); 
+            $student = Student::with('payments')->first();
         }
 
         $student->load([
             'payments',
             'workflowInstances.workflow',
-            'workflowInstances.approvals'
+            'workflowInstances.approvals',
         ]);
 
-        // Get active workflow
         $activeWorkflow = $student->workflowInstances()
             ->whereIn('status', ['pending', 'in_progress'])
             ->with(['workflow', 'approvals'])
             ->first();
 
         return Inertia::render('Students/StudentProfile', [
-            'student' => $student,
+            'student'        => $student,
             'activeWorkflow' => $activeWorkflow,
         ]);
     }
 
     // ============================================
-    // NEW: WORKFLOW ACTIONS
+    // WORKFLOW ACTIONS
     // ============================================
 
     /**
-     * Manually advance student workflow to next step
+     * Manually advance student workflow to next step.
      */
     public function advanceWorkflow(Student $student)
     {
@@ -318,7 +299,7 @@ class StudentController extends Controller
 
         try {
             $this->workflowService->advanceWorkflow($activeWorkflow, auth()->id());
-            
+
             return back()->with('success', 'Workflow advanced to next step');
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Failed to advance workflow: ' . $e->getMessage()]);
@@ -326,7 +307,7 @@ class StudentController extends Controller
     }
 
     /**
-     * View workflow history for student
+     * View workflow history for student.
      */
     public function workflowHistory(Student $student)
     {
@@ -336,7 +317,7 @@ class StudentController extends Controller
             ->get();
 
         return Inertia::render('Students/WorkflowHistory', [
-            'student' => $student,
+            'student'   => $student,
             'workflows' => $workflows,
         ]);
     }

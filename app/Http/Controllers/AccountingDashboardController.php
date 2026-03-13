@@ -15,7 +15,8 @@ class AccountingDashboardController extends Controller
     public function index()
     {
         $currentYear = now()->year;
-        $month = now()->month;
+        $month       = now()->month;
+
         if ($month >= 6 && $month <= 10) {
             $currentSemester = '1st Sem';
         } elseif ($month >= 11 || $month <= 3) {
@@ -24,80 +25,77 @@ class AccountingDashboardController extends Controller
             $currentSemester = 'Summer';
         }
 
-        // Existing stats
         $stats = [
-            'total_students' => User::where('role', 'student')->count(),
+            'total_students'  => User::where('role', 'student')->count(),
             'active_students' => User::where('role', 'student')
                 ->where('status', User::STATUS_ACTIVE)
                 ->count(),
-            'total_charges' => Transaction::where('kind', 'charge')->sum('amount'),
-            'total_payments' => Transaction::where('kind', 'payment')
+            'total_charges'   => Transaction::where('kind', 'charge')->sum('amount'),
+            'total_payments'  => Transaction::where('kind', 'payment')
                 ->where('status', 'paid')
                 ->sum('amount'),
-            'total_pending' => abs(User::where('role', 'student')
-                ->whereHas('account', function ($q) {
-                    $q->where('balance', '>', 0);
-                })
-                ->with('account')
-                ->get()
-                ->sum('account.balance')),
+            'total_pending'   => abs(
+                User::where('role', 'student')
+                    ->whereHas('account', fn ($q) => $q->where('balance', '>', 0))
+                    ->with('account')
+                    ->get()
+                    ->sum('account.balance')
+            ),
             'collection_rate' => 0,
-            // Fee management feature is disabled; fees are now part of student assessment
-            'active_fees' => 0,
-            'total_fee_amount' => 0,
-            // PENDING APPROVALS: Count of payment submissions awaiting accounting review
+
+            // Fee management feature is disabled.
+            // Fees are now part of StudentAssessment; active assessment counts replace fee counts.
+            'active_fees'      => StudentAssessment::where('status', 'active')->count(),
+            'total_fee_amount' => StudentAssessment::where('status', 'active')->sum('total_assessment'),
+
+            // Pending approvals: payment submissions awaiting accounting review
             'pending_approvals' => \App\Models\WorkflowApproval::where('status', 'pending')
                 ->whereHas('workflowInstance.workflow', fn ($q) => $q->where('type', 'payment_approval'))
                 ->count(),
         ];
+
         // Calculate collection rate
-        $totalCharges = $stats['total_charges'];
-        $totalPayments = $stats['total_payments'];
-        $stats['collection_rate'] = $totalCharges > 0 
-            ? round(($totalPayments / $totalCharges) * 100, 2) 
+        $totalCharges     = $stats['total_charges'];
+        $totalPayments    = $stats['total_payments'];
+        $stats['collection_rate'] = $totalCharges > 0
+            ? round(($totalPayments / $totalCharges) * 100, 2)
             : 0;
 
-        // Students with balance
+        // Students with outstanding balance
         $studentsWithBalance = User::where('role', 'student')
-            ->whereHas('account', function ($q) {
-                $q->where('balance', '>', 0);
-            })
+            ->whereHas('account', fn ($q) => $q->where('balance', '>', 0))
             ->with('account')
             ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'account_id' => $user->account_id,
-                    'course' => $user->course,
-                    'year_level' => $user->year_level,
-                    'balance' => abs($user->account->balance ?? 0),
-                ];
-            });
+            ->map(fn ($user) => [
+                'id'         => $user->id,
+                'name'       => $user->name,
+                'email'      => $user->email,
+                'account_id' => $user->account_id,
+                'course'     => $user->course,
+                'year_level' => $user->year_level,
+                'balance'    => abs($user->account->balance ?? 0),
+            ]);
 
-        // Recent payments
+        // Recent approved payments
         $recentPayments = Transaction::where('kind', 'payment')
             ->where('status', 'paid')
             ->with('user')
             ->orderBy('paid_at', 'desc')
             ->limit(10)
             ->get()
-            ->map(function ($transaction) {
-                return [
-                    'id' => $transaction->id,
-                    'reference' => $transaction->reference,
-                    'student_name' => $transaction->user->name ?? 'N/A',
-                    'amount' => $transaction->amount,
-                    'status' => $transaction->status,
-                    'paid_at' => $transaction->paid_at,
-                    'created_at' => $transaction->created_at,
-                ];
-            });
+            ->map(fn ($transaction) => [
+                'id'           => $transaction->id,
+                'reference'    => $transaction->reference,
+                'student_name' => $transaction->user->name ?? 'N/A',
+                'amount'       => $transaction->amount,
+                'status'       => $transaction->status,
+                'paid_at'      => $transaction->paid_at,
+                'created_at'   => $transaction->created_at,
+            ]);
 
-        // Payment trends (last 6 months)
+        // Payment trends — last 6 months
         $paymentTrends = Transaction::where('kind', 'payment')
             ->where('status', 'paid')
             ->where('paid_at', '>=', now()->subMonths(6))
@@ -131,32 +129,30 @@ class AccountingDashboardController extends Controller
             ->orderBy('year_level')
             ->get();
 
-        // NEW: Student Fee Stats
+        // Student fee stats derived entirely from StudentAssessment
         $studentFeeStats = [
-            'total_assessments' => StudentAssessment::where('status', 'active')->count(),
-            'total_assessment_amount' => StudentAssessment::where('status', 'active')
-                ->sum('total_assessment'),
-            'pending_assessments' => StudentAssessment::where('status', 'pending')->count(),
-            'recent_assessments' => StudentAssessment::where('created_at', '>=', now()->subDays(30))
-                ->count(),
-            'recent_payments_amount' => Transaction::where('kind', 'payment')
+            'total_assessments'       => StudentAssessment::where('status', 'active')->count(),
+            'total_assessment_amount' => StudentAssessment::where('status', 'active')->sum('total_assessment'),
+            'pending_assessments'     => StudentAssessment::where('status', 'pending')->count(),
+            'recent_assessments'      => StudentAssessment::where('created_at', '>=', now()->subDays(30))->count(),
+            'recent_payments_amount'  => Transaction::where('kind', 'payment')
                 ->where('status', 'paid')
                 ->where('paid_at', '>=', now()->subDays(30))
                 ->sum('amount'),
         ];
 
         return Inertia::render('Accounting/Dashboard', [
-            'stats' => $stats,
+            'stats'               => $stats,
             'studentsWithBalance' => $studentsWithBalance,
-            'recentPayments' => $recentPayments,
-            'paymentTrends' => $paymentTrends,
-            'paymentByMethod' => $paymentByMethod,
+            'recentPayments'      => $recentPayments,
+            'paymentTrends'       => $paymentTrends,
+            'paymentByMethod'     => $paymentByMethod,
             'studentsByYearLevel' => $studentsByYearLevel,
-            'currentTerm' => [
-                'year' => $currentYear,
+            'currentTerm'         => [
+                'year'     => $currentYear,
                 'semester' => $currentSemester,
             ],
-            'studentFeeStats' => $studentFeeStats, // NEW: Add student fee stats
+            'studentFeeStats'     => $studentFeeStats,
         ]);
     }
 }

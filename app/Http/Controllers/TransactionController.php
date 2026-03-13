@@ -34,7 +34,7 @@ class TransactionController extends Controller
                 ->orderByDesc('year')
                 ->orderByDesc('semester')
                 ->get()
-                ->groupBy(fn($txn) => $this->getTransactionGroupKey($txn));
+                ->groupBy(fn ($txn) => $this->getTransactionGroupKey($txn));
 
             $currentTerm = $this->getCurrentTerm();
         } else {
@@ -43,12 +43,11 @@ class TransactionController extends Controller
                 ->orderByDesc('year')
                 ->orderByDesc('semester')
                 ->get()
-                ->groupBy(fn($txn) => $this->getTransactionGroupKey($txn));
+                ->groupBy(fn ($txn) => $this->getTransactionGroupKey($txn));
 
-            // ── Bug #2 Fix: for students, resolve currentTerm from their ──────
-            // latest assessment so the correct term group is auto-expanded.
-            // This ensures newly-created assessments expand the right term even
-            // when the server-time semester differs from the assessment semester.
+            // For students, resolve currentTerm from their latest assessment so the
+            // correct term group is auto-expanded even when server-time semester
+            // differs from the assessment semester.
             $latestAssessment = \App\Models\StudentAssessment::where('user_id', $user->id)
                 ->where('status', 'active')
                 ->latest()
@@ -136,10 +135,7 @@ class TransactionController extends Controller
             abort(403, 'You do not have permission to view this receipt.');
         }
 
-        // ── Block receipts for unconfirmed payments ───────────────────────────
         // Only fully paid transactions may generate a receipt PDF.
-        // Awaiting-approval payments have not yet been verified by accounting,
-        // so issuing a receipt would be premature and potentially misleading.
         if ($transaction->status === 'awaiting_approval') {
             abort(403, 'Receipt is not available yet. Your payment is still awaiting accounting verification.');
         }
@@ -197,7 +193,7 @@ class TransactionController extends Controller
 
         $termKey = $request->input('term');
         if ($termKey && $termKey !== 'All Terms') {
-            $parts    = explode(' ', $termKey, 2);
+            $parts   = explode(' ', $termKey, 2);
             $termYear = $parts[0] ?? null;
             $termSem  = $parts[1] ?? null;
 
@@ -209,20 +205,13 @@ class TransactionController extends Controller
 
         $transactions = $query->get();
 
-        // ── Exclude awaiting_approval from the PDF ────────────────────────────
-        // Only confirmed (paid) payments and charges should appear in the Term
-        // Summary PDF. Unverified payments are excluded from the document and
-        // from the balance calculations to avoid misrepresenting the account.
+        // Exclude awaiting_approval payments from the PDF — only confirmed
+        // (paid) payments and charges appear in the Term Summary document.
         $transactions = $transactions->filter(function ($txn) {
-            // Always include charges (assessment items)
             if ($txn->kind === 'charge') return true;
-            // For payments, only include those that are confirmed paid
             return $txn->kind === 'payment' && $txn->status === 'paid';
         });
 
-        // ── Block download if there are no paid transactions ─────────────────
-        // If every payment in this term is still awaiting approval, the PDF
-        // would show an incomplete or misleading balance. Prevent the download.
         $paidPaymentsExist = $transactions->where('kind', 'payment')->where('status', 'paid')->isNotEmpty();
         $chargesExist      = $transactions->where('kind', 'charge')->isNotEmpty();
 
@@ -258,8 +247,8 @@ class TransactionController extends Controller
      * Process a payment submission from a student or staff.
      *
      * Students' payments require accounting approval:
-     *   1. Transaction is created with status = 'awaiting_approval'
-     *   2. A WorkflowInstance + WorkflowApproval record are created
+     *   1. Transaction created with status = 'awaiting_approval'
+     *   2. WorkflowInstance + WorkflowApproval records are created
      *   3. Accounting users see the pending approval in /approvals
      *
      * Staff (admin/accounting) bypass approval and are marked 'paid' immediately.
@@ -282,14 +271,9 @@ class TransactionController extends Controller
         ]);
 
         try {
-            // ─────────────────────────────────────────────────────────────────
-            // SERVER-SIDE BALANCE GUARD (Bug Fix #6)
-            // The Vue client enforces a max but a user can bypass it via API.
-            // We must re-validate the amount against the term's actual balance.
-            // ─────────────────────────────────────────────────────────────────
             $term = StudentPaymentTerm::findOrFail((int) $data['selected_term_id']);
 
-            // Ensure the term belongs to this user (security: prevent cross-user payment)
+            // Security: prevent cross-user payment — term must belong to this user
             if ((int) $term->user_id !== (int) $user->id) {
                 return back()->withErrors(['payment' => 'Invalid payment term selected.']);
             }
@@ -311,10 +295,7 @@ class TransactionController extends Controller
                 ]);
             }
 
-            // ─────────────────────────────────────────────────────────────────
-            // SERVER-SIDE DEDUPLICATION: Prevent duplicate awaiting_approval
-            // submissions for the same term.
-            // ─────────────────────────────────────────────────────────────────
+            // Prevent duplicate awaiting_approval submissions for the same term
             if ($isStudent) {
                 $alreadyPending = Transaction::where('user_id', $user->id)
                     ->where('status', 'awaiting_approval')
@@ -330,17 +311,13 @@ class TransactionController extends Controller
             $paymentService   = new StudentPaymentService();
             $requiresApproval = $isStudent;
 
-            // ─────────────────────────────────────────────────────────────────
-            // TERM KEY FIX (Bug Fix #4)
             // Always derive year and semester from the term's own assessment so
             // the transaction is grouped under the correct term in history.
-            // Fallback to server-time only if the assessment is missing.
-            // ─────────────────────────────────────────────────────────────────
-            $assessment       = $term->assessment;
-            $transactionYear  = $assessment
+            $assessment      = $term->assessment;
+            $transactionYear = $assessment
                 ? explode('-', $assessment->school_year)[0]
                 : (string) now()->year;
-            $transactionSem   = $assessment?->semester ?? $this->getCurrentSemesterLabel();
+            $transactionSem  = $assessment?->semester ?? $this->getCurrentSemesterLabel();
 
             $result = $paymentService->processPayment($user, $paidAmount, [
                 'payment_method'   => $data['payment_method'],
@@ -352,15 +329,12 @@ class TransactionController extends Controller
                 'semester'         => $transactionSem,
             ], $requiresApproval);
 
-            // ── START APPROVAL WORKFLOW FOR STUDENT PAYMENTS ──────────────────
-            // This is the critical step that was missing. Without this, the
-            // WorkflowApproval record is never created and accounting never
-            // receives the submission in their queue.
+            // Start approval workflow for student payments
             if ($requiresApproval) {
                 $this->startPaymentApprovalWorkflow($result['transaction_id'], $user->id);
             }
 
-            // ── POST-PROCESSING FOR IMMEDIATELY-APPROVED PAYMENTS ─────────────
+            // Post-processing for immediately-approved payments (staff side)
             if (!$requiresApproval) {
                 event(new PaymentRecorded(
                     $user,
@@ -381,8 +355,8 @@ class TransactionController extends Controller
             return back()->with([
                 'success' => $message,
                 'flash'   => [
-                    'transaction_id'     => $result['transaction_id'] ?? null,
-                    'requires_approval'  => $requiresApproval,
+                    'transaction_id'    => $result['transaction_id'] ?? null,
+                    'requires_approval' => $requiresApproval,
                 ],
             ]);
 
@@ -397,14 +371,21 @@ class TransactionController extends Controller
         }
     }
 
+    // ─── destroy ─────────────────────────────────────────────────────────────
+
+    public function destroy(Transaction $transaction)
+    {
+        $transaction->delete();
+
+        return redirect()->route('transactions.index')
+            ->with('success', 'Transaction deleted successfully.');
+    }
+
     // ─── Private helpers ──────────────────────────────────────────────────────
 
     /**
      * Find the active payment_approval workflow and start a workflow instance
-     * for the given transaction. This creates WorkflowApproval records so
-     * accounting users can see and act on the submission.
-     *
-     * @throws \Exception if no active payment_approval workflow exists
+     * for the given transaction so accounting users can approve or reject it.
      */
     private function startPaymentApprovalWorkflow(int $transactionId, int $userId): void
     {
@@ -420,7 +401,6 @@ class TransactionController extends Controller
         }
 
         $transaction = Transaction::findOrFail($transactionId);
-
         $this->workflowService->startWorkflow($workflow, $transaction, $userId);
     }
 
@@ -484,6 +464,6 @@ class TransactionController extends Controller
     {
         // Fee management has been disabled.
         // Payables are now created through StudentAssessment and StudentPaymentTerms.
-        // This method is retained for backward compatibility but does nothing.
+        // This method is retained for backward compatibility but intentionally does nothing.
     }
 }

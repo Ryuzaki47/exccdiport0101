@@ -18,9 +18,9 @@ class AdminWorkflowIntegrationTest extends TestCase
         parent::setUp();
 
         $this->superAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
-            'is_active' => true,
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'super',
+            'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
     }
@@ -30,13 +30,13 @@ class AdminWorkflowIntegrationTest extends TestCase
     {
         // 1. Create a new admin
         $createData = [
-            'first_name' => 'Integration',
-            'last_name' => 'Test',
-            'email' => 'integration@test.com',
-            'password' => 'IntegrationTest123!',
+            'first_name'            => 'Integration',
+            'last_name'             => 'Test',
+            'email'                 => 'integration@test.com',
+            'password'              => 'IntegrationTest123!',
             'password_confirmation' => 'IntegrationTest123!',
-            'admin_type' => 'manager',
-            'department' => 'Integration Dept',
+            'admin_type'            => 'manager',
+            'department'            => 'Integration Dept',
         ];
 
         $createResponse = $this->actingAs($this->superAdmin)
@@ -53,8 +53,8 @@ class AdminWorkflowIntegrationTest extends TestCase
         // 3. Edit the admin
         $editData = [
             'first_name' => 'Updated',
-            'last_name' => 'Integration',
-            'email' => 'integration@test.com',
+            'last_name'  => 'Integration',
+            'email'      => 'integration@test.com',
             'admin_type' => 'operator',
             'department' => 'Updated Dept',
         ];
@@ -68,7 +68,7 @@ class AdminWorkflowIntegrationTest extends TestCase
 
         // 4. Deactivate the admin
         $deactivateResponse = $this->actingAs($this->superAdmin)
-            ->post(route('users.deactivate', $adminId));
+            ->post(route('admin.users.deactivate', $adminId));
 
         $admin->refresh();
         $this->assertFalse($admin->is_active);
@@ -81,7 +81,7 @@ class AdminWorkflowIntegrationTest extends TestCase
 
         // 6. Reactivate the admin
         $reactivateResponse = $this->actingAs($this->superAdmin)
-            ->post(route('users.reactivate', $adminId));
+            ->post(route('admin.users.reactivate', $adminId));
 
         $admin->refresh();
         $this->assertTrue($admin->is_active);
@@ -97,22 +97,21 @@ class AdminWorkflowIntegrationTest extends TestCase
     public function admin_list_shows_all_admins_with_correct_data(): void
     {
         User::factory()->count(3)->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'manager',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
         User::factory()->count(2)->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => false,
+            'is_active'  => false,
         ]);
 
         $response = $this->actingAs($this->superAdmin)
             ->get(route('users.index'));
 
         $response->assertStatus(200);
-        // The response should contain admin list data
         $this->assertNotNull($response);
     }
 
@@ -120,21 +119,21 @@ class AdminWorkflowIntegrationTest extends TestCase
     public function only_super_admin_can_perform_admin_management_actions(): void
     {
         $manager = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
-            'is_active' => true,
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'manager',
+            'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
         $operator = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
-            'is_active' => true,
+            'role'              => UserRoleEnum::ADMIN,
+            'admin_type'        => 'operator',
+            'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
         $targetAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
         ]);
 
@@ -150,7 +149,7 @@ class AdminWorkflowIntegrationTest extends TestCase
 
         // Manager cannot deactivate
         $deactivateResponse = $this->actingAs($manager)
-            ->post(route('users.deactivate', $targetAdmin->id));
+            ->post(route('admin.users.deactivate', $targetAdmin->id));
         $deactivateResponse->assertStatus(403);
 
         // Only super admin can create
@@ -160,7 +159,7 @@ class AdminWorkflowIntegrationTest extends TestCase
 
         // Only super admin can deactivate
         $deactivateResponse = $this->actingAs($this->superAdmin)
-            ->post(route('users.deactivate', $targetAdmin->id));
+            ->post(route('admin.users.deactivate', $targetAdmin->id));
         $this->assertTrue($targetAdmin->refresh()->is_active === false);
     }
 
@@ -168,34 +167,23 @@ class AdminWorkflowIntegrationTest extends TestCase
     public function permission_hierarchy_is_correctly_enforced(): void
     {
         $manager = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'manager',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
         $operator = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
-        // Manager has manage_fees permission
         $this->assertTrue($manager->hasPermission('manage_fees'));
-
-        // Operator doesn't have manage_fees permission
         $this->assertFalse($operator->hasPermission('manage_fees'));
-
-        // But operator has approve_payments
         $this->assertTrue($operator->hasPermission('approve_payments'));
-
-        // Manager also has approve_payments
         $this->assertTrue($manager->hasPermission('approve_payments'));
-
-        // Neither has system_settings
         $this->assertFalse($manager->hasPermission('system_settings'));
         $this->assertFalse($operator->hasPermission('system_settings'));
-
-        // Super admin has everything
         $this->assertTrue($this->superAdmin->hasPermission('system_settings'));
         $this->assertTrue($this->superAdmin->hasPermission('manage_fees'));
         $this->assertTrue($this->superAdmin->hasPermission('approve_payments'));
@@ -207,37 +195,34 @@ class AdminWorkflowIntegrationTest extends TestCase
         $creator = $this->superAdmin;
 
         $createData = [
-            'first_name' => 'Audit',
-            'last_name' => 'Trail',
-            'email' => 'audittrail@test.com',
-            'password' => 'AuditTrail123!',
+            'first_name'            => 'Audit',
+            'last_name'             => 'Trail',
+            'email'                 => 'audittrail@test.com',
+            'password'              => 'AuditTrail123!',
             'password_confirmation' => 'AuditTrail123!',
-            'admin_type' => 'manager',
-            'department' => 'Audit Dept',
+            'admin_type'            => 'manager',
+            'department'            => 'Audit Dept',
         ];
 
         $this->actingAs($creator)->post(route('users.store'), $createData);
 
         $admin = User::where('email', 'audittrail@test.com')->first();
 
-        // Verify created_by and created_at are set
         $this->assertEquals($creator->id, $admin->created_by);
         $this->assertNotNull($admin->created_at);
         $originalCreatedAt = $admin->created_at;
 
-        // Travel 1 second into the future so updated_at is guaranteed to be newer than created_at
         $this->travel(1)->seconds();
 
-        // Now update with different admin
         $updater = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'super',
         ]);
 
         $updateData = [
             'first_name' => 'Updated',
-            'last_name' => 'Audit',
-            'email' => 'audittrail@test.com',
+            'last_name'  => 'Audit',
+            'email'      => 'audittrail@test.com',
             'admin_type' => 'operator',
         ];
 
@@ -245,16 +230,9 @@ class AdminWorkflowIntegrationTest extends TestCase
 
         $admin->refresh();
 
-        // Verify updated_by is set to the updater
         $this->assertEquals($updater->id, $admin->updated_by);
-
-        // Verify created_by remains unchanged
         $this->assertEquals($creator->id, $admin->created_by);
-
-        // Verify created_at remains unchanged
         $this->assertEquals($originalCreatedAt->timestamp, $admin->created_at->timestamp);
-
-        // Verify updated_at is newer
         $this->assertGreaterThan($originalCreatedAt->timestamp, $admin->updated_at->timestamp);
     }
 
@@ -262,44 +240,39 @@ class AdminWorkflowIntegrationTest extends TestCase
     public function terms_acceptance_is_immutable_after_creation(): void
     {
         $createData = [
-            'first_name' => 'Terms',
-            'last_name' => 'Test',
-            'email' => 'termstest@test.com',
-            'password' => 'TermsTest123!',
+            'first_name'            => 'Terms',
+            'last_name'             => 'Test',
+            'email'                 => 'termstest@test.com',
+            'password'              => 'TermsTest123!',
             'password_confirmation' => 'TermsTest123!',
-            'admin_type' => 'manager',
+            'admin_type'            => 'manager',
         ];
 
         $this->actingAs($this->superAdmin)->post(route('users.store'), $createData);
 
         $admin = User::where('email', 'termstest@test.com')->first();
-
         $originalTermsDate = $admin->terms_accepted_at;
 
-        // Try to update (terms_accepted_at is not fillable, so should not change)
         $updateData = [
             'first_name' => 'Terms',
-            'last_name' => 'Updated',
-            'email' => 'termstest@test.com',
+            'last_name'  => 'Updated',
+            'email'      => 'termstest@test.com',
             'admin_type' => 'manager',
         ];
 
         $this->actingAs($this->superAdmin)->put(route('users.update', $admin->id), $updateData);
 
         $admin->refresh();
-
-        // Terms accepted at should remain the same
         $this->assertEquals($originalTermsDate->timestamp, $admin->terms_accepted_at->timestamp);
     }
 
     /** @test */
     public function cannot_create_admin_without_all_required_fields(): void
     {
-        // Missing password
         $incompleteData = [
             'first_name' => 'Incomplete',
-            'last_name' => 'Admin',
-            'email' => 'incomplete@test.com',
+            'last_name'  => 'Admin',
+            'email'      => 'incomplete@test.com',
             'admin_type' => 'manager',
         ];
 
@@ -316,12 +289,10 @@ class AdminWorkflowIntegrationTest extends TestCase
 
         $adminListResponse = $this->actingAs($student)
             ->get(route('users.index'));
-
         $adminListResponse->assertStatus(403);
 
         $createAdminResponse = $this->actingAs($student)
             ->get(route('users.create'));
-
         $createAdminResponse->assertStatus(403);
     }
 
@@ -329,20 +300,18 @@ class AdminWorkflowIntegrationTest extends TestCase
     public function admin_can_be_promoted_demoted_between_types(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
+            'role'       => UserRoleEnum::ADMIN,
             'admin_type' => 'operator',
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
-        // Verify initial permissions
         $this->assertTrue($admin->hasPermission('approve_payments'));
         $this->assertFalse($admin->hasPermission('manage_fees'));
 
-        // Promote to manager
         $promoteData = [
             'first_name' => $admin->first_name,
-            'last_name' => $admin->last_name,
-            'email' => $admin->email,
+            'last_name'  => $admin->last_name,
+            'email'      => $admin->email,
             'admin_type' => 'manager',
         ];
 
@@ -350,16 +319,13 @@ class AdminWorkflowIntegrationTest extends TestCase
             ->put(route('users.update', $admin->id), $promoteData);
 
         $admin->refresh();
-
-        // Verify new permissions
         $this->assertTrue($admin->hasPermission('manage_fees'));
         $this->assertTrue($admin->hasPermission('approve_payments'));
 
-        // Demote back to operator
         $demoteData = [
             'first_name' => $admin->first_name,
-            'last_name' => $admin->last_name,
-            'email' => $admin->email,
+            'last_name'  => $admin->last_name,
+            'email'      => $admin->email,
             'admin_type' => 'operator',
         ];
 
@@ -367,8 +333,6 @@ class AdminWorkflowIntegrationTest extends TestCase
             ->put(route('users.update', $admin->id), $demoteData);
 
         $admin->refresh();
-
-        // Verify reverted permissions
         $this->assertFalse($admin->hasPermission('manage_fees'));
         $this->assertTrue($admin->hasPermission('approve_payments'));
     }
@@ -377,14 +341,13 @@ class AdminWorkflowIntegrationTest extends TestCase
     public function last_login_tracking_works(): void
     {
         $admin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
+            'role'          => UserRoleEnum::ADMIN,
+            'admin_type'    => 'manager',
             'last_login_at' => null,
         ]);
 
         $this->assertNull($admin->last_login_at);
 
-        // Record login
         $admin->recordLastLogin();
 
         $this->assertNotNull($admin->refresh()->last_login_at);
