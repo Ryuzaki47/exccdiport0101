@@ -689,7 +689,7 @@ const accountBalance = computed(() => {
             <!-- Header -->
             <div class="mb-6">
                 <h1 class="text-3xl font-bold">My Account Overview</h1>
-                <p v-if="currentTerm" class="mt-1 text-gray-600">{{ currentTerm.semester }} - {{ currentTerm.year }}-{{ currentTerm.year + 1 }}</p>
+                <p v-if="latestAssessment" class="mt-1 text-gray-600">{{ latestAssessment.semester }} - {{ latestAssessment.school_year }}</p>
                 <p v-if="latestAssessment" class="mt-1 text-sm text-gray-500">Assessment No: {{ latestAssessment.assessment_number }}</p>
             </div>
 
