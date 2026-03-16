@@ -35,11 +35,11 @@ class StudentController extends Controller
         }
 
         if ($request->filled('course')) {
-            $query->whereHas('user', fn($q) => $q->where('course', $request->course));
+            $query->whereHas('user', fn ($q) => $q->where('course', $request->course));
         }
 
         if ($request->filled('year_level')) {
-            $query->whereHas('user', fn($q) => $q->where('year_level', $request->year_level));
+            $query->whereHas('user', fn ($q) => $q->where('year_level', $request->year_level));
         }
 
         if ($request->filled('status')) {
@@ -117,7 +117,7 @@ class StudentController extends Controller
             'birthday'          => 'nullable|date',
             'phone'             => 'nullable|string',
             'address'           => 'nullable|string',
-            'total_balance'     => 'nullable|numeric',
+            // FIX: total_balance removed — balance lives in accounts.balance only.
             'enrollment_status' => 'sometimes|in:pending,active,suspended,graduated,dropped,inactive',
             'user_id'           => 'nullable|exists:users,id',
         ]);
@@ -125,17 +125,17 @@ class StudentController extends Controller
         // If no user_id provided, create the User first with personal info
         if (empty($validated['user_id'])) {
             $user = \App\Models\User::create([
-                'email'         => $validated['email'],
-                'last_name'     => $validated['last_name'],
-                'first_name'    => $validated['first_name'],
+                'email'          => $validated['email'],
+                'last_name'      => $validated['last_name'],
+                'first_name'     => $validated['first_name'],
                 'middle_initial' => $validated['middle_initial'],
-                'course'        => $validated['course'],
-                'year_level'    => $validated['year_level'],
-                'birthday'      => $validated['birthday'],
-                'phone'         => $validated['phone'],
-                'address'       => $validated['address'],
-                'role'          => \App\Enums\UserRoleEnum::STUDENT,
-                'password'      => bcrypt('temporary' . time()), // temporary password
+                'course'         => $validated['course'],
+                'year_level'     => $validated['year_level'],
+                'birthday'       => $validated['birthday'],
+                'phone'          => $validated['phone'],
+                'address'        => $validated['address'],
+                'role'           => \App\Enums\UserRoleEnum::STUDENT,
+                'password'       => bcrypt('temporary' . time()),
             ]);
             $validated['user_id'] = $user->id;
         }
@@ -145,9 +145,9 @@ class StudentController extends Controller
         }
 
         $validated['enrollment_status'] = $validated['enrollment_status'] ?? 'pending';
-        $validated['total_balance']     = 0.0;
 
-        // Remove personal data fields — these are now in the User record
+        // Remove personal data fields — these live in the User record.
+        // Remove total_balance — balance is now owned by accounts.balance.
         unset(
             $validated['last_name'],
             $validated['first_name'],
@@ -157,7 +157,7 @@ class StudentController extends Controller
             $validated['year_level'],
             $validated['birthday'],
             $validated['phone'],
-            $validated['address']
+            $validated['address'],
         );
 
         $student = Student::create($validated);
@@ -250,11 +250,12 @@ class StudentController extends Controller
             'birthday'          => 'nullable|date',
             'phone'             => 'nullable|string|max:20',
             'address'           => 'nullable|string|max:500',
-            'total_balance'     => 'required|numeric|min:0',
+            // FIX: total_balance removed — balance is computed by AccountService,
+            // not manually editable. Admins must use the payment recording flow.
             'enrollment_status' => 'sometimes|in:pending,active,suspended,graduated,dropped,inactive',
         ]);
 
-        // Update the related User record with personal data
+        // Update personal data on the related User record.
         if ($student->user) {
             $student->user->update([
                 'first_name'     => $validated['first_name'],
@@ -269,12 +270,11 @@ class StudentController extends Controller
             ]);
         }
 
-        // Update student record with student-specific data only
+        // Update student-specific fields only.
         $statusChanged = $student->enrollment_status !== ($validated['enrollment_status'] ?? $student->enrollment_status);
 
         $student->update([
             'student_id'        => $validated['student_id'],
-            'total_balance'     => $validated['total_balance'],
             'enrollment_status' => $validated['enrollment_status'] ?? $student->enrollment_status,
         ]);
 
@@ -301,15 +301,14 @@ class StudentController extends Controller
         $user = $request->user();
 
         if ($user->role === 'student') {
-            $student = Student::where('email', $user->email)
-                ->orWhere('user_id', $user->id)
-                ->firstOrFail();
+            $student = Student::where('user_id', $user->id)->firstOrFail();
         } else {
             $student = Student::with('payments')->first();
         }
 
         $student->load([
             'payments',
+            'user.account',
             'workflowInstances.workflow',
             'workflowInstances.approvals',
         ]);

@@ -1,1 +1,0 @@
-<?php require 'vendor/autoload.php';$a=require 'bootstrap/app.php';$k=$a->make('Illuminate\Contracts\Console\Kernel');$k->bootstrap();echo \App\Models\StudentPaymentTerm::where('user_id',3)->count();

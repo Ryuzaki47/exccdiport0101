@@ -13,6 +13,7 @@ class ResetDemoUsers extends Command
      * The name and signature of the console command.
      *
      * Example: php artisan demo:reset
+     *          php artisan demo:reset --with-students
      */
     protected $signature = 'demo:reset {--with-students : Reset demo students as well}';
 
@@ -28,45 +29,44 @@ class ResetDemoUsers extends Command
     {
         $this->info('Resetting demo users...');
 
-        // Reset Admin with proper name
+        // Reset Admin
         $admin = User::updateOrCreate(
             ['email' => 'admin@ccdi.edu.ph'],
             [
-                'last_name' => 'Rodriguez',
-                'first_name' => 'Carlos',
+                'last_name'      => 'Rodriguez',
+                'first_name'     => 'Carlos',
                 'middle_initial' => 'M',
-                'password' => Hash::make('password'),
-                'role' => 'admin',
-                'status' => User::STATUS_ACTIVE,
-                'faculty' => 'Administration',
-                'phone' => '09171234501',
-                'address' => 'Sorsogon City',
-                'birthday' => '1985-05-15',
+                'password'       => Hash::make('password'),
+                'role'           => 'admin',
+                'status'         => User::STATUS_ACTIVE,
+                'faculty'        => 'Administration',
+                'phone'          => '09171234501',
+                'address'        => 'Sorsogon City',
+                'birthday'       => '1985-05-15',
             ]
         );
         $admin->account()->firstOrCreate([], ['balance' => 0]);
         $this->info('✓ Admin (Carlos M. Rodriguez) reset.');
 
-        // Reset Accounting Staff with proper name
+        // Reset Accounting Staff
         $accounting = User::updateOrCreate(
             ['email' => 'accounting@ccdi.edu.ph'],
             [
-                'last_name' => 'Garcia',
-                'first_name' => 'Ana Marie',
+                'last_name'      => 'Garcia',
+                'first_name'     => 'Ana Marie',
                 'middle_initial' => 'S',
-                'password' => Hash::make('password'),
-                'role' => 'accounting',
-                'status' => User::STATUS_ACTIVE,
-                'faculty' => 'Accounting Department',
-                'phone' => '09181234502',
-                'address' => 'Legazpi City',
-                'birthday' => '1990-08-20',
+                'password'       => Hash::make('password'),
+                'role'           => 'accounting',
+                'status'         => User::STATUS_ACTIVE,
+                'faculty'        => 'Accounting Department',
+                'phone'          => '09181234502',
+                'address'        => 'Legazpi City',
+                'birthday'       => '1990-08-20',
             ]
         );
         $accounting->account()->firstOrCreate([], ['balance' => 0]);
         $this->info('✓ Accounting staff (Ana Marie S. Garcia) reset.');
 
-        // Optionally reset seeded students
         if ($this->option('with-students')) {
             $this->resetDemoStudents();
         } else {
@@ -81,93 +81,84 @@ class ResetDemoUsers extends Command
     {
         $students = [
             [
-                'last_name' => 'Dela Cruz',
-                'first_name' => 'Juan',
+                'last_name'      => 'Dela Cruz',
+                'first_name'     => 'Juan',
                 'middle_initial' => 'P',
-                'email' => 'student1@ccdi.edu.ph',
-                'student_id' => '2025-0001',
-                'course' => 'BS Computer Science',
-                'year_level' => '1st Year',
-                'status' => 'enrolled',
-                'birthday' => '2005-06-15',
-                'phone' => '09171234567',
-                'address' => 'Sorsogon City',
+                'email'          => 'student1@ccdi.edu.ph',
+                'student_id'     => '2025-0001',
+                'course'         => 'BS Computer Science',
+                'year_level'     => '1st Year',
+                'user_status'    => User::STATUS_ACTIVE,
+                'birthday'       => '2005-06-15',
+                'phone'          => '09171234567',
+                'address'        => 'Sorsogon City',
             ],
             [
-                'last_name' => 'Santos',
-                'first_name' => 'Maria',
+                'last_name'      => 'Santos',
+                'first_name'     => 'Maria',
                 'middle_initial' => 'L',
-                'email' => 'student2@ccdi.edu.ph',
-                'student_id' => '2025-0002',
-                'course' => 'BS Information Technology',
-                'year_level' => '4th Year',
-                'status' => 'graduated',
-                'birthday' => '2002-03-10',
-                'phone' => '09181234567',
-                'address' => 'Legazpi City',
+                'email'          => 'student2@ccdi.edu.ph',
+                'student_id'     => '2025-0002',
+                'course'         => 'BS Information Technology',
+                'year_level'     => '4th Year',
+                'user_status'    => User::STATUS_GRADUATED,
+                'birthday'       => '2002-03-10',
+                'phone'          => '09181234567',
+                'address'        => 'Legazpi City',
             ],
             [
-                'last_name' => 'Ramirez',
-                'first_name' => 'Pedro',
+                'last_name'      => 'Ramirez',
+                'first_name'     => 'Pedro',
                 'middle_initial' => 'C',
-                'email' => 'student3@ccdi.edu.ph',
-                'student_id' => '2025-0003',
-                'course' => 'BS Accountancy',
-                'year_level' => '2nd Year',
-                'status' => 'inactive',
-                'birthday' => '2004-11-20',
-                'phone' => '09191234567',
-                'address' => 'Naga City',
+                'email'          => 'student3@ccdi.edu.ph',
+                'student_id'     => '2025-0003',
+                'course'         => 'BS Accountancy',
+                'year_level'     => '2nd Year',
+                'user_status'    => User::STATUS_DROPPED,
+                'birthday'       => '2004-11-20',
+                'phone'          => '09191234567',
+                'address'        => 'Naga City',
             ],
-        ];
-
-        $statusMap = [
-            'enrolled' => User::STATUS_ACTIVE,
-            'graduated' => User::STATUS_GRADUATED,
-            'inactive' => User::STATUS_DROPPED,
         ];
 
         foreach ($students as $s) {
             $user = User::updateOrCreate(
                 ['email' => $s['email']],
                 [
-                    'last_name' => $s['last_name'],
-                    'first_name' => $s['first_name'],
+                    'last_name'      => $s['last_name'],
+                    'first_name'     => $s['first_name'],
                     'middle_initial' => $s['middle_initial'],
-                    'password' => Hash::make('password'),
-                    'role' => 'student',
-                    'account_id' => $s['student_id'],
-                    'status' => $statusMap[$s['status']] ?? User::STATUS_ACTIVE,
-                    'course' => $s['course'],
-                    'year_level' => $s['year_level'],
-                    'birthday' => $s['birthday'],
-                    'phone' => $s['phone'],
-                    'address' => $s['address'],
+                    'password'       => Hash::make('password'),
+                    'role'           => 'student',
+                    'account_id'     => $s['student_id'],
+                    'status'         => $s['user_status'],
+                    'course'         => $s['course'],
+                    'year_level'     => $s['year_level'],
+                    'birthday'       => $s['birthday'],
+                    'phone'          => $s['phone'],
+                    'address'        => $s['address'],
                 ]
             );
 
-            $user->account()->firstOrCreate([], ['balance' => -8048.00]);
+            // FIX: Set account balance directly — accounts.balance is the single
+            // source of truth. total_balance has been removed from students table
+            // (migration 2026_03_17_000001_drop_total_balance_from_students_table).
+            $user->account()->updateOrCreate([], ['balance' => 8048.00]);
 
+            // FIX: Student record contains only student-specific fields.
+            // Dropped columns (last_name, first_name, middle_initial, email, course,
+            // year_level, birthday, phone, address, total_balance) were removed in
+            // migrations 2026_03_16 and 2026_03_17. Writing them would throw
+            // SQLSTATE[42S22] Column not found.
             Student::updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'student_id' => $s['student_id'],
-                    'last_name' => $s['last_name'],
-                    'first_name' => $s['first_name'],
-                    'middle_initial' => $s['middle_initial'],
-                    'email' => $s['email'],
-                    'course' => $s['course'],
-                    'year_level' => $s['year_level'],
-                    'status' => $s['status'],
-                    'birthday' => $s['birthday'],
-                    'phone' => $s['phone'],
-                    'address' => $s['address'],
-                    'total_balance' => 8048.00,
+                    'student_id'        => $s['student_id'],
+                    'enrollment_status' => 'active',
                 ]
             );
 
-            $fullName = $user->name; // Uses the accessor
-            $this->info("✓ Student {$fullName} reset.");
+            $this->info("✓ Student {$user->name} reset.");
         }
     }
 }

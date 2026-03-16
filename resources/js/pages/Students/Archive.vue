@@ -4,13 +4,18 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
+/**
+ * FIX: Removed `total_balance` from the Student interface.
+ * Balance is now read from `student.account?.balance` (accounts table),
+ * which is the single source of truth. The archive controller already
+ * eager-loads `account` with `Student::with(['user', 'account'])`.
+ */
 interface Student {
     id: number;
     student_id: string;
     student_number: string | null;
     enrollment_status: string;
     updated_at: string;
-    total_balance: number;
     user?: {
         first_name: string;
         last_name: string;
@@ -30,8 +35,8 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const search     = ref(props.filters.search  || '');
-const statusFilter = ref(props.filters.status || '');
+const search       = ref(props.filters.search  || '');
+const statusFilter = ref(props.filters.status  || '');
 
 let timeout: ReturnType<typeof setTimeout>;
 watch([search, statusFilter], () => {
@@ -58,7 +63,7 @@ const formatCurrency = (amount: number) =>
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
     graduated: { label: 'Graduated', classes: 'bg-blue-100 text-blue-800' },
-    dropped:   { label: 'Dropped',   classes: 'bg-red-100 text-red-800'  },
+    dropped:   { label: 'Dropped',   classes: 'bg-red-100 text-red-800'   },
     inactive:  { label: 'Inactive',  classes: 'bg-gray-100 text-gray-700' },
 };
 
@@ -111,26 +116,17 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
 
             <!-- Filters -->
             <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <input
-                    v-model="search"
-                    type="text"
-                    placeholder="Search by name, ID, email, course…"
-                    class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-                <select
-                    v-model="statusFilter"
-                    class="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
+                <input v-model="search" type="text" placeholder="Search by name, ID, email, course…"
+                    class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                <select v-model="statusFilter"
+                    class="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     <option value="">All archived statuses</option>
                     <option value="graduated">Graduated</option>
                     <option value="dropped">Dropped</option>
                     <option value="inactive">Inactive</option>
                 </select>
-                <button
-                    v-if="search || statusFilter"
-                    @click="search = ''; statusFilter = ''"
-                    class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-                >
+                <button v-if="search || statusFilter" @click="search = ''; statusFilter = ''"
+                    class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
                     Clear
                 </button>
             </div>
@@ -152,11 +148,14 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 bg-white">
-                        <tr v-for="student in students.data" :key="student.id" class="hover:bg-gray-50 transition-colors">
+                        <tr v-for="student in students.data" :key="student.id"
+                            class="hover:bg-gray-50 transition-colors">
                             <td class="px-5 py-4 font-mono text-gray-700 text-xs">{{ student.student_id }}</td>
                             <td class="px-5 py-4 font-medium text-gray-900">
                                 {{ student.user?.last_name }}, {{ student.user?.first_name }}
-                                <span v-if="student.user?.middle_initial" class="text-gray-400"> {{ student.user?.middle_initial }}.</span>
+                                <span v-if="student.user?.middle_initial" class="text-gray-400">
+                                    {{ student.user?.middle_initial }}.
+                                </span>
                             </td>
                             <td class="px-5 py-4 text-gray-600">{{ student.user?.email }}</td>
                             <td class="px-5 py-4 text-gray-700">{{ student.user?.course }}</td>
@@ -170,15 +169,14 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                                 </span>
                                 <span v-else class="text-gray-400 text-xs">{{ student.enrollment_status }}</span>
                             </td>
+                            <!-- Balance reads from accounts.balance (single source of truth) -->
                             <td class="px-5 py-4 text-right text-gray-700">
                                 {{ formatCurrency(Math.abs(student.account?.balance ?? 0)) }}
                             </td>
                             <td class="px-5 py-4 text-gray-500">{{ formatDate(student.updated_at) }}</td>
                             <td class="px-5 py-4">
-                                <Link
-                                    :href="route('students.show', student.id)"
-                                    class="text-blue-600 hover:text-blue-800 font-medium"
-                                >View</Link>
+                                <Link :href="route('students.show', student.id)"
+                                    class="text-blue-600 hover:text-blue-800 font-medium">View</Link>
                             </td>
                         </tr>
                         <tr v-if="students.data.length === 0">
@@ -191,7 +189,8 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                 </table>
 
                 <!-- Pagination -->
-                <div v-if="students.links?.length > 3" class="border-t bg-gray-50 px-5 py-3 flex justify-center gap-1">
+                <div v-if="students.links?.length > 3"
+                    class="border-t bg-gray-50 px-5 py-3 flex justify-center gap-1">
                     <Link
                         v-for="link in students.links"
                         :key="link.label"

@@ -4,87 +4,80 @@ namespace App\Services;
 
 use App\Models\User;
 
+/**
+ * Single authoritative writer for student account balances.
+ *
+ * INVARIANT: `accounts.balance` is the ONE source of truth.
+ *   - Every balance read goes through `$user->account->balance`.
+ *   - This service is the ONLY writer of that column.
+ *   - `students.total_balance` has been removed (migration 2026_03_17_000001).
+ *
+ * Call `recalculate()` after any event that changes the financial position:
+ *   - After StudentPaymentService::processPayment / finalizeApprovedPayment
+ *   - After StudentFeeController::store / storePayment / update
+ */
 class AccountService
 {
     /**
-     * Recalculate a user's balance based on transactions.
+     * Recompute and persist the authoritative balance for a user.
      *
-     * Queries `transactions` for the authoritative balance and writes the
-     * result to BOTH `accounts.balance` AND `students.total_balance` so any
-     * legacy code reading either column stays consistent.
+     * Balance = SUM(charge transactions) - SUM(paid payment transactions)
+     *
+     * Positive  → student owes money.
+     * Zero/negative → fully paid (or over-paid / credit).
+     *
+     * @param  User|null  $user  Null-safe: no-op when null.
      */
     public static function recalculate(?User $user): void
     {
-        // If no user is provided, safely exit (prevents seeding crashes)
         if (! $user) {
             return;
         }
 
-        $charges = $user->transactions()
+        $charges = (float) $user->transactions()
             ->where('kind', 'charge')
             ->sum('amount');
 
-        $payments = $user->transactions()
+        $payments = (float) $user->transactions()
             ->where('kind', 'payment')
             ->where('status', 'paid')
             ->sum('amount');
 
-        $balance = round((float) $charges - (float) $payments, 2);
+        $balance = round($charges - $payments, 2);
 
-        // ── Ensure account record exists and update it ────────────────────────
+        // ── Single source of truth: accounts.balance ──────────────────────────
         $account = $user->account ?? $user->account()->create(['balance' => 0]);
         $account->update(['balance' => $balance]);
 
-        // ── Mirror balance on the students row (kept for legacy reads) ────────
-        if ($user->student) {
-            $user->student->update(['total_balance' => $balance]);
-        }
+        // NOTE: students.total_balance has been REMOVED (migration 2026_03_17_000001).
+        // There is no second write here. accounts.balance is the only balance column.
 
-        // ── Auto-promote only when the account is fully settled ───────────────
-        // Condition: charges exist AND balance is <= 0 (includes credit balance)
-        if ($user->student && (float) $charges > 0 && $balance <= 0) {
+        // ── Auto-promote when fully settled ───────────────────────────────────
+        if ($user->student && $charges > 0 && $balance <= 0) {
             self::promoteStudent($user);
         }
     }
 
     /**
-     * Promote student to next year level when balance reaches zero.
+     * Promote student to next year level (or graduate) when balance reaches zero.
      *
-     * FIX (Bug #2): Previously this method read and wrote `students.year_level`
-     * and `students.status`, both of which were dropped in migration
+     * Reads/writes users.year_level and users.status exclusively.
+     * students.year_level / students.status were dropped in migration
      * 2026_03_16_000000_remove_duplicate_columns_from_students_table.
-     *
-     * All personal/academic data now lives in the `users` table only.
-     * This method reads `users.year_level` and writes to `users.year_level` /
-     * `users.status` accordingly.
      */
     protected static function promoteStudent(User $user): void
     {
-        $yearLevels = [
-            '1st Year',
-            '2nd Year',
-            '3rd Year',
-            '4th Year',
-        ];
-
-        // Read year_level from users table (NOT students table)
-        $currentIndex = array_search($user->year_level, $yearLevels);
+        $yearLevels   = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+        $currentIndex = array_search($user->year_level, $yearLevels, strict: true);
 
         if ($currentIndex === false) {
-            // Unknown year level — skip promotion silently
             return;
         }
 
         if ($currentIndex < count($yearLevels) - 1) {
-            // Promote to next year — write to users table
-            $user->update([
-                'year_level' => $yearLevels[$currentIndex + 1],
-            ]);
+            $user->update(['year_level' => $yearLevels[$currentIndex + 1]]);
         } else {
-            // Final year completed — graduate — write to users table
-            $user->update([
-                'status' => User::STATUS_GRADUATED,
-            ]);
+            $user->update(['status' => User::STATUS_GRADUATED]);
         }
     }
 }
