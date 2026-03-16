@@ -51,37 +51,7 @@ class RoleMiddleware
             return $next($request);
         }
 
-        // Role mismatch — redirect to the user's own dashboard with a flash.
-        $dashboardRoute = self::ROLE_DASHBOARDS[$userRole] ?? 'dashboard';
-
-        $requiredLabel = $this->formatRoleList($roles);
-
-        return redirect()
-            ->route($dashboardRoute)
-            ->with('flash.warning', "You don't have permission to access that page. It requires {$requiredLabel} access.");
-    }
-
-    /**
-     * Format a list of role slugs into a human-readable string.
-     * e.g. ['admin', 'accounting'] → "Admin or Accounting"
-     */
-    private function formatRoleList(array $roles): string
-    {
-        $labels = array_map(
-            fn (string $role) => match ($role) {
-                'admin'      => 'Admin',
-                'accounting' => 'Accounting',
-                'student'    => 'Student',
-                default      => ucfirst($role),
-            },
-            $roles
-        );
-
-        if (count($labels) === 1) {
-            return $labels[0];
-        }
-
-        $last = array_pop($labels);
-        return implode(', ', $labels) . ' or ' . $last;
+        // Role mismatch — abort with 403 Forbidden
+        abort(403, 'Unauthorized - insufficient role permissions');
     }
 }

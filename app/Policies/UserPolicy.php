@@ -7,22 +7,22 @@ use App\Models\User;
 class UserPolicy
 {
     /**
-     * Any active admin can view the list — Super Admin can manage.
+     * Only super admins can view the list — Manager/Operator cannot.
      */
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin() && $user->is_active;
+        return $user->isSuperAdmin() && $user->is_active;
     }
 
     /**
-     * Any active admin can view a profile. Everyone can view their own.
+     * Only super admins can view other users. Users can always view their own.
      */
     public function view(User $user, User $model): bool
     {
         if ($user->id === $model->id && $user->is_active) {
             return true;
         }
-        return $user->isAdmin() && $user->is_active;
+        return $user->isSuperAdmin() && $user->is_active;
     }
 
     /**
