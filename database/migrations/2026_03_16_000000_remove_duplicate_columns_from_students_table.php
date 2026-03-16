@@ -24,6 +24,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('students', function (Blueprint $table) {
+            // Drop unique constraint on email first (required for SQLite compatibility)
+            // In SQLite, you cannot drop a column that's referenced by a unique index
+            $table->dropUnique(['email']);
+        });
+
+        Schema::table('students', function (Blueprint $table) {
             // Drop duplicate columns that exist in users table
             $table->dropColumn([
                 'last_name',
@@ -35,7 +41,7 @@ return new class extends Migration
                 'birthday',
                 'phone',
                 'address',
-                'date_of_birth', // Consolidate with users.birthday
+                'date_of_birth',
             ]);
         });
     }
