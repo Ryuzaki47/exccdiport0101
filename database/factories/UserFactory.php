@@ -49,4 +49,24 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Create a user with student-specific fields.
+     */
+    public function student(): static
+    {
+        return $this->state(function (array $attributes) {
+            $year = date('Y');
+            return array_merge($attributes, [
+                'role' => 'student',
+                'account_id' => $year . '-' . str_pad(fake()->unique()->numberBetween(1, 9999), 4, '0', STR_PAD_LEFT),
+                'course' => fake()->randomElement(['BS Computer Science', 'BS Information Technology', 'BS Electrical Engineering Technology']),
+                'year_level' => fake()->randomElement(['1st Year', '2nd Year', '3rd Year', '4th Year']),
+                'birthday' => fake()->dateTimeBetween('-25 years', '-18 years'),
+                'phone' => fake()->phoneNumber(),
+                'address' => fake()->address(),
+                'status' => 'active',
+            ]);
+        });
+    }
 }
