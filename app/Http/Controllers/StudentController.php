@@ -342,14 +342,42 @@ class StudentController extends Controller
 
     public function workflowHistory(Student $student): Response
     {
+        $student->load('user');
+
         $workflows = $student->workflowInstances()
             ->with(['workflow', 'approvals.approver'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($instance) {
+                // Pick the most recent approval that has a decision (approved/rejected)
+                $decidedApproval = $instance->approvals
+                    ->whereIn('status', ['approved', 'rejected'])
+                    ->sortByDesc('approved_at')
+                    ->first();
+
+                // Fall back to any approval if none decided yet
+                $anyApproval = $decidedApproval ?? $instance->approvals->first();
+
+                return [
+                    'id'            => $instance->id,
+                    'workflow_type' => $instance->workflow?->name ?? 'Payment Approval',
+                    'description'   => $instance->workflow?->description
+                                        ?? ('Step: ' . $instance->current_step),
+                    'status'        => $instance->status,
+                    'current_step'  => $instance->current_step,
+                    'approver_name' => $anyApproval?->approver
+                                        ? $anyApproval->approver->last_name . ', ' . $anyApproval->approver->first_name
+                                        : null,
+                    'comment'       => $anyApproval?->comments ?? null,
+                    'created_at'    => $instance->created_at,
+                    'updated_at'    => $instance->updated_at,
+                    'completed_at'  => $instance->completed_at,
+                ];
+            });
 
         return Inertia::render('Students/WorkflowHistory', [
-            'student'   => $student,
-            'workflows' => $workflows,
+            'account_id' => $student->user?->account_id ?? $student->student_id,
+            'workflows'  => $workflows,
         ]);
     }
 }
