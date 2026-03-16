@@ -9,7 +9,7 @@ class StudentFactory extends Factory
 {
     public function definition(): array
     {
-        $user = User::factory()->student();
+        $user = User::factory()->student()->create();
 
         return [
             'user_id' => $user->id,
