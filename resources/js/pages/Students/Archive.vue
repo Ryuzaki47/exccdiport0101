@@ -200,8 +200,9 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                             link.active ? 'bg-blue-600 text-white' : 'border bg-white text-gray-600 hover:bg-gray-100',
                             !link.url ? 'pointer-events-none opacity-40' : '',
                         ]"
-                        v-html="link.label"
-                    />
+                    >
+                        {{ link.label }}
+                    </Link>
                 </div>
             </div>
         </div>

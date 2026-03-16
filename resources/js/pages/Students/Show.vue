@@ -32,11 +32,6 @@ const accountBalance = computed<number>(() => {
     return Number(student.user?.account?.balance ?? student.account?.balance ?? 0);
 });
 
-const totalPaid = computed<number>(() => {
-    if (!student.payments?.length) return 0;
-    return student.payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0);
-});
-
 const remainingBalance = computed<number>(() => accountBalance.value);
 </script>
 
