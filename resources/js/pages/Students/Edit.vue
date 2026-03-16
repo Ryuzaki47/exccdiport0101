@@ -7,22 +7,26 @@ const { student } = defineProps<{
     student: any;
 }>();
 
+const studentName = `${student.user?.last_name}, ${student.user?.first_name}${student.user?.middle_initial ? ' ' + student.user.middle_initial + '.' : ''}`;
+
 const form = useForm({
     student_id: student.student_id,
-    name: student.name,
-    email: student.email,
-    course: student.course,
-    year_level: student.year_level,
-    birthday: student.birthday ? student.birthday.split('T')[0] : '',
-    phone: student.phone || '',
-    address: student.address || '',
+    first_name: student.user?.first_name || '',
+    last_name: student.user?.last_name || '',
+    middle_initial: student.user?.middle_initial || '',
+    email: student.user?.email || '',
+    course: student.user?.course || '',
+    year_level: student.user?.year_level || '',
+    birthday: student.user?.birthday ? student.user.birthday.split('T')[0] : '',
+    phone: student.user?.phone || '',
+    address: student.user?.address || '',
     total_balance: student.total_balance,
 });
 
 const breadcrumbs = [
     { title: 'Dashboard', href: route('dashboard') },
     { title: 'Students', href: route('students.index') },
-    { title: `Edit ${student.name}`, href: '#' },
+    { title: `Edit ${studentName}`, href: '#' },
 ];
 
 function submit() {
@@ -31,7 +35,7 @@ function submit() {
 </script>
 
 <template>
-    <Head :title="`Edit ${student.name}`" />
+    <Head :title="`Edit ${studentName}`" />
 
     <AppLayout>
         <div class="mx-auto max-w-3xl p-6">
@@ -39,20 +43,32 @@ function submit() {
             <Breadcrumbs :items="breadcrumbs" />
 
             <!-- Page Heading -->
-            <h1 class="mb-6 text-2xl font-semibold text-gray-800">Edit Student: {{ student.name }}</h1>
+            <h1 class="mb-6 text-2xl font-semibold text-gray-800">Edit Student: {{ studentName }}</h1>
 
             <!-- Form -->
             <form @submit.prevent="submit" class="space-y-4 rounded-xl bg-white p-6 shadow-md">
-                <!-- Account ID -->
+                <!-- Student ID -->
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-gray-700">Account ID *</label>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Student ID *</label>
                     <input v-model="form.student_id" required class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" />
                 </div>
 
-                <!-- Name -->
+                <!-- Last Name -->
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-gray-700">Full Name *</label>
-                    <input v-model="form.name" required class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" />
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Last Name *</label>
+                    <input v-model="form.last_name" required class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <!-- First Name -->
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">First Name *</label>
+                    <input v-model="form.first_name" required class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <!-- Middle Initial -->
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Middle Initial</label>
+                    <input v-model="form.middle_initial" maxlength="10" class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" />
                 </div>
 
                 <!-- Email -->

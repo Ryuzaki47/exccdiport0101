@@ -88,7 +88,13 @@ class ComprehensiveAssessmentSeeder extends Seeder
 
         $this->command->info('🗑️  Clearing existing assessments, payment terms, charge transactions…');
         $studentIds = User::where('role', 'student')->pluck('id');
-        StudentPaymentTerm::whereIn('user_id', $studentIds)->delete();
+        
+        // Delete payment terms through their assessment relationship
+        StudentPaymentTerm::whereIn(
+            'student_assessment_id',
+            StudentAssessment::whereIn('user_id', $studentIds)->pluck('id')
+        )->delete();
+        
         StudentAssessment::whereIn('user_id', $studentIds)->delete();
         Transaction::whereIn('user_id', $studentIds)->where('kind', 'charge')->delete();
         $this->command->info('✓ Cleared.');
@@ -248,7 +254,6 @@ class ComprehensiveAssessmentSeeder extends Seeder
 
             StudentPaymentTerm::create([
                 'student_assessment_id'  => $assessment->id,
-                'user_id'                => $student->id,
                 'term_name'              => $term['name'],
                 'term_order'             => $order,
                 'percentage'             => $term['percentage'],

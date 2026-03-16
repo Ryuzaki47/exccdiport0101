@@ -154,16 +154,10 @@ class StudentFirstPaymentSeeder extends Seeder
         }
 
         return Student::create([
-            'user_id'        => $user->id,
-            'student_id'     => $user->account_id,  // CCDI student ID (e.g. "2026-0200")
-            'last_name'      => $user->last_name,
-            'first_name'     => $user->first_name,
-            'middle_initial' => $user->middle_initial,
-            'email'          => $user->email,
-            'course'         => 'N/A',              // placeholder — NOT NULL constraint
-            'year_level'     => self::YEAR_LEVEL,
-            'total_balance'  => 0,
-            'status'         => 'enrolled',         // enum: enrolled|graduated|inactive
+            'user_id'          => $user->id,
+            'student_id'       => $user->account_id,  // CCDI student ID (e.g. "2026-0200")
+            'enrollment_status' => 'active',           // enum: active|pending|suspended|graduated
+            'total_balance'    => 0,
         ]);
     }
 

@@ -5,7 +5,9 @@ import { Head, useForm } from '@inertiajs/vue3';
 
 const form = useForm({
     student_id: '',
-    name: '',
+    first_name: '',
+    last_name: '',
+    middle_initial: '',
     email: '',
     course: '',
     year_level: '',
@@ -44,17 +46,43 @@ function submit() {
                         class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                         placeholder="2024-0001"
                     />
+                    <p v-if="form.errors.student_id" class="text-sm text-red-500">{{ form.errors.student_id }}</p>
                 </div>
 
-                <!-- Name -->
+                <!-- Last Name -->
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-gray-700">Full Name *</label>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Last Name *</label>
                     <input
-                        v-model="form.name"
+                        v-model="form.last_name"
                         required
                         class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                        placeholder="Juan Dela Cruz"
+                        placeholder="Dela Cruz"
                     />
+                    <p v-if="form.errors.last_name" class="text-sm text-red-500">{{ form.errors.last_name }}</p>
+                </div>
+
+                <!-- First Name -->
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">First Name *</label>
+                    <input
+                        v-model="form.first_name"
+                        required
+                        class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Juan"
+                    />
+                    <p v-if="form.errors.first_name" class="text-sm text-red-500">{{ form.errors.first_name }}</p>
+                </div>
+
+                <!-- Middle Initial -->
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Middle Initial</label>
+                    <input
+                        v-model="form.middle_initial"
+                        max="1"
+                        class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        placeholder="P"
+                    />
+                    <p v-if="form.errors.middle_initial" class="text-sm text-red-500">{{ form.errors.middle_initial }}</p>
                 </div>
 
                 <!-- Email -->
@@ -67,6 +95,7 @@ function submit() {
                         class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                         placeholder="student@ccdi.edu.ph"
                     />
+                    <p v-if="form.errors.email" class="text-sm text-red-500">{{ form.errors.email }}</p>
                 </div>
 
                 <!-- Course & Year Level -->
@@ -79,6 +108,7 @@ function submit() {
                             class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                             placeholder="BS Information Technology"
                         />
+                        <p v-if="form.errors.course" class="text-sm text-red-500">{{ form.errors.course }}</p>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">Year Level *</label>
@@ -88,6 +118,7 @@ function submit() {
                             class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                             placeholder="1st Year"
                         />
+                        <p v-if="form.errors.year_level" class="text-sm text-red-500">{{ form.errors.year_level }}</p>
                     </div>
                 </div>
 
@@ -102,12 +133,14 @@ function submit() {
                         class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                         placeholder="25000.00"
                     />
+                    <p v-if="form.errors.total_balance" class="text-sm text-red-500">{{ form.errors.total_balance }}</p>
                 </div>
 
                 <!-- Birthday -->
                 <div>
                     <label class="mb-1 block text-sm font-medium text-gray-700">Birthday</label>
                     <input v-model="form.birthday" type="date" class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" />
+                    <p v-if="form.errors.birthday" class="text-sm text-red-500">{{ form.errors.birthday }}</p>
                 </div>
 
                 <!-- Phone -->
@@ -118,6 +151,7 @@ function submit() {
                         class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                         placeholder="+63 912 345 6789"
                     />
+                    <p v-if="form.errors.phone" class="text-sm text-red-500">{{ form.errors.phone }}</p>
                 </div>
 
                 <!-- Address -->
@@ -129,6 +163,7 @@ function submit() {
                         class="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
                         placeholder="Complete address"
                     ></textarea>
+                    <p v-if="form.errors.address" class="text-sm text-red-500">{{ form.errors.address }}</p>
                 </div>
 
                 <!-- Buttons -->

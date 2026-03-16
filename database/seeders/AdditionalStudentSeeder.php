@@ -396,7 +396,6 @@ class AdditionalStudentSeeder extends Seeder
 
             $term = StudentPaymentTerm::create([
                 'student_assessment_id'  => $assessment->id,
-                'user_id'                => $user->id,
                 'term_name'              => $def['name'],
                 'term_order'             => $order,
                 'percentage'             => $def['percentage'],
@@ -455,7 +454,10 @@ class AdditionalStudentSeeder extends Seeder
         if ($user) {
             // Wipe previous seeded data so we always start from a clean state
             Transaction::where('user_id', $user->id)->delete();
-            StudentPaymentTerm::where('user_id', $user->id)->delete();
+            StudentPaymentTerm::whereIn(
+                'student_assessment_id',
+                StudentAssessment::where('user_id', $user->id)->pluck('id')
+            )->delete();
             StudentAssessment::where('user_id', $user->id)->delete();
             $this->cmd()->comment("   ~ Reset existing user: {$email}");
             return $user;
@@ -492,13 +494,9 @@ class AdditionalStudentSeeder extends Seeder
         return Student::updateOrCreate(
             ['user_id' => $user->id],
             [
-                'email'      => $user->email,
-                'first_name' => $user->first_name,
-                'last_name'  => $user->last_name,
-                'student_id' => $user->account_id,
-                'course'     => 'BS Electrical Engineering Technology',
-                'year_level' => $yearLevel,
-                'status'     => 'enrolled',
+                'student_id'       => $user->account_id,
+                'enrollment_status' => 'active',
+                'total_balance'    => 0,
             ]
         );
     }

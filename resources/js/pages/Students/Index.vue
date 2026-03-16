@@ -90,15 +90,15 @@ const formatCurrency = (amount: number) => {
                     <tbody class="divide-y divide-gray-100 bg-white">
                         <tr v-for="student in students.data" :key="student.id" class="hover:bg-gray-50">
                             <td class="px-6 py-4 text-sm text-gray-700">{{ student.student_number }}</td>
-                            <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ student.first_name }} {{ student.last_name }}</td>
-                            <td class="px-6 py-4 text-sm text-gray-700">{{ student.email }}</td>
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ student.user?.first_name }} {{ student.user?.last_name }}</td>
+                            <td class="px-6 py-4 text-sm text-gray-700">{{ student.user?.email }}</td>
                             <td class="px-6 py-4 text-sm font-semibold capitalize">
                                 <span :class="['status-badge', `status-${student.enrollment_status?.toLowerCase()}`]">
                                     {{ student.enrollment_status || '-' }}
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(student.enrollment_date) }}</td>
-                            <td class="px-6 py-4 text-right text-sm text-gray-900">{{ formatCurrency(Math.abs(student.account?.balance ?? 0)) }}</td>
+                            <td class="px-6 py-4 text-right text-sm text-gray-900">{{ formatCurrency(Math.abs(student.user?.account?.balance ?? 0)) }}</td>
                             <td class="flex gap-3 px-6 py-4 text-sm">
                                 <!-- View -->
                                 <Link :href="`/students/${student.id}`" class="text-blue-600 hover:text-blue-800"> View </Link>

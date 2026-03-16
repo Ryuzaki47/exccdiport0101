@@ -39,11 +39,11 @@ const remainingBalance = computed(() => {
     return Number(student.total_balance) - totalPaid;
 });
 
-const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 'Students', href: route('students.index') }, { title: student.name }];
+const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 'Students', href: route('students.index') }, { title: `${student.user?.last_name}, ${student.user?.first_name}` }];
 </script>
 
 <template>
-    <Head :title="`My Profile - ${student.name}`" />
+    <Head :title="`My Profile - ${student.user?.last_name}, ${student.user?.first_name}`" />
 
     <AppLayout>
         <div class="w-full p-6">
@@ -58,17 +58,17 @@ const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 
             <div class="mb-6 rounded-xl bg-white p-6 shadow">
                 <h2 class="mb-4 text-xl font-medium text-gray-800">Personal Information</h2>
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div><span class="font-medium">Full Name:</span> {{ student.name }}</div>
+                    <div><span class="font-medium">Full Name:</span> {{ student.user?.last_name }}, {{ student.user?.first_name }}{{ student.user?.middle_initial ? ' ' + student.user.middle_initial + '.' : '' }}</div>
                     <div><span class="font-medium">Account ID:</span> {{ student.student_id }}</div>
-                    <div><span class="font-medium">Email:</span> {{ student.email }}</div>
-                    <div><span class="font-medium">Course:</span> {{ student.course }}</div>
-                    <div><span class="font-medium">Year:</span> {{ student.year_level }}</div>
-                    <div v-if="student.phone"><span class="font-medium">Phone:</span> {{ student.phone }}</div>
-                    <div v-if="student.birthday">
+                    <div><span class="font-medium">Email:</span> {{ student.user?.email }}</div>
+                    <div><span class="font-medium">Course:</span> {{ student.user?.course }}</div>
+                    <div><span class="font-medium">Year:</span> {{ student.user?.year_level }}</div>
+                    <div v-if="student.user?.phone"><span class="font-medium">Phone:</span> {{ student.user?.phone }}</div>
+                    <div v-if="student.user?.birthday">
                         <span class="font-medium">Birthday:</span>
-                        {{ new Date(student.birthday).toLocaleDateString() }}
+                        {{ new Date(student.user?.birthday).toLocaleDateString() }}
                     </div>
-                    <div class="md:col-span-2" v-if="student.address"><span class="font-medium">Address:</span> {{ student.address }}</div>
+                    <div class="md:col-span-2" v-if="student.user?.address"><span class="font-medium">Address:</span> {{ student.user?.address }}</div>
                 </div>
 
                 <!-- Balance Display -->
