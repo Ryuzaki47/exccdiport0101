@@ -97,7 +97,7 @@ class StudentPaymentService
             ]);
 
             // Update payment term balance and status only when immediately approved (staff-side payment)
-            if (!$requiresApproval) {
+            if (! $requiresApproval) {
                 $newBalance = max(0, (float) $term->balance - $amount);
                 $newStatus  = $newBalance <= 0
                     ? StudentPaymentTerm::STATUS_PAID
@@ -109,23 +109,26 @@ class StudentPaymentService
                     'paid_date' => $newStatus === StudentPaymentTerm::STATUS_PAID ? now() : $term->paid_date,
                 ]);
 
-                // Create a Payment record so the history table shows the entry
+                // FIX (Bug #4): Added student_assessment_id so PDF export can filter
+                // payments by assessment. Without it, assessment-scoped payment history
+                // was always empty for staff-recorded payments.
                 if ($user->student) {
                     Payment::create([
-                        'student_id'       => $user->student->id,
-                        'amount'           => $amount,
-                        'payment_method'   => $options['payment_method'] ?? null,
-                        'reference_number' => $reference,
-                        'description'      => $description,
-                        'status'           => Payment::STATUS_COMPLETED,
-                        'paid_at'          => $options['paid_at'] ?? now(),
+                        'student_id'           => $user->student->id,
+                        'student_assessment_id' => $term->student_assessment_id,
+                        'amount'               => $amount,
+                        'payment_method'       => $options['payment_method'] ?? null,
+                        'reference_number'     => $reference,
+                        'description'          => $description,
+                        'status'               => Payment::STATUS_COMPLETED,
+                        'paid_at'              => $options['paid_at'] ?? now(),
                     ]);
                 }
 
                 // Recalculate account balance
                 AccountService::recalculate($user);
 
-                // ── Check if all terms of this assessment are now fully paid ──
+                // Check if all terms of this assessment are now fully paid.
                 // If yes, notify admin to create the next semester's assessment.
                 $this->checkAndNotifyProgressionReady($user, $term->student_assessment_id);
 
@@ -182,7 +185,7 @@ class StudentPaymentService
             }
 
             // ── Fallback: match by term name scoped to user (last resort) ──
-            if (!$term) {
+            if (! $term) {
                 $termName = $transaction->meta['term_name'] ?? $transaction->type;
 
                 Log::warning('finalizeApprovedPayment: term_id not in meta, falling back to name match', [
@@ -201,10 +204,10 @@ class StudentPaymentService
                     ->first();
             }
 
-            if (!$term) {
+            if (! $term) {
                 throw new \Exception(
                     "Could not find StudentPaymentTerm for transaction #{$transaction->id} (user {$user->id}). " .
-                    "Payment cannot be finalized without a term reference."
+                    'Payment cannot be finalized without a term reference.'
                 );
             }
 
@@ -228,16 +231,19 @@ class StudentPaymentService
                 $description = 'Payment — ' . $term->term_name;
             }
 
-            // ── Create Payment record for history ──
+            // FIX (Bug #4): Added student_assessment_id so PDF export can filter
+            // payments by assessment. Without it, assessment-scoped payment history
+            // was always empty for workflow-approved payments.
             if ($user->student) {
                 Payment::create([
-                    'student_id'       => $user->student->id,
-                    'amount'           => $amount,
-                    'payment_method'   => $transaction->payment_channel,
-                    'reference_number' => $transaction->reference,
-                    'description'      => $description,
-                    'status'           => Payment::STATUS_COMPLETED,
-                    'paid_at'          => $transaction->paid_at ?? now(),
+                    'student_id'           => $user->student->id,
+                    'student_assessment_id' => $term->student_assessment_id,
+                    'amount'               => $amount,
+                    'payment_method'       => $transaction->payment_channel,
+                    'reference_number'     => $transaction->reference,
+                    'description'          => $description,
+                    'status'               => Payment::STATUS_COMPLETED,
+                    'paid_at'              => $transaction->paid_at ?? now(),
                 ]);
             }
 
@@ -316,36 +322,28 @@ class StudentPaymentService
      *   2. Notify the Student — "Your [Year] [Sem] is fully settled. The admin
      *                            is preparing your next semester's payables."
      *
-     * The check is idempotent:  if a "progression_ready" notification for this
+     * The check is idempotent: if a "progression_ready" notification for this
      * exact assessment already exists, it is not duplicated.
-     *
-     * The Admin then navigates to StudentFees/Create and creates the assessment
-     * manually — exactly the same flow as any other new assessment creation.
-     *
-     * @param  User $user           The student whose term was just paid.
-     * @param  int  $assessmentId   The assessment that was just partially or
-     *                              fully paid.
      */
     private function checkAndNotifyProgressionReady(User $user, int $assessmentId): void
     {
         try {
             $assessment = StudentAssessment::with('paymentTerms')->find($assessmentId);
 
-            if (!$assessment) {
+            if (! $assessment) {
                 return;
             }
 
-            // Are ALL 5 terms now fully paid?
             $allPaid = $assessment->paymentTerms->isNotEmpty()
                 && $assessment->paymentTerms->every(
                     fn ($t) => $t->status === StudentPaymentTerm::STATUS_PAID
                 );
 
-            if (!$allPaid) {
-                return; // Still outstanding balances — do nothing
+            if (! $allPaid) {
+                return;
             }
 
-            // Guard: don't create duplicate notifications for the same assessment
+            // Guard: don't duplicate notifications for the same assessment
             $alreadyNotified = Notification::where('type', 'progression_ready')
                 ->whereJsonContains('term_ids', $assessmentId)
                 ->exists();
@@ -358,13 +356,11 @@ class StudentPaymentService
                 return;
             }
 
-            $yearLevel  = $assessment->year_level;
-            $semester   = $assessment->semester;
-            $schoolYear = $assessment->school_year;
+            $yearLevel   = $assessment->year_level;
+            $semester    = $assessment->semester;
+            $schoolYear  = $assessment->school_year;
             $studentName = trim($user->first_name . ' ' . $user->last_name);
-
-            // Determine what comes next for the label in the notification message
-            $nextLabel = $this->resolveNextSemesterLabel($yearLevel, $semester);
+            $nextLabel   = $this->resolveNextSemesterLabel($yearLevel, $semester);
 
             // ── 1. Admin notification ─────────────────────────────────────────
             Notification::create([
@@ -374,12 +370,11 @@ class StudentPaymentService
                                . "Please create their {$nextLabel} assessment via Student Fees → Create Assessment.",
                 'type'        => 'progression_ready',
                 'target_role' => 'admin',
-                'user_id'     => null,        // Broadcast to all admins, not one specific admin
+                'user_id'     => null,
                 'is_active'   => true,
                 'is_complete' => false,
                 'start_date'  => now()->toDateString(),
                 'end_date'    => now()->addDays(30)->toDateString(),
-                // Reuse term_ids to store the assessment ID for duplicate-guard above
                 'term_ids'    => [$assessmentId],
             ]);
 
@@ -389,7 +384,7 @@ class StudentPaymentService
                 'message'     => "Congratulations! You have fully settled all payment terms for "
                                . "{$yearLevel} {$semester} ({$schoolYear}). "
                                . "The admin is now preparing your {$nextLabel} assessment. "
-                               . "You will be notified once it is ready.",
+                               . 'You will be notified once it is ready.',
                 'type'        => 'payment_due',
                 'target_role' => 'student',
                 'user_id'     => $user->id,
@@ -400,11 +395,11 @@ class StudentPaymentService
             ]);
 
             Log::info('StudentPaymentService: progression_ready notifications sent', [
-                'user_id'         => $user->id,
-                'assessment_id'   => $assessmentId,
-                'year_level'      => $yearLevel,
-                'semester'        => $semester,
-                'next_label'      => $nextLabel,
+                'user_id'       => $user->id,
+                'assessment_id' => $assessmentId,
+                'year_level'    => $yearLevel,
+                'semester'      => $semester,
+                'next_label'    => $nextLabel,
             ]);
 
         } catch (\Exception $e) {
@@ -419,11 +414,6 @@ class StudentPaymentService
 
     /**
      * Build a human-readable label for the next semester/year.
-     *
-     * Examples:
-     *   1st Year, 1st Sem  →  "1st Year 2nd Sem"
-     *   1st Year, 2nd Sem  →  "2nd Year 1st Sem"
-     *   4th Year, 2nd Sem  →  "graduation" (end of program)
      */
     private function resolveNextSemesterLabel(string $yearLevel, string $semester): string
     {

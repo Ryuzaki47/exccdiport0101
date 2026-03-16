@@ -20,32 +20,27 @@ class StudentAccountController extends Controller
 
         $user->load(['transactions' => fn ($q) => $q->orderByDesc('created_at')]);
 
-        $year  = now()->year;
-        $month = now()->month;
-
-        if ($month >= 6 && $month <= 10) {
-            $semester = '1st Sem';
-        } elseif ($month >= 11 || $month <= 3) {
-            $semester = '2nd Sem';
-        } else {
-            $semester = 'Summer';
-        }
-
-        // Fees are managed through StudentAssessment fee_breakdown JSON.
-        // This hardcoded structure is a fallback for display when no assessment exists yet.
-        // It is NOT sourced from the Fee model (fee management is disabled).
-        $fees = collect([
-            ['name' => 'Registration Fee', 'amount' => 200.0,  'category' => 'Miscellaneous'],
-            ['name' => 'Tuition Fee',      'amount' => 5000.0, 'category' => 'Tuition'],
-            ['name' => 'Lab Fee',          'amount' => 2000.0, 'category' => 'Laboratory'],
-            ['name' => 'Library Fee',      'amount' => 500.0,  'category' => 'Library'],
-            ['name' => 'Misc. Fee',        'amount' => 1200.0, 'category' => 'Miscellaneous'],
-        ]);
-
         $latestAssessment = StudentAssessment::where('user_id', $user->id)
             ->with('paymentTerms')
             ->latest('created_at')
             ->first();
+
+        // FIX (Bug #7): Build the fees list from the student's actual assessment
+        // fee_breakdown JSON. The previous code had a hardcoded array with
+        // fictitiously low amounts (₱5,000 tuition) that were shown to the student
+        // even when a real assessment existed, causing financial confusion.
+        //
+        // If no assessment exists yet, return an empty collection so the frontend
+        // can render a "No assessment yet" state instead of fake placeholder data.
+        if ($latestAssessment && ! empty($latestAssessment->fee_breakdown)) {
+            $fees = collect($latestAssessment->fee_breakdown)->map(fn ($item) => [
+                'name'     => $item['name']     ?? 'Fee',
+                'amount'   => (float) ($item['amount'] ?? 0),
+                'category' => $item['category'] ?? 'Other',
+            ])->values();
+        } else {
+            $fees = collect();
+        }
 
         $paymentTerms = [];
         if ($latestAssessment) {
@@ -91,12 +86,13 @@ class StudentAccountController extends Controller
             ]);
 
         return Inertia::render('Student/AccountOverview', [
-            'account'                 => $user->account,
-            'transactions'            => $user->transactions ?? [],
-            'fees'                    => $fees->values(),
-            'latestAssessment'        => $latestAssessment,
-            'paymentTerms'            => $paymentTerms,
-            'notifications'           => $notifications,
+            'account'          => $user->account,
+            'transactions'     => $user->transactions ?? [],
+            'fees'             => $fees->values(),
+            'latestAssessment' => $latestAssessment,
+            'paymentTerms'     => $paymentTerms,
+            'notifications'    => $notifications,
+
             'pendingApprovalPayments' => $user->transactions
                 ->filter(fn ($t) => $t->kind === 'payment' && $t->status === 'awaiting_approval')
                 ->map(fn ($t) => [

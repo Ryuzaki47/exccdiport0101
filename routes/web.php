@@ -49,6 +49,7 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->grou
         ->name('reminders.read');
     Route::post('reminders/{reminder}/dismiss', [PaymentReminderController::class, 'dismiss'])
         ->name('reminders.dismiss');
+    Route::post('/account/pay-now', [TransactionController::class, 'payNow'])->name('account.pay-now');
 });
 
 // ============================================
@@ -89,7 +90,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/transactions/download', [TransactionController::class, 'download'])->name('transactions.download');
     // Single-transaction receipt PDF — any authenticated user, but controller enforces ownership
     Route::get('/transactions/{transaction}/receipt', [TransactionController::class, 'receipt'])->name('transactions.receipt');
-    Route::post('/account/pay-now', [TransactionController::class, 'payNow'])->name('account.pay-now');
 });
 
 Route::middleware(['auth', 'verified', 'role:admin,accounting'])->group(function () {

@@ -614,7 +614,7 @@ class StudentFeeController extends Controller
             }
 
             $storedBreakdown = $latestAssessment->fee_breakdown ?? [];
-            if (!empty($storedBreakdown)) {
+            if (! empty($storedBreakdown)) {
                 $grouped = collect($storedBreakdown)
                     ->whereNotIn('category', ['Tuition'])
                     ->groupBy('category');
@@ -670,7 +670,7 @@ class StudentFeeController extends Controller
             ->where('role', 'student')
             ->findOrFail($userId);
 
-        if (!$student->student) {
+        if (! $student->student) {
             return back()->withErrors(['error' => 'Student record not found. Please contact administrator.']);
         }
 
@@ -750,7 +750,7 @@ class StudentFeeController extends Controller
             ->latest()
             ->first();
 
-        if (!$assessment) {
+        if (! $assessment) {
             return redirect()
                 ->route('student-fees.create')
                 ->with('info', 'Please create an assessment for this student first.');
@@ -810,6 +810,12 @@ class StudentFeeController extends Controller
         try {
             $user = User::where('role', 'student')->findOrFail($userId);
 
+            // FIX (Bug #1): Only update the users table.
+            // The students table had last_name, first_name, middle_initial, email,
+            // birthday, phone, address, course, year_level dropped in migration
+            // 2026_03_16_000000_remove_duplicate_columns_from_students_table.
+            // Writing to those columns would throw SQLSTATE[42S22] Column not found.
+            // All personal data is now authoritative in the users table only.
             $user->update([
                 'last_name'      => $validated['last_name'],
                 'first_name'     => $validated['first_name'],
@@ -821,20 +827,6 @@ class StudentFeeController extends Controller
                 'course'         => $validated['course'],
                 'year_level'     => $validated['year_level'],
             ]);
-
-            if ($user->student) {
-                $user->student->update([
-                    'last_name'      => $validated['last_name'],
-                    'first_name'     => $validated['first_name'],
-                    'middle_initial' => $validated['middle_initial'] ?? null,
-                    'email'          => $validated['email'],
-                    'birthday'       => $validated['birthday'] ?? null,
-                    'phone'          => $validated['phone']   ?? null,
-                    'address'        => $validated['address'] ?? null,
-                    'course'         => $validated['course'],
-                    'year_level'     => $validated['year_level'],
-                ]);
-            }
 
             $assessment = StudentAssessment::where('user_id', $userId)
                 ->where('status', 'active')
@@ -1032,29 +1024,29 @@ class StudentFeeController extends Controller
             $accountId = $this->generateUniqueAccountId();
 
             $user = User::create([
-                'last_name'          => $validated['last_name'],
-                'first_name'         => $validated['first_name'],
-                'middle_initial'     => $validated['middle_initial'] ?? null,
-                'email'              => $validated['email'],
-                'birthday'           => $validated['birthday'],
-                'phone'              => $validated['phone'],
-                'address'            => $validated['address'],
-                'year_level'         => $validated['year_level'],
-                'course'             => $validated['course'],
-                'account_id'         => $accountId,
-                'role'               => 'student',
-                'is_active'          => true,
-                'status'             => User::STATUS_ACTIVE,
-                'email_verified_at'  => now(),
-                'password'           => Hash::make('password'),
+                'last_name'         => $validated['last_name'],
+                'first_name'        => $validated['first_name'],
+                'middle_initial'    => $validated['middle_initial'] ?? null,
+                'email'             => $validated['email'],
+                'birthday'          => $validated['birthday'],
+                'phone'             => $validated['phone'],
+                'address'           => $validated['address'],
+                'year_level'        => $validated['year_level'],
+                'course'            => $validated['course'],
+                'account_id'        => $accountId,
+                'role'              => 'student',
+                'is_active'         => true,
+                'status'            => User::STATUS_ACTIVE,
+                'email_verified_at' => now(),
+                'password'          => Hash::make('password'),
             ]);
 
             // Only store student-specific data. Personal info is in the user record.
             Student::create([
-                'user_id'        => $user->id,
-                'student_id'     => $studentId,
+                'user_id'           => $user->id,
+                'student_id'        => $studentId,
                 'enrollment_status' => 'pending',
-                'total_balance'  => 0,
+                'total_balance'     => 0,
             ]);
 
             DB::commit();
@@ -1083,9 +1075,8 @@ class StudentFeeController extends Controller
      * Create the 5 standard payment terms for a newly created assessment.
      * Term percentages: 42.15 | 17.86 | 17.86 | 14.88 | 7.25
      *
-     * NOTE: $userId parameter has been intentionally removed. Payment terms are
-     * owned by the assessment (student_assessment_id), never directly by a user.
-     * Use term → assessment → user to reach the student if needed.
+     * NOTE: Payment terms are owned by the assessment (student_assessment_id),
+     * never directly by a user. Use term → assessment → user if needed.
      */
     private function createPaymentTerms(StudentAssessment $assessment, float $total): void
     {

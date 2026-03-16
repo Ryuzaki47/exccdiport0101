@@ -4,17 +4,27 @@ namespace App\Services;
 
 use App\Models\StudentPaymentTerm;
 use App\Models\StudentAssessment;
-use Carbon\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class PaymentCarryoverService
 {
     /**
-     * Apply carryover logic to all payment terms for an assessment
+     * Apply carryover logic to all payment terms for an assessment.
      *
-     * Wrapped in a database transaction to ensure all terms are updated atomically.
-     * If any term update fails, the entire carryover is rolled back.
+     * Each term's balance = its own original amount PLUS any unpaid balance
+     * carried forward from the previous term.
+     *
+     * For a freshly created assessment (no payments yet) every term's balance
+     * will equal its amount and carryover will be zero between terms.
+     *
+     * Wrapped in a DB transaction — all terms update atomically.
+     *
+     * FIX (Bug #3): Previously `$carryoverBalance` was read from `$term->balance`
+     * immediately after `$term->update([...])`. Eloquent's update() persists to
+     * the DB but does NOT refresh the in-memory model, so `$term->balance` still
+     * held the OLD value. Every subsequent term's balance was computed from a
+     * stale base, causing cascading inflation. The fix is to use the locally
+     * computed `$totalBalance` variable instead of re-reading the model.
      */
     public function applyCarryoverToAssessment(StudentAssessment $assessment): void
     {
@@ -27,53 +37,47 @@ class PaymentCarryoverService
                 return;
             }
 
-            $carryoverBalance = 0;
+            $carryoverBalance = 0.0;
 
-            foreach ($terms as $index => $term) {
-            $previousTermUnpaid = $carryoverBalance;
-            $currentTermAmount = (float) $term->amount;
-            
-            // Total balance = unpaid from previous terms + current term's own amount
-            // For fresh assessments (no payments yet), carryover is 0, so balance = amount
-            // For post-payment assessments, carryover is the remaining unpaid from previous term
-            $totalBalance = $previousTermUnpaid + $currentTermAmount;
+            foreach ($terms as $term) {
+                $previousTermUnpaid  = $carryoverBalance;
+                $currentTermAmount   = (float) $term->amount;
 
-            // Update this term's balance
-            $remarks = null;
-            if ($previousTermUnpaid > 0) {
-                $remarks = "Balance of ₱" . number_format($previousTermUnpaid, 2) . " carried from previous term(s)";
-            }
+                // Total balance for this term = own amount + any unpaid from previous term
+                $totalBalance = round($previousTermUnpaid + $currentTermAmount, 2);
 
-            $term->update([
-                'balance' => round($totalBalance, 2),
-                'remarks' => $remarks,
-                'status' => $totalBalance > 0 ? 'pending' : 'paid',
-            ]);
-
-            // ✅ Only carry over what remains UNPAID after any payments made to this term
-            // On fresh assessments with no payments yet, balance = amount, so carryover = amount for next term
-            // After a payment is processed, balance is reduced from amount, so carryover = remaining balance
-                $carryoverBalance = round((float) $term->balance, 2);
-            }
-
-            // Mark the last term for carryover information
-            if ($terms->count() > 0) {
-                $lastTerm = $terms->last();
-                if ($lastTerm->balance > 0) {
-                    $lastTerm->update([
-                        'remarks' => ($lastTerm->remarks ? $lastTerm->remarks . '. ' : '') . 'Final term - no carryover beyond this',
-                    ]);
+                $remarks = null;
+                if ($previousTermUnpaid > 0) {
+                    $remarks = 'Balance of ₱' . number_format($previousTermUnpaid, 2) . ' carried from previous term(s)';
                 }
+
+                $term->update([
+                    'balance' => $totalBalance,
+                    'remarks' => $remarks,
+                    'status'  => $totalBalance > 0 ? StudentPaymentTerm::STATUS_PENDING : StudentPaymentTerm::STATUS_PAID,
+                ]);
+
+                // FIX: use the locally computed $totalBalance — NOT $term->balance.
+                // $term->balance is stale (Eloquent does not refresh after update()).
+                $carryoverBalance = $totalBalance;
+            }
+
+            // Annotate the last term so it is clear no further carryover occurs
+            $lastTerm = $terms->last();
+            if ($lastTerm && (float) $lastTerm->balance > 0) {
+                $existingRemarks = $lastTerm->remarks ?? '';
+                $lastTerm->update([
+                    'remarks' => ($existingRemarks ? $existingRemarks . '. ' : '') . 'Final term — no carryover beyond this',
+                ]);
             }
         });
     }
 
     /**
-     * Apply payment across terms using carryover priority
-     * Priority: Earlier unpaid terms first, then current term
+     * Apply a payment across terms using carryover priority.
      *
-     * Wrapped in a database transaction to ensure all term updates are atomic.
-     * If any term update fails, the entire payment is rolled back.
+     * Payments are distributed to the earliest unpaid terms first (term_order ASC).
+     * Wrapped in a DB transaction — all term updates are atomic.
      */
     public function applyPayment(StudentAssessment $assessment, float $paymentAmount): array
     {
@@ -87,27 +91,26 @@ class PaymentCarryoverService
                 ->get();
 
             foreach ($terms as $term) {
-            if ($remainingAmount <= 0) {
-                break;
-            }
+                if ($remainingAmount <= 0) {
+                    break;
+                }
 
-            $termBalance = (float) $term->balance;
-            $amountToApply = min($remainingAmount, $termBalance);
+                $termBalance    = (float) $term->balance;
+                $amountToApply  = min($remainingAmount, $termBalance);
+                $newBalance     = round($termBalance - $amountToApply, 2);
+                $newStatus      = $newBalance <= 0 ? StudentPaymentTerm::STATUS_PAID : StudentPaymentTerm::STATUS_PARTIAL;
 
-            $newBalance = $termBalance - $amountToApply;
-            $newStatus = $newBalance <= 0 ? 'paid' : 'partial';
+                $term->update([
+                    'balance'   => max(0.0, $newBalance),
+                    'status'    => $newStatus,
+                    'paid_date' => $newStatus === StudentPaymentTerm::STATUS_PAID ? now() : $term->paid_date,
+                ]);
 
-            $term->update([
-                'balance' => max(0, $newBalance),
-                'status' => $newStatus,
-                'paid_date' => $newStatus === 'paid' ? now() : $term->paid_date,
-            ]);
-
-            $appliedPayments[] = [
-                'term' => $term->term_name,
-                'applied' => $amountToApply,
-                'remaining_balance' => max(0, $newBalance),
-            ];
+                $appliedPayments[] = [
+                    'term'              => $term->term_name,
+                    'applied'           => $amountToApply,
+                    'remaining_balance' => max(0.0, $newBalance),
+                ];
 
                 $remainingAmount -= $amountToApply;
             }
@@ -115,22 +118,21 @@ class PaymentCarryoverService
             return [
                 'applied_payments' => $appliedPayments,
                 'remaining_amount' => $remainingAmount,
-                'total_applied' => $paymentAmount - $remainingAmount,
+                'total_applied'    => $paymentAmount - $remainingAmount,
             ];
         });
     }
 
     /**
-     * Get total remaining balance across all terms
+     * Get total remaining balance across all terms for an assessment.
      */
     public function getTotalRemainingBalance(StudentAssessment $assessment): float
     {
-        return (float) $assessment->paymentTerms()
-            ->sum('balance');
+        return (float) $assessment->paymentTerms()->sum('balance');
     }
 
     /**
-     * Check if assessment is fully paid
+     * Check if assessment is fully paid.
      */
     public function isFullyPaid(StudentAssessment $assessment): bool
     {
@@ -138,44 +140,48 @@ class PaymentCarryoverService
     }
 
     /**
-     * Get next pending term
+     * Get the next unpaid/partially-paid/overdue term for an assessment.
      */
     public function getNextPendingTerm(StudentAssessment $assessment): ?StudentPaymentTerm
     {
         return $assessment->paymentTerms()
-            ->whereIn('status', ['pending', 'partial', 'overdue'])
+            ->whereIn('status', [
+                StudentPaymentTerm::STATUS_PENDING,
+                StudentPaymentTerm::STATUS_PARTIAL,
+                StudentPaymentTerm::STATUS_OVERDUE,
+            ])
             ->orderBy('term_order')
             ->first();
     }
 
     /**
-     * Get payment breakdown for display
+     * Get a full payment breakdown suitable for display or API response.
      */
     public function getPaymentBreakdown(StudentAssessment $assessment): array
     {
         $terms = $assessment->paymentTerms()
             ->orderBy('term_order')
             ->get()
-            ->map(fn($term) => [
-                'id' => $term->id,
-                'term_name' => $term->term_name,
-                'term_order' => $term->term_order,
-                'percentage' => $term->percentage,
+            ->map(fn ($term) => [
+                'id'              => $term->id,
+                'term_name'       => $term->term_name,
+                'term_order'      => $term->term_order,
+                'percentage'      => $term->percentage,
                 'original_amount' => (float) $term->amount,
-                'balance' => (float) $term->balance,
-                'status' => $term->status,
-                'due_date' => $term->due_date->format('Y-m-d'),
-                'remarks' => $term->remarks,
-                'has_carryover' => $term->hasCarryover(),
+                'balance'         => (float) $term->balance,
+                'status'          => $term->status,
+                'due_date'        => $term->due_date?->format('Y-m-d'),
+                'remarks'         => $term->remarks,
+                'has_carryover'   => $term->hasCarryover(),
             ])
             ->toArray();
 
         return [
             'total_assessment' => (float) $assessment->total_assessment,
-            'total_paid' => (float) $assessment->total_assessment - $this->getTotalRemainingBalance($assessment),
-            'total_remaining' => $this->getTotalRemainingBalance($assessment),
-            'is_fully_paid' => $this->isFullyPaid($assessment),
-            'terms' => $terms,
+            'total_paid'       => (float) $assessment->total_assessment - $this->getTotalRemainingBalance($assessment),
+            'total_remaining'  => $this->getTotalRemainingBalance($assessment),
+            'is_fully_paid'    => $this->isFullyPaid($assessment),
+            'terms'            => $terms,
         ];
     }
 }
