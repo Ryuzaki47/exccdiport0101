@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\PaymentStatus;
 use App\Models\User;
 use App\Models\Transaction;
 use App\Models\Payment;
@@ -62,7 +63,9 @@ class StudentPaymentService
             $reference = 'PAY-' . Str::upper(Str::random(8));
 
             // Determine transaction status based on approval requirement
-            $status = $requiresApproval ? 'awaiting_approval' : 'paid';
+            $status = $requiresApproval
+                ? PaymentStatus::AWAITING_APPROVAL->value
+                : PaymentStatus::PAID->value;
 
             // Normalise description — never null to satisfy DB NOT NULL constraint
             $description = $options['description'] ?? null;
@@ -100,13 +103,13 @@ class StudentPaymentService
             if (! $requiresApproval) {
                 $newBalance = max(0, (float) $term->balance - $amount);
                 $newStatus  = $newBalance <= 0
-                    ? StudentPaymentTerm::STATUS_PAID
-                    : StudentPaymentTerm::STATUS_PARTIAL;
+                    ? PaymentStatus::PAID->value
+                    : PaymentStatus::PARTIAL->value;
 
                 $term->update([
                     'balance'   => $newBalance,
                     'status'    => $newStatus,
-                    'paid_date' => $newStatus === StudentPaymentTerm::STATUS_PAID ? now() : $term->paid_date,
+                    'paid_date' => $newStatus === PaymentStatus::PAID->value ? now() : $term->paid_date,
                 ]);
 
                 // FIX (Bug #4): Added student_assessment_id so PDF export can filter
@@ -120,7 +123,7 @@ class StudentPaymentService
                         'payment_method'       => $options['payment_method'] ?? null,
                         'reference_number'     => $reference,
                         'description'          => $description,
-                        'status'               => Payment::STATUS_COMPLETED,
+                        'status'               => PaymentStatus::COMPLETED->value,
                         'paid_at'              => $options['paid_at'] ?? now(),
                     ]);
                 }
@@ -164,7 +167,7 @@ class StudentPaymentService
             throw new \Exception('Transaction is not a payment.');
         }
 
-        if ($transaction->status === 'paid') {
+        if ($transaction->status === PaymentStatus::PAID->value) {
             // Already finalized — idempotent, skip
             return;
         }
@@ -199,7 +202,7 @@ class StudentPaymentService
                     ->first()
                     ?->paymentTerms()
                     ->where('term_name', $termName)
-                    ->whereIn('status', ['pending', 'partial'])
+                    ->whereIn('status', PaymentStatus::unpaidValues())
                     ->orderBy('due_date', 'desc')
                     ->first();
             }
@@ -214,13 +217,13 @@ class StudentPaymentService
             // ── Update the payment term ──
             $newBalance = max(0, (float) $term->balance - $amount);
             $newStatus  = $newBalance <= 0
-                ? StudentPaymentTerm::STATUS_PAID
-                : StudentPaymentTerm::STATUS_PARTIAL;
+                ? PaymentStatus::PAID->value
+                : PaymentStatus::PARTIAL->value;
 
             $term->update([
                 'balance'   => $newBalance,
                 'status'    => $newStatus,
-                'paid_date' => $newStatus === StudentPaymentTerm::STATUS_PAID
+                'paid_date' => $newStatus === PaymentStatus::PAID->value
                     ? now()
                     : $term->paid_date,
             ]);
@@ -242,13 +245,13 @@ class StudentPaymentService
                     'payment_method'       => $transaction->payment_channel,
                     'reference_number'     => $transaction->reference,
                     'description'          => $description,
-                    'status'               => Payment::STATUS_COMPLETED,
+                    'status'               => PaymentStatus::COMPLETED->value,
                     'paid_at'              => $transaction->paid_at ?? now(),
                 ]);
             }
 
             // ── Mark transaction as paid ──
-            $transaction->update(['status' => 'paid']);
+            $transaction->update(['status' => PaymentStatus::PAID->value]);
 
             // ── Recalculate account balance ──
             AccountService::recalculate($user);
@@ -282,7 +285,7 @@ class StudentPaymentService
 
         DB::transaction(function () use ($transaction) {
             // Mark as cancelled — term balance was never deducted (payment was pending)
-            $transaction->update(['status' => 'cancelled']);
+            $transaction->update(['status' => PaymentStatus::CANCELLED->value]);
 
             Log::info('Payment cancelled due to workflow rejection', [
                 'transaction_id' => $transaction->id,
@@ -304,7 +307,7 @@ class StudentPaymentService
         return (float) StudentPaymentTerm::whereHas('assessment', function ($q) use ($user) {
             $q->where('user_id', $user->id);
         })
-            ->whereIn('status', ['pending', 'partial'])
+            ->whereIn('status', PaymentStatus::unpaidValues())
             ->sum('balance');
     }
 
@@ -336,7 +339,7 @@ class StudentPaymentService
 
             $allPaid = $assessment->paymentTerms->isNotEmpty()
                 && $assessment->paymentTerms->every(
-                    fn ($t) => $t->status === StudentPaymentTerm::STATUS_PAID
+                    fn ($t) => $t->status === PaymentStatus::PAID->value
                 );
 
             if (! $allPaid) {

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -24,9 +25,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Payment extends Model
 {
-    const STATUS_COMPLETED = 'completed';
-    const STATUS_PENDING   = 'pending';
-    const STATUS_FAILED    = 'failed';
+    // ── Status constants — backed by PaymentStatus enum ───────────────────────
+    // Kept as string constants for backward-compatible Model::STATUS_* access.
+    const STATUS_COMPLETED = PaymentStatus::COMPLETED->value; // 'completed'
+    const STATUS_PENDING   = PaymentStatus::PENDING->value;   // 'pending'
+    const STATUS_FAILED    = 'failed';                        // error state only
 
     protected $fillable = [
         'student_id',

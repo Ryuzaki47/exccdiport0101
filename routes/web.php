@@ -71,19 +71,54 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
 // ============================================
 // STUDENT FEE MANAGEMENT ROUTES
 // ============================================
+//
+// All {userId} parameters are constrained to numeric strings via whereNumber()
+// so that a request like /student-fees/abc/edit hits a clean 404 instead of
+// propagating a type error from Eloquent's findOrFail().
+//
+// The drop route uses {user} model binding (User model, resolved by PK).
+// The controller's drop() method is updated accordingly — no manual
+// User::findOrFail() boilerplate is needed there anymore.
+//
+// NOTE ON REINSTATE ASYMMETRY:
+// drop   → accessible to both admin AND accounting (operational action)
+// reinstate → admin ONLY (deliberate — requires admin sign-off to re-activate
+//             a student who was dropped, e.g. for non-payment reasons).
+// If this policy changes, move the reinstate route here and add 'accounting'
+// to its role guard.
+// ============================================
 Route::middleware(['auth', 'verified', 'role:admin,accounting'])->prefix('student-fees')->group(function () {
     Route::get('/', [StudentFeeController::class, 'index'])->name('student-fees.index');
     Route::get('/create-student', [StudentFeeController::class, 'createStudent'])->name('student-fees.create-student');
     Route::post('/store-student', [StudentFeeController::class, 'storeStudent'])->name('student-fees.store-student');
     Route::get('/create', [StudentFeeController::class, 'create'])->name('student-fees.create');
     Route::post('/', [StudentFeeController::class, 'store'])->name('student-fees.store');
-    Route::post('/{userId}/drop', [StudentFeeController::class, 'drop'])
+
+    // Model-bound drop: {user} resolves User by PK; 404s automatically on unknown id.
+    // Replaces the old /{userId}/drop with manual User::findOrFail() inside the method.
+    Route::post('/{user}/drop', [StudentFeeController::class, 'drop'])
+        ->whereNumber('user')
         ->name('student-fees.drop');
-    Route::get('/{userId}', [StudentFeeController::class, 'show'])->name('student-fees.show');
-    Route::get('/{userId}/edit', [StudentFeeController::class, 'edit'])->name('student-fees.edit');
-    Route::put('/{userId}', [StudentFeeController::class, 'update'])->name('student-fees.update');
-    Route::post('/{userId}/payments', [StudentFeeController::class, 'storePayment'])->name('student-fees.payments.store');
-    Route::get('/{userId}/export-pdf', [StudentFeeController::class, 'exportPdf'])->name('student-fees.export-pdf');
+
+    Route::get('/{userId}', [StudentFeeController::class, 'show'])
+        ->whereNumber('userId')
+        ->name('student-fees.show');
+
+    Route::get('/{userId}/edit', [StudentFeeController::class, 'edit'])
+        ->whereNumber('userId')
+        ->name('student-fees.edit');
+
+    Route::put('/{userId}', [StudentFeeController::class, 'update'])
+        ->whereNumber('userId')
+        ->name('student-fees.update');
+
+    Route::post('/{userId}/payments', [StudentFeeController::class, 'storePayment'])
+        ->whereNumber('userId')
+        ->name('student-fees.payments.store');
+
+    Route::get('/{userId}/export-pdf', [StudentFeeController::class, 'exportPdf'])
+        ->whereNumber('userId')
+        ->name('student-fees.export-pdf');
 });
 
 // ============================================

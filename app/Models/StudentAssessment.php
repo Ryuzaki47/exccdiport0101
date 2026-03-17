@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class StudentAssessment extends Model
 {
@@ -84,17 +85,53 @@ class StudentAssessment extends Model
     // =========================================================================
 
     /**
-     * Generate a unique assessment number (e.g. ASS-2026-0001).
+     * Generate a unique assessment number in the format ASS-YYYY-NNNN.
+     *
+     * CONTRACT: This method MUST be called inside an active DB transaction
+     * (i.e. after DB::beginTransaction() has been called by the caller).
+     * The SELECT ... FOR UPDATE lock prevents two concurrent requests from
+     * reading the same "last number" and producing a duplicate assessment
+     * number before either transaction commits.
+     *
+     * Correct usage (in StudentFeeController::store()):
+     *
+     *   DB::beginTransaction();
+     *   try {
+     *       $assessment = StudentAssessment::create([
+     *           'assessment_number' => StudentAssessment::generateAssessmentNumber(),
+     *           ...
+     *       ]);
+     *       DB::commit();
+     *   } catch (\Exception $e) {
+     *       DB::rollBack();
+     *       ...
+     *   }
+     *
+     * @throws \RuntimeException if called outside a transaction.
      */
     public static function generateAssessmentNumber(): string
     {
+        // Guard: enforce the transaction contract so callers cannot accidentally
+        // use this outside a transaction and produce duplicate numbers.
+        if (DB::transactionLevel() === 0) {
+            throw new \RuntimeException(
+                'StudentAssessment::generateAssessmentNumber() must be called inside an active DB transaction.'
+            );
+        }
+
         $year = now()->year;
-        $lastAssessment = self::where('assessment_number', 'like', "ASS-{$year}-%")
+
+        // SELECT ... FOR UPDATE acquires a row-level lock on the latest record
+        // for the current year. Any concurrent transaction attempting the same
+        // query will block here until the first one commits or rolls back,
+        // guaranteeing sequential number assignment.
+        $last = self::where('assessment_number', 'like', "ASS-{$year}-%")
             ->orderBy('id', 'desc')
+            ->lockForUpdate()
             ->first();
 
-        $lastNumber = $lastAssessment
-            ? intval(substr($lastAssessment->assessment_number, -4))
+        $lastNumber = $last
+            ? (int) substr($last->assessment_number, -4)
             : 0;
 
         return sprintf('ASS-%d-%04d', $year, $lastNumber + 1);

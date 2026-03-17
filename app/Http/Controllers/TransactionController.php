@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentStatus;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Transaction;
 use App\Models\User;
@@ -100,7 +101,9 @@ class TransactionController extends Controller
             'kind'            => $data['type'],
             'type'            => 'Manual Entry',
             'amount'          => $data['amount'],
-            'status'          => $data['type'] === 'payment' ? 'paid' : 'pending',
+            'status'          => $data['type'] === 'payment'
+                ? PaymentStatus::PAID->value
+                : PaymentStatus::PENDING->value,
             'payment_channel' => $data['payment_channel'] ?? null,
             'year'            => (string) now()->year,
             'semester'        => $this->getCurrentSemesterLabel(),
@@ -109,7 +112,7 @@ class TransactionController extends Controller
             ],
         ]);
 
-        $this->recalculateAccount($transaction->user);
+        AccountService::recalculate($transaction->user);
 
         return redirect()->route('transactions.index')
             ->with('success', 'Transaction created successfully!');
@@ -137,7 +140,7 @@ class TransactionController extends Controller
         }
 
         // Only fully paid transactions may generate a receipt PDF.
-        if ($transaction->status === 'awaiting_approval') {
+        if ($transaction->status === PaymentStatus::AWAITING_APPROVAL->value) {
             abort(403, 'Receipt is not available yet. Your payment is still awaiting accounting verification.');
         }
 
@@ -150,7 +153,7 @@ class TransactionController extends Controller
         $currentBalance = (float) ($targetUser->account->balance ?? 0);
         $paymentAmount  = (float) $transaction->amount;
 
-        if ($transaction->status === 'paid') {
+        if ($transaction->status === PaymentStatus::PAID->value) {
             $balanceBefore    = round($currentBalance + $paymentAmount, 2);
             $remainingBalance = round($currentBalance, 2);
         } else {
@@ -210,10 +213,11 @@ class TransactionController extends Controller
         // (paid) payments and charges appear in the Term Summary document.
         $transactions = $transactions->filter(function ($txn) {
             if ($txn->kind === 'charge') return true;
-            return $txn->kind === 'payment' && $txn->status === 'paid';
+            return $txn->kind === 'payment' && $txn->status === PaymentStatus::PAID->value;
         });
 
-        $paidPaymentsExist = $transactions->where('kind', 'payment')->where('status', 'paid')->isNotEmpty();
+        $paidPaymentsExist = $transactions->where('kind', 'payment')
+            ->where('status', PaymentStatus::PAID->value)->isNotEmpty();
         $chargesExist      = $transactions->where('kind', 'charge')->isNotEmpty();
 
         if (!$paidPaymentsExist && !$chargesExist) {
@@ -221,7 +225,8 @@ class TransactionController extends Controller
         }
 
         $totalCharges = $transactions->where('kind', 'charge')->sum('amount');
-        $totalPaid    = $transactions->where('kind', 'payment')->where('status', 'paid')->sum('amount');
+        $totalPaid    = $transactions->where('kind', 'payment')
+            ->where('status', PaymentStatus::PAID->value)->sum('amount');
         $netBalance   = round((float) $totalCharges - (float) $totalPaid, 2);
 
         $pdf = Pdf::loadView('pdf.transactions', [
@@ -301,7 +306,7 @@ class TransactionController extends Controller
             // Prevent duplicate awaiting_approval submissions for the same term
             if ($isStudent) {
                 $alreadyPending = Transaction::where('user_id', $user->id)
-                    ->where('status', 'awaiting_approval')
+                    ->where('status', PaymentStatus::AWAITING_APPROVAL->value)
                     ->where('kind', 'payment')
                     ->whereJsonContains('meta->selected_term_id', (int) $data['selected_term_id'])
                     ->exists();
@@ -345,10 +350,8 @@ class TransactionController extends Controller
                     (float) $data['amount'],
                     $result['transaction_reference'] ?? 'N/A'
                 ));
-
-                if ($user->student) {
-                    $this->checkAndPromoteStudent($user->student);
-                }
+                // Year-level promotion is handled automatically by AccountService::recalculate()
+                // which is called inside StudentPaymentService::processPayment().
             }
 
             $message = $requiresApproval
@@ -430,45 +433,5 @@ class TransactionController extends Controller
     {
         $month = now()->month;
         return ($month >= 6 && $month <= 10) ? '1st Sem' : '2nd Sem';
-    }
-
-    protected function recalculateAccount(User $user): void
-    {
-        $charges  = $user->transactions()->where('kind', 'charge')->sum('amount');
-        $payments = $user->transactions()->where('kind', 'payment')->where('status', 'paid')->sum('amount');
-        $balance  = round((float) $charges - (float) $payments, 2);
-
-        $account = $user->account ?? $user->account()->create(['balance' => 0]);
-        $account->update(['balance' => $balance]);
-    }
-
-    protected function checkAndPromoteStudent($student): void
-    {
-        if (!$student) return;
-        $user = $student->user;
-        if (!$user) return;
-        if ($user->account && $user->account->balance <= 0) {
-            $this->promoteYearLevel($student);
-            $this->assignNextPayables($student);
-        }
-    }
-
-    protected function promoteYearLevel($student): void
-    {
-        if (!$student->user) return;
-        
-        $levels       = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
-        $currentIndex = array_search($student->user->year_level, $levels);
-        if ($currentIndex !== false && $currentIndex < count($levels) - 1) {
-            $student->user->year_level = $levels[$currentIndex + 1];
-            $student->user->save();
-        }
-    }
-
-    protected function assignNextPayables($student): void
-    {
-        // Fee management has been disabled.
-        // Payables are now created through StudentAssessment and StudentPaymentTerms.
-        // This method is retained for backward compatibility but intentionally does nothing.
     }
 }

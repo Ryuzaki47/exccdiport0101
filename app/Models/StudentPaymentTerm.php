@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -30,13 +31,17 @@ class StudentPaymentTerm extends Model
         'paid_date'        => 'datetime',
     ];
 
-    // Payment statuses
-    const STATUS_PENDING = 'pending';
-    const STATUS_PARTIAL = 'partial';
-    const STATUS_PAID    = 'paid';
-    const STATUS_OVERDUE = 'overdue';
+    // ── Payment term statuses — use PaymentStatus enum values ─────────────────
+    // These constants are kept as string aliases so any existing code that
+    // references StudentPaymentTerm::STATUS_* continues to work without
+    // a mass find-and-replace. New code should use PaymentStatus::* directly.
+    const STATUS_PENDING = PaymentStatus::PENDING->value;   // 'pending'
+    const STATUS_PARTIAL = PaymentStatus::PARTIAL->value;   // 'partial'
+    const STATUS_PAID    = PaymentStatus::PAID->value;      // 'paid'
+    const STATUS_OVERDUE = 'overdue';                       // not in PaymentStatus (display-only flag)
 
-    // Term names and orders
+    // Term definitions — duplicated from config/fees.php for in-model convenience.
+    // config('fees.terms') is the authoritative source; this stays in sync manually.
     const TERMS = [
         1 => ['name' => 'Upon Registration', 'percentage' => 42.15],
         2 => ['name' => 'Prelim',            'percentage' => 17.86],

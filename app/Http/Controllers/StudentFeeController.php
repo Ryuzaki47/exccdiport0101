@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentStatus;
 use App\Models\Payment;
 use App\Models\Student;
 use App\Models\StudentAssessment;
@@ -10,240 +11,32 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Models\StudentStatusLog;
 use App\Services\StudentPaymentService;
+use App\Services\AccountService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class StudentFeeController extends Controller
 {
     // =========================================================================
-    // COURSE FEE PRESETS
+    // FEE CONFIGURATION
     // =========================================================================
     //
-    // Each entry: course → year_level → semester → fee line items[]
+    // Fee presets, allowed categories, and payment term definitions have been
+    // moved to config/fees.php so school administrators can update them each
+    // year without a code deploy.
     //
-    // The totals below match the amounts given for BS Electrical Engineering
-    // Technology (BSEET). BS Electronics Engineering Technology (BSEECT) uses
-    // the same structure with slightly different tuition amounts.
+    // Read presets  : config('fees.presets')
+    // Read categories: config('fees.categories')
+    // Read terms    : config('fees.terms')
     //
-    // Categories allowed: Tuition, Laboratory, Miscellaneous, Other
-    // (Academic category has been removed per project requirement)
-    //
-    // To add a new course: add a new top-level key matching the course name
-    // exactly as stored in users.course.
+    // After editing config/fees.php run: php artisan config:clear
     // =========================================================================
 
-    private const COURSE_FEE_PRESETS = [
-
-        // ─────────────────────────────────────────────────────────────────────
-        // BS Electrical Engineering Technology
-        // Totals: 1Y1S=18400 | 1Y2S=16000 | 2Y1S=17600 | 2Y2S=16800
-        //         3Y1S=19200 | 3Y2S=18000 | 4Y1S=20000 | 4Y2S=19200
-        // ─────────────────────────────────────────────────────────────────────
-        'BS Electrical Engineering Technology' => [
-            '1st Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13500.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1800.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    ['category' => 'Other',         'name' => 'Medical/Dental Fee',   'amount' =>   400.00],
-                    // Total = 18,400
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 11600.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1800.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    // Total = 16,000
-                ],
-            ],
-            '2nd Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13200.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1900.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    // Total = 17,800 (close to 17,600 — admin can adjust)
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 12700.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  1700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    // Total = 17,000 (close to 16,800 — admin can adjust)
-                ],
-            ],
-            '3rd Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    // Total = 19,400 (admin can adjust to 19,200)
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13400.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    // Total = 18,200 (admin can adjust to 18,000)
-                ],
-            ],
-            '4th Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 15400.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    // Total = 20,400 (admin can adjust to 20,000)
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    // Total = 19,500 (admin can adjust to 19,200)
-                ],
-            ],
-        ],
-
-        // ─────────────────────────────────────────────────────────────────────
-        // BS Electronics Engineering Technology
-        // Slightly higher lab fees due to electronics lab equipment
-        // ─────────────────────────────────────────────────────────────────────
-        'BS Electronics Engineering Technology' => [
-            '1st Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13500.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2000.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                    ['category' => 'Other',         'name' => 'Medical/Dental Fee',   'amount' =>   400.00],
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 11600.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2000.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                ],
-            ],
-            '2nd Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13200.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2100.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 12700.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2000.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   700.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                ],
-            ],
-            '3rd Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2300.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13400.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2300.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   800.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                ],
-            ],
-            '4th Year' => [
-                '1st Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 15400.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   500.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                ],
-                '2nd Sem' => [
-                    ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
-                    ['category' => 'Laboratory',    'name' => 'Laboratory Fee',       'amount' =>  2400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Registration Fee',     'amount' =>   400.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Miscellaneous Fee',    'amount' =>   900.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Athletics Fee',        'amount' =>   200.00],
-                    ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
-                    ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
-                    ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
-                ],
-            ],
-        ],
-    ];
-
-    // Allowed fee categories (Academic removed per project requirement)
-    private const FEE_CATEGORIES = ['Tuition', 'Laboratory', 'Miscellaneous', 'Other'];
 
     // =========================================================================
     // INDEX
@@ -366,7 +159,7 @@ class StudentFeeController extends Controller
 
         // Course list: presets + existing student courses (subjects no longer contribute)
         $allCourses = collect(array_unique(array_merge(
-            array_keys(self::COURSE_FEE_PRESETS),
+            array_keys(config('fees.presets', [])),
             User::where('role', 'student')->whereNotNull('course')->distinct()->pluck('course')->toArray(),
         )))->sort()->values();
 
@@ -381,7 +174,7 @@ class StudentFeeController extends Controller
                 ($currentYear + 1) . '-' . ($currentYear + 2),
                 ($currentYear + 2) . '-' . ($currentYear + 3),
             ],
-            'feePresets'  => self::COURSE_FEE_PRESETS,
+            'feePresets'  => config('fees.presets', []),
             // Irregular subject picker — empty because Subject management is disabled.
             'subjectMap'  => $subjectMap,
             'courses'     => $allCourses,
@@ -494,7 +287,7 @@ class StudentFeeController extends Controller
                 'year'      => $yearNum,
                 'semester'  => $base['semester'],
                 'amount'    => $grandTotal,
-                'status'    => 'pending',
+                'status'    => PaymentStatus::PENDING->value,
                 'meta'      => [
                     'assessment_id'   => $assessment->id,
                     'assessment_type' => $base['assessment_type'],
@@ -760,7 +553,7 @@ class StudentFeeController extends Controller
 
         // Subject management is disabled; courses come from presets and existing students only.
         $courses = collect(array_unique(array_merge(
-            array_keys(self::COURSE_FEE_PRESETS),
+            array_keys(config('fees.presets', [])),
             User::where('role', 'student')->whereNotNull('course')->distinct()->pluck('course')->toArray(),
         )))->sort()->values();
 
@@ -784,7 +577,7 @@ class StudentFeeController extends Controller
             ],
             'assessment'    => $assessment,
             'courses'       => $courses,
-            'feeCategories' => self::FEE_CATEGORIES,
+            'feeCategories' => config('fees.categories', []),
         ]);
     }
 
@@ -976,15 +769,17 @@ class StudentFeeController extends Controller
     
     // ── DROP STUDENT — move active/pending student to dropped ────────────────
     /**
-     * POST /student-fees/{userId}/drop
+     * POST /student-fees/{user}/drop
      *
-     * Accessible from Student Fee Management.
-     * Only active or pending students can be dropped.
+     * {user} is resolved by Laravel route model binding (User model, PK).
+     * A non-existent or non-numeric id returns a 404 before this method fires.
+     *
+     * Accessible to both admin and accounting roles.
+     * Only active, pending, or suspended students can be dropped.
      */
-    public function drop(Request $request, $userId)
+    public function drop(Request $request, User $user): \Illuminate\Http\RedirectResponse
     {
-        $user = User::findOrFail($userId);
-        $student = Student::where('user_id', $userId)->firstOrFail();
+        $student = Student::where('user_id', $user->id)->firstOrFail();
 
         $droppable = ['active', 'pending', 'suspended'];
 
@@ -1003,7 +798,7 @@ class StudentFeeController extends Controller
 
         $student->update(['enrollment_status' => 'dropped']);
 
-        \App\Models\StudentStatusLog::create([
+        StudentStatusLog::create([
             'student_id'  => $student->id,
             'changed_by'  => auth()->id(),
             'from_status' => $fromStatus,
@@ -1031,7 +826,7 @@ class StudentFeeController extends Controller
             ->values();
 
         if ($courses->isEmpty()) {
-            $courses = collect(array_keys(self::COURSE_FEE_PRESETS));
+            $courses = collect(array_keys(config('fees.presets', [])));
         }
 
         return Inertia::render('StudentFees/CreateStudent', [
@@ -1117,24 +912,25 @@ class StudentFeeController extends Controller
     // =========================================================================
 
     /**
-     * Create the 5 standard payment terms for a newly created assessment.
-     * Term percentages: 42.15 | 17.86 | 17.86 | 14.88 | 7.25
+     * Create the standard payment terms for a newly created assessment.
+     *
+     * Term definitions are read from config/fees.terms so the percentages can
+     * be updated in config/fees.php without touching this controller.
+     *
+     * The last term absorbs any cent-level rounding remainder so that
+     * SUM(term.amount) == $total exactly.
      *
      * NOTE: Payment terms are owned by the assessment (student_assessment_id),
      * never directly by a user. Use term → assessment → user if needed.
+     *
+     * REQUIRES: Must be called inside an active DB::beginTransaction() block.
      */
     private function createPaymentTerms(StudentAssessment $assessment, float $total): void
     {
-        $termDefs = [
-            1 => ['name' => 'Upon Registration', 'percentage' => 42.15],
-            2 => ['name' => 'Prelim',            'percentage' => 17.86],
-            3 => ['name' => 'Midterm',           'percentage' => 17.86],
-            4 => ['name' => 'Semi-Final',        'percentage' => 14.88],
-            5 => ['name' => 'Final',             'percentage' =>  7.25],
-        ];
-
+        /** @var array<int, array{name: string, percentage: float}> $termDefs */
+        $termDefs  = config('fees.terms');
+        $lastOrder = array_key_last($termDefs);
         $allocated = 0.00;
-        $lastOrder = 5;
 
         foreach ($termDefs as $order => $def) {
             $amount = ($order === $lastOrder)
@@ -1153,7 +949,7 @@ class StudentFeeController extends Controller
                 'amount'                 => $amount,
                 'balance'                => $amount,
                 'due_date'               => null,
-                'status'                 => StudentPaymentTerm::STATUS_PENDING,
+                'status'                 => PaymentStatus::PENDING->value,
                 'remarks'                => null,
                 'paid_date'              => null,
                 'carryover_from_term_id' => null,
