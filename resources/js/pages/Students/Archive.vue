@@ -84,7 +84,10 @@ const closeReinstate = () => {
 const submitReinstate = () => {
     if (! selectedStudent.value) return;
     reinstateForm.post(route('students.reinstate', selectedStudent.value.id), {
-        onSuccess: () => closeReinstate(),
+        onSuccess: () => {
+            closeReinstate();
+            router.reload();
+        },
     });
 };
 
@@ -256,8 +259,9 @@ const canReinstate = (student: Student) =>
                             link.active ? 'bg-blue-600 text-white' : 'border bg-white text-gray-600 hover:bg-gray-100',
                             !link.url ? 'pointer-events-none opacity-40' : '',
                         ]"
-                        v-html="link.label"
-                    />
+                    >
+                        {{ link.label }}
+                    </Link>
                 </div>
             </div>
         </div>
