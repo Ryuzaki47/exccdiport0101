@@ -36,9 +36,6 @@ import AppLogo from './AppLogo.vue';
  * Returns the resolved URL string, or a fallback '#' when the route has not
  * yet been registered in the compiled Ziggy manifest (e.g. after a rename
  * before `php artisan ziggy:generate` has been re-run).
- *
- * This prevents the sidebar from hard-crashing for ALL roles when a single
- * role-gated route is missing from the manifest.
  */
 const safeRoute = (name: string, params?: any): string => {
     try {
@@ -59,9 +56,7 @@ const page     = usePage();
 const userRole = computed(() => (page.props.auth as any)?.user?.role ?? 'student');
 
 // ---------------------------------------------------------------------------
-// Nav items — ALL route() calls live inside the computed so they are resolved
-// lazily after Ziggy is fully initialised, and wrapped via safeRoute so a
-// missing route name never throws.
+// Nav items
 // ---------------------------------------------------------------------------
 
 const mainNavItems = computed<NavItem[]>(() => {
@@ -101,12 +96,9 @@ const mainNavItems = computed<NavItem[]>(() => {
             icon:  Users,
             roles: ['admin'],
         },
-        {
-            title: 'Student Management',
-            href:  safeRoute('students.index'),
-            icon:  GraduationCap,
-            roles: ['admin'],
-        },
+        // NOTE: "Student Management" (students.index) has been removed.
+        // Student records are now managed through Student Fee Management.
+        // Archived students are accessed through the Archives page.
         {
             title: 'Archives',
             href:  safeRoute('students.archive'),
@@ -143,7 +135,6 @@ const mainNavItems = computed<NavItem[]>(() => {
         },
     ];
 
-    // Filter to only the items that belong to the current user's role.
     return items.filter((item) => {
         if (!item.roles) return true;
         return item.roles.includes(role);
