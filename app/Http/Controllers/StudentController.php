@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
+use App\Models\User;
 use App\Models\Payment;
 use App\Models\StudentStatusLog;
 use App\Models\Workflow;
@@ -124,7 +125,12 @@ class StudentController extends Controller
 
         $fromStatus = $student->enrollment_status;
 
+        // Update both the student's enrollment status and the user's status
         $student->update(['enrollment_status' => 'active']);
+        
+        if ($student->user) {
+            $student->user->update(['status' => User::STATUS_ACTIVE]);
+        }
 
         // Write the audit log
         StudentStatusLog::create([
