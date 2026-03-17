@@ -79,6 +79,14 @@ class Student extends Model
         return $this->morphMany(AccountingTransaction::class, 'transactionable');
     }
 
+    /** Full audit trail of every status change for this student. */
+    public function statusLogs(): HasMany
+    {
+        return $this->hasMany(StudentStatusLog::class, 'student_id')
+                    ->with('changedBy')
+                    ->orderByDesc('created_at');
+    }
+
     // =========================================================================
     // ACCESSORS
     // =========================================================================
@@ -149,4 +157,4 @@ class Student extends Model
     {
         return $query->whereHas('user', fn ($q) => $q->where('year_level', $yearLevel));
     }
-}   
+}

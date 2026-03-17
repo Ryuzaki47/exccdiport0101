@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Student;
 use App\Models\Payment;
+use App\Models\StudentStatusLog;
 use App\Models\Workflow;
 use App\Services\WorkflowService;
 use Illuminate\Http\Request;
@@ -99,6 +100,51 @@ class StudentController extends Controller
         ]);
     }
 
+    // ── REINSTATE — move dropped/inactive student back to active ─────────────
+    /**
+     * POST /students/{student}/reinstate
+     *
+     * Only students with status "dropped" or "inactive" may be reinstated.
+     * Graduated students must go through proper re-enrollment, not this route.
+     */
+    public function reinstate(Request $request, Student $student)
+    {
+        $reinstatable = ['dropped', 'inactive'];
+
+        if (! in_array($student->enrollment_status, $reinstatable)) {
+            return back()->with(
+                'error',
+                "Only dropped or inactive students can be reinstated. Current status: {$student->enrollment_status}."
+            );
+        }
+
+        $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $fromStatus = $student->enrollment_status;
+
+        $student->update(['enrollment_status' => 'active']);
+
+        // Write the audit log
+        StudentStatusLog::create([
+            'student_id'  => $student->id,
+            'changed_by'  => auth()->id(),
+            'from_status' => $fromStatus,
+            'to_status'   => 'active',
+            'reason'      => $request->input('reason'),
+            'action'      => 'reinstate',
+        ]);
+
+        $name = $student->user
+            ? "{$student->user->last_name}, {$student->user->first_name}"
+            : $student->student_id;
+
+        return back()->with('success', "{$name} has been reinstated and is now active.");
+    }
+
+    // ── CREATE / STORE ────────────────────────────────────────────────────────
+
     public function create(): Response
     {
         return Inertia::render('Students/Create');
@@ -117,12 +163,10 @@ class StudentController extends Controller
             'birthday'          => 'nullable|date',
             'phone'             => 'nullable|string',
             'address'           => 'nullable|string',
-            // FIX: total_balance removed — balance lives in accounts.balance only.
             'enrollment_status' => 'sometimes|in:pending,active,suspended,graduated,dropped,inactive',
             'user_id'           => 'nullable|exists:users,id',
         ]);
 
-        // If no user_id provided, create the User first with personal info
         if (empty($validated['user_id'])) {
             $user = \App\Models\User::create([
                 'email'          => $validated['email'],
@@ -146,8 +190,6 @@ class StudentController extends Controller
 
         $validated['enrollment_status'] = $validated['enrollment_status'] ?? 'pending';
 
-        // Remove personal data fields — these live in the User record.
-        // Remove total_balance — balance is now owned by accounts.balance.
         unset(
             $validated['last_name'],
             $validated['first_name'],
@@ -185,6 +227,8 @@ class StudentController extends Controller
             ->with('success', 'Student created successfully');
     }
 
+    // ── SHOW ──────────────────────────────────────────────────────────────────
+
     public function show($id): Response
     {
         $student = Student::with([
@@ -205,6 +249,8 @@ class StudentController extends Controller
             'activeWorkflow' => $activeWorkflow,
         ]);
     }
+
+    // ── STORE PAYMENT ─────────────────────────────────────────────────────────
 
     public function storePayment(Request $request, Student $student)
     {
@@ -232,6 +278,8 @@ class StudentController extends Controller
         return back()->with('success', 'Payment recorded successfully!');
     }
 
+    // ── EDIT / UPDATE ─────────────────────────────────────────────────────────
+
     public function edit(Student $student): Response
     {
         return Inertia::render('Students/Edit', ['student' => $student]);
@@ -250,12 +298,9 @@ class StudentController extends Controller
             'birthday'          => 'nullable|date',
             'phone'             => 'nullable|string|max:20',
             'address'           => 'nullable|string|max:500',
-            // FIX: total_balance removed — balance is computed by AccountService,
-            // not manually editable. Admins must use the payment recording flow.
             'enrollment_status' => 'sometimes|in:pending,active,suspended,graduated,dropped,inactive',
         ]);
 
-        // Update personal data on the related User record.
         if ($student->user) {
             $student->user->update([
                 'first_name'     => $validated['first_name'],
@@ -270,18 +315,30 @@ class StudentController extends Controller
             ]);
         }
 
-        // Update student-specific fields only.
-        $statusChanged = $student->enrollment_status !== ($validated['enrollment_status'] ?? $student->enrollment_status);
+        $newStatus     = $validated['enrollment_status'] ?? $student->enrollment_status;
+        $statusChanged = $student->enrollment_status !== $newStatus;
 
         $student->update([
             'student_id'        => $validated['student_id'],
-            'enrollment_status' => $validated['enrollment_status'] ?? $student->enrollment_status,
+            'enrollment_status' => $newStatus,
         ]);
 
-        if ($statusChanged && $student->enrollment_status === 'active') {
-            $activeWorkflow = $student->workflowInstances()->where('status', 'in_progress')->first();
-            if ($activeWorkflow) {
-                $activeWorkflow->update(['status' => 'completed', 'completed_at' => now()]);
+        // Log status change if it happened via the general edit form
+        if ($statusChanged) {
+            StudentStatusLog::create([
+                'student_id'  => $student->id,
+                'changed_by'  => auth()->id(),
+                'from_status' => $student->getOriginal('enrollment_status'),
+                'to_status'   => $newStatus,
+                'reason'      => null,
+                'action'      => 'manual_edit',
+            ]);
+
+            if ($newStatus === 'active') {
+                $activeWorkflow = $student->workflowInstances()->where('status', 'in_progress')->first();
+                if ($activeWorkflow) {
+                    $activeWorkflow->update(['status' => 'completed', 'completed_at' => now()]);
+                }
             }
         }
 
@@ -289,12 +346,16 @@ class StudentController extends Controller
             ->with('success', 'Student updated successfully!');
     }
 
+    // ── DESTROY ───────────────────────────────────────────────────────────────
+
     public function destroy(Student $student)
     {
         $student->delete();
         return redirect()->route('students.index')
             ->with('success', 'Student deleted successfully!');
     }
+
+    // ── STUDENT PROFILE (self-view) ───────────────────────────────────────────
 
     public function studentProfile(Request $request): Response
     {
@@ -324,6 +385,8 @@ class StudentController extends Controller
         ]);
     }
 
+    // ── WORKFLOW HELPERS ──────────────────────────────────────────────────────
+
     public function advanceWorkflow(Student $student)
     {
         $activeWorkflow = $student->workflowInstances()->where('status', 'in_progress')->first();
@@ -349,13 +412,11 @@ class StudentController extends Controller
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($instance) {
-                // Pick the most recent approval that has a decision (approved/rejected)
                 $decidedApproval = $instance->approvals
                     ->whereIn('status', ['approved', 'rejected'])
                     ->sortByDesc('approved_at')
                     ->first();
 
-                // Fall back to any approval if none decided yet
                 $anyApproval = $decidedApproval ?? $instance->approvals->first();
 
                 return [

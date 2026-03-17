@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
 interface Student {
@@ -63,6 +63,33 @@ const statusConfig: Record<string, { label: string; classes: string }> = {
 };
 
 const totalArchived = props.counts.graduated + props.counts.dropped + props.counts.inactive;
+
+// ── Reinstate modal ────────────────────────────────────────────────────────
+const reinstateModal = ref(false);
+const selectedStudent = ref<Student | null>(null);
+
+const reinstateForm = useForm({ reason: '' });
+
+const openReinstate = (student: Student) => {
+    selectedStudent.value = student;
+    reinstateForm.reset();
+    reinstateModal.value = true;
+};
+
+const closeReinstate = () => {
+    reinstateModal.value = false;
+    selectedStudent.value = null;
+};
+
+const submitReinstate = () => {
+    if (! selectedStudent.value) return;
+    reinstateForm.post(route('students.reinstate', selectedStudent.value.id), {
+        onSuccess: () => closeReinstate(),
+    });
+};
+
+const canReinstate = (student: Student) =>
+    ['dropped', 'inactive'].includes(student.enrollment_status);
 </script>
 
 <template>
@@ -114,7 +141,7 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="Search by name, ID, email, course…"
+                    placeholder="Search by name, ID, email…"
                     class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
                 <select
@@ -176,27 +203,11 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                                 </span>
                                 <span v-else class="text-gray-400 text-xs">{{ student.enrollment_status }}</span>
                             </td>
-                            <!-- Balance from accounts.balance — single source of truth -->
                             <td class="px-5 py-4 text-right text-gray-700">
                                 {{ formatCurrency(Math.abs(student.account?.balance ?? 0)) }}
                             </td>
                             <td class="px-5 py-4 text-gray-500">{{ formatDate(student.updated_at) }}</td>
 
-                            <!--
-                                ACTIONS — two buttons replacing the old single "View" link:
-
-                                Fee Details      → student-fees.show (user_id)
-                                  Opens the same rich detail page used in Student Fee Management:
-                                  personal info card, fee breakdown, payment terms progress,
-                                  payment history table, transaction history, Record Payment
-                                  dialog, and Export PDF. This gives archives the same full
-                                  view that active students have in Student Fee Management.
-
-                                Workflow History → students.workflow-history (student.id)
-                                  Opens the approval workflow timeline showing every workflow
-                                  this student has been through, who approved/rejected, and any
-                                  comments left by accounting staff.
-                            -->
                             <td class="px-5 py-4">
                                 <div class="flex items-center gap-2">
                                     <Link
@@ -209,8 +220,16 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                                         :href="route('students.workflow-history', student.id)"
                                         class="inline-flex items-center rounded-md bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-200 hover:bg-gray-100 transition-colors"
                                     >
-                                        Workflow History
+                                        Workflow
                                     </Link>
+                                    <!-- Reinstate — only for dropped or inactive -->
+                                    <button
+                                        v-if="canReinstate(student)"
+                                        @click="openReinstate(student)"
+                                        class="inline-flex items-center rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-200 hover:bg-green-100 transition-colors"
+                                    >
+                                        Reinstate
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -242,5 +261,68 @@ const totalArchived = props.counts.graduated + props.counts.dropped + props.coun
                 </div>
             </div>
         </div>
+
+        <!-- ── Reinstate Confirmation Modal ──────────────────────────────── -->
+        <Teleport to="body">
+            <div
+                v-if="reinstateModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                @click.self="closeReinstate"
+            >
+                <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between border-b px-6 py-4">
+                        <h2 class="text-base font-semibold text-gray-900">Reinstate Student</h2>
+                        <button @click="closeReinstate" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="px-6 py-5 space-y-4">
+                        <p class="text-sm text-gray-600">
+                            You are reinstating
+                            <span class="font-semibold text-gray-900">
+                                {{ selectedStudent?.user?.last_name }}, {{ selectedStudent?.user?.first_name }}
+                            </span>
+                            from
+                            <span class="font-medium capitalize text-red-600">{{ selectedStudent?.enrollment_status }}</span>
+                            back to
+                            <span class="font-medium text-green-600">Active</span>.
+                        </p>
+
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Reason <span class="text-gray-400">(optional)</span>
+                            </label>
+                            <textarea
+                                v-model="reinstateForm.reason"
+                                rows="3"
+                                placeholder="e.g. Student resolved financial obligations and returned to school."
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none resize-none"
+                            />
+                            <p v-if="reinstateForm.errors.reason" class="mt-1 text-xs text-red-500">
+                                {{ reinstateForm.errors.reason }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="flex justify-end gap-3 border-t px-6 py-4">
+                        <button
+                            @click="closeReinstate"
+                            class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            @click="submitReinstate"
+                            :disabled="reinstateForm.processing"
+                            class="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                        >
+                            {{ reinstateForm.processing ? 'Reinstating…' : 'Confirm Reinstate' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>

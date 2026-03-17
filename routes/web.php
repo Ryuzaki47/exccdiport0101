@@ -64,6 +64,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
         ->name('students.workflow-history');
     // Student Archives — graduated, dropped, and inactive students
     Route::get('students-archive', [StudentController::class, 'archive'])->name('students.archive');
+    Route::post('students/{student}/reinstate', [StudentController::class, 'reinstate'])
+        ->name('students.reinstate');
 });
 
 // ============================================
@@ -75,6 +77,8 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->prefix('studen
     Route::post('/store-student', [StudentFeeController::class, 'storeStudent'])->name('student-fees.store-student');
     Route::get('/create', [StudentFeeController::class, 'create'])->name('student-fees.create');
     Route::post('/', [StudentFeeController::class, 'store'])->name('student-fees.store');
+    Route::post('/{userId}/drop', [StudentFeeController::class, 'drop'])
+        ->name('student-fees.drop');
     Route::get('/{userId}', [StudentFeeController::class, 'show'])->name('student-fees.show');
     Route::get('/{userId}/edit', [StudentFeeController::class, 'edit'])->name('student-fees.edit');
     Route::put('/{userId}', [StudentFeeController::class, 'update'])->name('student-fees.update');

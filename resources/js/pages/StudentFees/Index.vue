@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Edit, Eye, Plus, Search, TrendingDown, TrendingUp, UserPlus } from 'lucide-vue-next';
+import { Edit, Eye, Plus, Search, TrendingDown, TrendingUp, UserPlus, UserX } from 'lucide-vue-next';
+import { useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 
 interface PaymentTerm {
@@ -191,6 +192,29 @@ const totalStudents = computed(() => props.students.data.length);
 const totalOutstanding = computed(() => props.students.data.reduce((sum, s) => sum + getRemainingBalance(s), 0));
 const fullyPaidCount = computed(() => props.students.data.filter((s) => getRemainingBalance(s) === 0).length);
 const behindCount = computed(() => props.students.data.filter((s) => getBalanceTimingStatus(s) === 'red').length);
+
+// ── Drop modal ─────────────────────────────────────────────────────────────
+const dropModal = ref(false);
+const selectedDropStudent = ref<Student | null>(null);
+const dropForm = useForm({ reason: '' });
+
+const openDrop = (student: Student) => {
+    selectedDropStudent.value = student;
+    dropForm.reset();
+    dropModal.value = true;
+};
+
+const closeDrop = () => {
+    dropModal.value = false;
+    selectedDropStudent.value = null;
+};
+
+const submitDrop = () => {
+    if (! selectedDropStudent.value) return;
+    dropForm.post(route('student-fees.drop', selectedDropStudent.value.id), {
+        onSuccess: () => closeDrop(),
+    });
+};
 </script>
 
 <template>
@@ -356,6 +380,15 @@ const behindCount = computed(() => props.students.data.filter((s) => getBalanceT
                                                 <Edit class="h-4 w-4" />
                                             </button>
                                         </Link>
+                                        <!-- Drop button — only for active/pending/suspended -->
+                                        <button
+                                            v-if="['active', 'pending', 'suspended'].includes(student.status)"
+                                            @click="openDrop(student)"
+                                            class="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50 hover:text-red-900"
+                                            title="Drop Student"
+                                        >
+                                            <UserX class="h-4 w-4" />
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -407,5 +440,61 @@ const behindCount = computed(() => props.students.data.filter((s) => getBalanceT
                 </div>
             </div>
         </div>
+
+        <!-- ── Drop Confirmation Modal ──────────────────────────────────────────── -->
+        <Teleport to="body">
+            <div
+                v-if="dropModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                @click.self="closeDrop"
+            >
+                <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
+                    <div class="flex items-center justify-between border-b px-6 py-4">
+                        <h2 class="text-base font-semibold text-gray-900">Drop Student</h2>
+                        <button @click="closeDrop" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                    </div>
+
+                    <div class="px-6 py-5 space-y-4">
+                        <p class="text-sm text-gray-600">
+                            You are marking
+                            <span class="font-semibold text-gray-900">{{ selectedDropStudent?.name }}</span>
+                            as <span class="font-medium text-red-600">Dropped</span>.
+                            This will move them to the Student Archives.
+                        </p>
+
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Reason <span class="text-gray-400">(optional)</span>
+                            </label>
+                            <textarea
+                                v-model="dropForm.reason"
+                                rows="3"
+                                placeholder="e.g. Student failed to complete payment obligations."
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none resize-none"
+                            />
+                            <p v-if="dropForm.errors.reason" class="mt-1 text-xs text-red-500">
+                                {{ dropForm.errors.reason }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-3 border-t px-6 py-4">
+                        <button
+                            @click="closeDrop"
+                            class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            @click="submitDrop"
+                            :disabled="dropForm.processing"
+                            class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                        >
+                            {{ dropForm.processing ? 'Dropping…' : 'Confirm Drop' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>

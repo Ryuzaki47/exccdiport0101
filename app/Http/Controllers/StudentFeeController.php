@@ -8,12 +8,14 @@ use App\Models\StudentAssessment;
 use App\Models\StudentPaymentTerm;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\StudentStatusLog;
 use App\Services\StudentPaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -970,6 +972,49 @@ class StudentFeeController extends Controller
         $filename = str_replace(['/', ' '], '-', $filename);
 
         return $pdf->download($filename);
+    }
+    
+    // ── DROP STUDENT — move active/pending student to dropped ────────────────
+    /**
+     * POST /student-fees/{userId}/drop
+     *
+     * Accessible from Student Fee Management.
+     * Only active or pending students can be dropped.
+     */
+    public function drop(Request $request, $userId)
+    {
+        $user = User::findOrFail($userId);
+        $student = Student::where('user_id', $userId)->firstOrFail();
+
+        $droppable = ['active', 'pending', 'suspended'];
+
+        if (! in_array($student->enrollment_status, $droppable)) {
+            return back()->with(
+                'error',
+                "Only active, pending, or suspended students can be dropped. Current status: {$student->enrollment_status}."
+            );
+        }
+
+        $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $fromStatus = $student->enrollment_status;
+
+        $student->update(['enrollment_status' => 'dropped']);
+
+        \App\Models\StudentStatusLog::create([
+            'student_id'  => $student->id,
+            'changed_by'  => auth()->id(),
+            'from_status' => $fromStatus,
+            'to_status'   => 'dropped',
+            'reason'      => $request->input('reason'),
+            'action'      => 'drop',
+        ]);
+
+        $name = "{$user->last_name}, {$user->first_name}";
+
+        return back()->with('success', "{$name} has been marked as Dropped.");
     }
 
     // =========================================================================
