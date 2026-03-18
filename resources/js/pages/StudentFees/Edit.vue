@@ -35,6 +35,7 @@ interface FeeLineItem {
 interface Assessment {
     id: number;
     assessment_number: string;
+    course: string | null;
     year_level: string;
     semester: string;
     school_year: string;
@@ -103,6 +104,22 @@ const seedFeeItems = (): FeeLineItem[] => {
     ].filter((r) => r.amount > 0);
 };
 
+    // ── FIX (Bug #5): Seed course from assessment.course, NOT student.course.
+    //
+    // assessment.course is the authoritative course this fee schedule was built for.
+    // student.course may differ if it was changed after the assessment was created.
+    // Using student.course would silently overwrite the assessed course on every save,
+    // defeating the course-tracking feature added to student_assessments.
+    const resolvedCourse = (): string => {
+        const fromAssessment = props.assessment.course?.trim();
+        if (fromAssessment && fromAssessment !== 'N/A') return fromAssessment;
+
+        const fromStudent = props.student.course?.trim();
+        if (fromStudent && fromStudent !== 'N/A') return fromStudent;
+
+        return '';
+    };
+
 const form = useForm({
     // ── Student profile ──────────────────────────────────────────────────────
     last_name:      props.student.last_name      ?? '',
@@ -112,8 +129,7 @@ const form = useForm({
     birthday:       props.student.birthday       ?? '',
     phone:          props.student.phone          ?? '',
     address:        props.student.address        ?? '',
-    course:         props.student.course && props.student.course !== 'N/A'
-                        ? props.student.course : '',
+    course:         resolvedCourse(),
     // ── Assessment term ──────────────────────────────────────────────────────
     year_level:     props.assessment.year_level  ?? '',
     semester:       props.assessment.semester    ?? '',

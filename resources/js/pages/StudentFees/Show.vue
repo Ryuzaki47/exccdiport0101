@@ -25,7 +25,7 @@ interface PaymentTerm {
 interface Props {
     student: any;
     assessment: any;
-    allAssessments: Array<{ id: number; assessment_number: string; semester: string; school_year: string; year_level: string }>;
+    allAssessments: Array<{ id: number; assessment_number: string; course: string | null; semester: string; school_year: string; year_level: string }>;
     transactions: any[];
     payments: any[];
     feeBreakdown: Array<{ category: string; total: number; items: number }>;
@@ -252,6 +252,14 @@ const loadMorePayments = () => {
 // user can pick which one to export. Defaults to the currently shown assessment.
 const selectedAssessmentId = ref<number | null>(props.assessment?.id ?? null);
 
+// FIX (Bug #4): Derive the currently-selected assessment metadata (including
+// course) from allAssessments so the course badge in the header updates when
+// the admin switches semesters in the selector — without a full page reload.
+const selectedAssessment = computed(() => {
+    if (!selectedAssessmentId.value) return props.assessment;
+    return props.allAssessments.find((a) => a.id === selectedAssessmentId.value) ?? props.assessment;
+});
+
 const exportUrl = computed(() => {
     const base = route('student-fees.export-pdf', props.student.id);
     return selectedAssessmentId.value ? `${base}?assessment_id=${selectedAssessmentId.value}` : base;
@@ -376,19 +384,20 @@ const getStudentStatusColor = (status: string) => {
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">{{ student.name }}</h1>
                         <p class="mt-0.5 text-sm text-gray-500">
-                            {{ student.account_id }} &middot; 
-                            <!-- Show assessment course (most authoritative) -->
+                            {{ student.account_id }} &middot;
+                            <!-- FIX (Bug #4): Use selectedAssessment so the course badge
+                                 updates live when admin switches semester in the selector. -->
                             <span class="font-medium">
-                                {{ assessment?.course || student.course || '—' }}
+                                {{ selectedAssessment?.course || student.course || '—' }}
                             </span>
-                            <!-- Badge if course was recently updated (changed from original) -->
-                            <span v-if="assessment?.course && assessment.course !== student.course" 
+                            <!-- Badge when assessment course differs from student profile course -->
+                            <span v-if="selectedAssessment?.course && selectedAssessment.course !== student.course"
                                   class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                                 Assessment Course
                             </span>
                             &middot;
                             <!-- Show assessment year_level (accurate) when available -->
-                            <span v-if="assessment?.year_level" class="font-medium text-blue-700">{{ assessment.year_level }}</span>
+                            <span v-if="selectedAssessment?.year_level" class="font-medium text-blue-700">{{ selectedAssessment.year_level }}</span>
                             <span v-else>{{ student.year_level }}</span>
                         </p>
                     </div>

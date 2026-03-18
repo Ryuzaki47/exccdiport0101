@@ -358,6 +358,10 @@ class StudentFeeController extends Controller
             ->get()
             ->map(fn ($a) => [
                 'id'               => $a->id,
+                // FIX (Bug #4): include course so Show.vue semester selector
+                // can display the correct course badge per assessment when
+                // switching between assessments with different courses.
+                'course'           => $a->course,
                 'semester'         => $a->semester,
                 'school_year'      => $a->school_year,
                 'year_level'       => $a->year_level,
@@ -697,21 +701,24 @@ class StudentFeeController extends Controller
 
             // Update the associated charge transaction to reflect new total.
             // Critical: This keeps AccountService::recalculate() accurate.
-            // Find by assessment_id in meta, or by amount proximity + creation time.
+            //
+            // FIX (Bug #3): Do NOT filter by status = 'pending'.
+            // After a partial payment the charge transaction status becomes 'partial'
+            // or 'paid'. Restricting to PENDING caused a silent miss and the balance
+            // stayed stale. We match on ALL statuses for charge kind.
             $chargeTransaction = Transaction::where('user_id', $userId)
                 ->where('kind', 'charge')
-                ->where('status', PaymentStatus::PENDING->value)
                 ->orderByDesc('created_at')
                 ->get()
                 ->first(function ($t) use ($assessment, $oldTotal) {
                     $meta = $t->meta ?? [];
-                    // Primary: match by assessment_id in meta
-                    if (isset($meta['assessment_id']) && $meta['assessment_id'] === $assessment->id) {
+                    // Primary: match by assessment_id stored in meta (int-safe cast)
+                    if (isset($meta['assessment_id']) && (int) $meta['assessment_id'] === (int) $assessment->id) {
                         return true;
                     }
-                    // Fallback: match by creation time (within 2 mins) and old amount
+                    // Fallback: creation time within 2 min + amount proximity
                     $createdDiff = abs($t->created_at->diffInSeconds($assessment->created_at));
-                    return $createdDiff < 120 && abs($t->amount - $oldTotal) < 0.01;
+                    return $createdDiff < 120 && abs((float) $t->amount - $oldTotal) < 0.01;
                 });
 
             if ($chargeTransaction) {
@@ -876,7 +883,11 @@ class StudentFeeController extends Controller
 
         $fromStatus = $student->enrollment_status;
 
+        // Update both records so every view stays consistent.
+        // students.enrollment_status — drives archive / reinstate logic.
+        // users.status              — drives Student Fee Management index filter.
         $student->update(['enrollment_status' => 'dropped']);
+        $user->update(['status' => User::STATUS_DROPPED]);
 
         StudentStatusLog::create([
             'student_id'  => $student->id,
@@ -962,11 +973,13 @@ class StudentFeeController extends Controller
             ]);
 
             // Only store student-specific data. Personal info is in the user record.
+            // NOTE: total_balance was dropped in migration
+            // 2026_03_16_034638_drop_total_balance_from_students_table.
+            // Balance is exclusively in accounts.balance via AccountService.
             Student::create([
                 'user_id'           => $user->id,
                 'student_id'        => $studentId,
                 'enrollment_status' => 'pending',
-                'total_balance'     => 0,
             ]);
 
             DB::commit();
