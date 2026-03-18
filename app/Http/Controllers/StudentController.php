@@ -414,7 +414,7 @@ class StudentController extends Controller
         $student->load('user');
 
         $workflows = $student->workflowInstances()
-            ->with(['workflow', 'approvals.approver'])
+            ->with(['workflow', 'approvals.approver', 'workflowable'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($instance) {
@@ -424,6 +424,18 @@ class StudentController extends Controller
                     ->first();
 
                 $anyApproval = $decidedApproval ?? $instance->approvals->first();
+
+                // Extract course from the workflowable entity if available
+                $course = null;
+                if ($instance->workflowable_type === 'App\\Models\\Transaction' && $instance->workflowable) {
+                    // Get the transaction's assessment data from metadata
+                    $transactionMeta = $instance->workflowable->meta ?? [];
+                    $course = $transactionMeta['course'] ?? null;
+                } elseif ($instance->workflowable_type === 'App\\Models\\Student' && $instance->workflowable) {
+                    // For student workflows, try to get course from the latest assessment
+                    $latestAssessment = $instance->workflowable->user?->latestAssessment;
+                    $course = $latestAssessment?->course;
+                }
 
                 return [
                     'id'            => $instance->id,
@@ -436,6 +448,7 @@ class StudentController extends Controller
                                         ? $anyApproval->approver->last_name . ', ' . $anyApproval->approver->first_name
                                         : null,
                     'comment'       => $anyApproval?->comments ?? null,
+                    'course'        => $course,
                     'created_at'    => $instance->created_at,
                     'updated_at'    => $instance->updated_at,
                     'completed_at'  => $instance->completed_at,

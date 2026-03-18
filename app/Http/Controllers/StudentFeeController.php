@@ -196,6 +196,7 @@ class StudentFeeController extends Controller
     {
         $base = $request->validate([
             'user_id'         => 'required|exists:users,id',
+            'course'          => 'required|string|max:255',
             'year_level'      => 'required|string',
             'semester'        => 'required|in:1st Sem,2nd Sem,Summer',
             'school_year'     => ['required', 'string', 'max:20', 'regex:/^\d{4}-\d{4}$/'],
@@ -263,9 +264,19 @@ class StudentFeeController extends Controller
                 ])->values()->toArray();
             }
 
+            // Archive any existing active assessments for the same year/semester combination.
+            // Ensures only ONE assessment per year/semester (prevents duplicates when admin corrects course selection).
+            StudentAssessment::where('user_id', $base['user_id'])
+                ->where('status', 'active')
+                ->where('year_level', $base['year_level'])
+                ->where('semester', $base['semester'])
+                ->where('school_year', $base['school_year'])
+                ->update(['status' => 'archived']);
+
             $assessment = StudentAssessment::create([
                 'user_id'           => $base['user_id'],
                 'assessment_number' => StudentAssessment::generateAssessmentNumber(),
+                'course'            => $base['course'],
                 'year_level'        => $base['year_level'],
                 'semester'          => $base['semester'],
                 'school_year'       => $base['school_year'],
@@ -291,6 +302,7 @@ class StudentFeeController extends Controller
                 'meta'      => [
                     'assessment_id'   => $assessment->id,
                     'assessment_type' => $base['assessment_type'],
+                    'course'          => $base['course'],
                     'description'     => $isIrregular
                         ? 'Irregular — ' . count($feeBreakdown) . ' subject(s)'
                         : "Tuition Fee — {$base['year_level']} {$base['semester']}",
@@ -302,6 +314,12 @@ class StudentFeeController extends Controller
             $this->createPaymentTerms($assessment, $grandTotal);
 
             $user = User::find($base['user_id']);
+            
+            // Update the student's course if it wasn't set or if a new one is being assigned
+            if ($base['course'] && (!$user->course || $user->course === 'N/A')) {
+                $user->update(['course' => $base['course']]);
+            }
+            
             \App\Services\AccountService::recalculate($user);
 
             DB::commit();
@@ -578,6 +596,7 @@ class StudentFeeController extends Controller
             'assessment'    => $assessment,
             'courses'       => $courses,
             'feeCategories' => config('fees.categories', []),
+            'presets'       => config('fees.presets', []),
         ]);
     }
 
@@ -634,6 +653,7 @@ class StudentFeeController extends Controller
             $grandTotal   = round($tuitionTotal + $otherTotal, 2);
 
             $assessment->update([
+                'course'           => $validated['course'],
                 'year_level'       => $validated['year_level'],
                 'semester'         => $validated['semester'],
                 'school_year'      => $validated['school_year'],
@@ -673,6 +693,16 @@ class StudentFeeController extends Controller
                     ]);
                 }
             }
+
+            // Archive any other active assessments for the same year/semester.
+            // Ensures only ONE assessment per year/semester combination (prevents course duplicates).
+            StudentAssessment::where('user_id', $userId)
+                ->where('status', 'active')
+                ->where('id', '!=', $assessment->id)
+                ->where('year_level', $validated['year_level'])
+                ->where('semester', $validated['semester'])
+                ->where('school_year', $validated['school_year'])
+                ->update(['status' => 'archived']);
 
             \App\Services\AccountService::recalculate($user);
 

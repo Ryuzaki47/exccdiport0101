@@ -166,7 +166,8 @@ return [
 
         // ─────────────────────────────────────────────────────────────────────
         // BS Electronics Engineering Technology
-        // Slightly higher lab fees due to electronics lab equipment
+        // Totals: 1Y1S=18,600 | 1Y2S=16,200 | 2Y1S=18,000 | 2Y2S=17,300
+        //         3Y1S=19,600 | 3Y2S=18,400 | 4Y1S=20,700 | 4Y2S=19,700
         // ─────────────────────────────────────────────────────────────────────
         'BS Electronics Engineering Technology' => [
             '1st Year' => [
@@ -180,6 +181,7 @@ return [
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
                     ['category' => 'Other',         'name' => 'Medical/Dental Fee',   'amount' =>   400.00],
+                    // Total = 18,600
                 ],
                 '2nd Sem' => [
                     ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 11600.00],
@@ -190,6 +192,7 @@ return [
                     ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 16,200
                 ],
             ],
             '2nd Year' => [
@@ -202,6 +205,7 @@ return [
                     ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 18,000
                 ],
                 '2nd Sem' => [
                     ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 12700.00],
@@ -212,6 +216,7 @@ return [
                     ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 17,300
                 ],
             ],
             '3rd Year' => [
@@ -224,6 +229,7 @@ return [
                     ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 19,600
                 ],
                 '2nd Sem' => [
                     ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 13400.00],
@@ -234,6 +240,7 @@ return [
                     ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 18,400
                 ],
             ],
             '4th Year' => [
@@ -246,6 +253,7 @@ return [
                     ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 20,700
                 ],
                 '2nd Sem' => [
                     ['category' => 'Tuition',       'name' => 'Tuition Fee',          'amount' => 14500.00],
@@ -256,6 +264,7 @@ return [
                     ['category' => 'Miscellaneous', 'name' => 'Library Fee',          'amount' =>   200.00],
                     ['category' => 'Other',         'name' => 'Student Activity Fee', 'amount' =>   500.00],
                     ['category' => 'Other',         'name' => 'ICT Fee',              'amount' =>   600.00],
+                    // Total = 19,700
                 ],
             ],
         ],

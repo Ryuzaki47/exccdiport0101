@@ -11,6 +11,7 @@ interface Workflow {
     current_step: string;
     approver_name: string | null;
     comment: string | null;
+    course: string | null;
     created_at: string;
     updated_at: string;
     completed_at: string | null;
@@ -139,6 +140,10 @@ const badgeClass = (status: string): string => {
                                         <p class="font-semibold">
                                             {{ formatDate(workflow.completed_at ?? workflow.updated_at) }}
                                         </p>
+                                    </div>
+                                    <div v-if="workflow.course">
+                                        <p class="text-gray-500">Course</p>
+                                        <p class="font-semibold">{{ workflow.course }}</p>
                                     </div>
                                 </div>
 

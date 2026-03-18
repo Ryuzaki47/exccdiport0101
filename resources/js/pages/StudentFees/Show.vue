@@ -376,7 +376,17 @@ const getStudentStatusColor = (status: string) => {
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">{{ student.name }}</h1>
                         <p class="mt-0.5 text-sm text-gray-500">
-                            {{ student.account_id }} &middot; {{ student.course }} &middot;
+                            {{ student.account_id }} &middot; 
+                            <!-- Show assessment course (most authoritative) -->
+                            <span class="font-medium">
+                                {{ assessment?.course || student.course || '—' }}
+                            </span>
+                            <!-- Badge if course was recently updated (changed from original) -->
+                            <span v-if="assessment?.course && assessment.course !== student.course" 
+                                  class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                                Assessment Course
+                            </span>
+                            &middot;
                             <!-- Show assessment year_level (accurate) when available -->
                             <span v-if="assessment?.year_level" class="font-medium text-blue-700">{{ assessment.year_level }}</span>
                             <span v-else>{{ student.year_level }}</span>
@@ -605,10 +615,22 @@ const getStudentStatusColor = (status: string) => {
             <!-- ── Fee Breakdown ── -->
             <Card>
                 <CardHeader>
-                    <CardTitle>Fee Breakdown</CardTitle>
-                    <CardDescription>
-                        Assessment for {{ assessment?.year_level }} — {{ assessment?.semester }} {{ assessment?.school_year }}
-                    </CardDescription>
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <CardTitle>Fee Breakdown</CardTitle>
+                            <CardDescription>
+                                Assessment for {{ assessment?.year_level }} — {{ assessment?.semester }} {{ assessment?.school_year }}
+                            </CardDescription>
+                        </div>
+                        <div class="text-right">
+                            <div class="inline-flex flex-col items-end gap-1">
+                                <span v-if="assessment?.course" class="text-xs font-semibold text-gray-600">Course:</span>
+                                <span v-if="assessment?.course" class="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                                    {{ assessment.course }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent class="space-y-5">
                     <!-- Individual fee line items -->

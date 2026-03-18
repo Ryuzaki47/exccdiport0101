@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Save, Plus, Trash2, UserCog } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,11 +45,26 @@ interface Assessment {
     status: string;
 }
 
+interface Preset {
+    category: string;
+    name: string;
+    amount: number;
+}
+
+interface Presets {
+    [course: string]: {
+        [yearLevel: string]: {
+            [semester: string]: Preset[];
+        };
+    };
+}
+
 interface Props {
     student:        Student;
     assessment:     Assessment;
     courses:        string[];
     feeCategories:  string[];
+    presets:        Presets;
 }
 
 const props = defineProps<Props>();
@@ -106,6 +121,38 @@ const form = useForm({
     // ── Fee breakdown (sent as fee_items[]) ──────────────────────────────────
     fee_items:      seedFeeItems(),
 });
+
+// ─── Update fee items when course/semester changes ───────────────────────────
+
+function updateFeeItemsFromPreset() {
+    const course = form.course.trim();
+    const yearLevel = form.year_level.trim();
+    const semester = form.semester.trim();
+
+    if (!course || !yearLevel || !semester) return;
+
+    const coursePresets = props.presets[course]?.[yearLevel]?.[semester];
+    if (coursePresets && Array.isArray(coursePresets)) {
+        form.fee_items = coursePresets.map((item) => ({
+            category: item.category ?? 'Tuition',
+            name:     item.name     ?? '',
+            amount:   Number(item.amount) || 0,
+        }));
+    }
+}
+
+// Watch for changes to course, year_level, or semester and update fee items
+watch(
+    () => [form.course, form.year_level, form.semester],
+    () => {
+        updateFeeItemsFromPreset();
+    },
+);
+
+// Event handler for @change on dropdowns (faster feedback)
+const handleCourseChange = () => {
+    updateFeeItemsFromPreset();
+}
 
 // ─── Fee row management ───────────────────────────────────────────────────────
 
@@ -316,6 +363,7 @@ const err = (field: string): string =>
                                     v-model="form.course"
                                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                     :class="err('course') ? 'border-red-400' : ''"
+                                    @change="handleCourseChange"
                                 >
                                     <option value="">— Select Course —</option>
                                     <option v-for="c in courses" :key="c" :value="c">{{ c }}</option>
@@ -331,6 +379,7 @@ const err = (field: string): string =>
                                     id="profile_year_level"
                                     v-model="form.year_level"
                                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                                    @change="handleCourseChange"
                                 >
                                     <option value="">— Select Year Level —</option>
                                     <option v-for="y in yearLevels" :key="y" :value="y">{{ y }}</option>
@@ -356,6 +405,7 @@ const err = (field: string): string =>
                                 v-model="form.semester"
                                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                 :class="err('semester') ? 'border-red-400' : ''"
+                                @change="handleCourseChange"
                             >
                                 <option value="">Select semester</option>
                                 <option v-for="s in semesters" :key="s" :value="s">{{ s }}</option>

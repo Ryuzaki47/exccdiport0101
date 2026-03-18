@@ -13,6 +13,7 @@ class StudentAssessment extends Model
     protected $fillable = [
         'user_id',
         'assessment_number',
+        'course',
         'year_level',
         'semester',
         'school_year',
