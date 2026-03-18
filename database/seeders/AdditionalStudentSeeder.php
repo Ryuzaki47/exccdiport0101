@@ -496,7 +496,6 @@ class AdditionalStudentSeeder extends Seeder
             [
                 'student_id'       => $user->account_id,
                 'enrollment_status' => 'active',
-                'total_balance'    => 0,
             ]
         );
     }

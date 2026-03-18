@@ -225,7 +225,6 @@ class ComprehensiveUserSeeder extends Seeder
                 'user_id' => $user->id,
                 'student_id' => $studentId,
                 'enrollment_status' => $studentStatusMap[$data['status']],
-                'total_balance' => $data['balance'],
             ]);
 
             $studentNumber++;

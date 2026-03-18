@@ -157,7 +157,6 @@ class StudentFirstPaymentSeeder extends Seeder
             'user_id'          => $user->id,
             'student_id'       => $user->account_id,  // CCDI student ID (e.g. "2026-0200")
             'enrollment_status' => 'active',           // enum: active|pending|suspended|graduated
-            'total_balance'    => 0,
         ]);
     }
 

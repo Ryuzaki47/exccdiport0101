@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Carbon\Carbon;
 use Database\Seeders\Traits\GetAdminUserTrait;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Models\Fee;
 use App\Models\StudentAssessment;
@@ -114,19 +115,21 @@ class ComprehensiveAssessmentSeeder extends Seeder
         $created = 0;
         $skipped = 0;
 
-        foreach ($students as $student) {
-            if (empty($student->year_level)) { $skipped++; continue; }
+        DB::transaction(function () use ($students, $semesters, $adminId, &$created, &$skipped) {
+            foreach ($students as $student) {
+                if (empty($student->year_level)) { $skipped++; continue; }
 
-            $totals = $this->courseTotals[$student->course ?? ''] ?? $this->fallbackTotals;
+                $totals = $this->courseTotals[$student->course ?? ''] ?? $this->fallbackTotals;
 
-            foreach ($semesters as $semester) {
-                $amount = $totals[$student->year_level][$semester] ?? null;
-                if ($amount === null) { $skipped++; continue; }
+                foreach ($semesters as $semester) {
+                    $amount = $totals[$student->year_level][$semester] ?? null;
+                    if ($amount === null) { $skipped++; continue; }
 
-                $this->createStudentAssessment($student, $semester, $adminId, (float) $amount);
-                $created++;
+                    $this->createStudentAssessment($student, $semester, $adminId, (float) $amount);
+                    $created++;
+                }
             }
-        }
+        });
 
         $this->command->info("✓ Created {$created} assessments. Skipped {$skipped}.");
         $this->command->newLine();

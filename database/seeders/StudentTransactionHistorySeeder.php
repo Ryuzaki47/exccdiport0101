@@ -236,7 +236,6 @@ class StudentTransactionHistorySeeder extends Seeder
             'student_id' => $accountId,
             'student_number' => 'STU-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT),
             'enrollment_status' => 'active',
-            'total_balance' => 0,
         ]);
 
         return $student;
