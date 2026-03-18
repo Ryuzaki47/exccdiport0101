@@ -670,6 +670,7 @@ class StudentFeeController extends Controller
 
             // Rescale each term's amount + balance proportionally
             $terms = $assessment->paymentTerms()->orderBy('term_order')->get();
+            $oldTotal = 0;  // For transaction lookup fallback
             if ($terms->isNotEmpty()) {
                 $oldTotal     = $terms->sum('amount');
                 $scaleFactor  = $oldTotal > 0 ? ($grandTotal / $oldTotal) : 1;
@@ -692,6 +693,55 @@ class StudentFeeController extends Controller
                         'balance' => $newBalance,
                     ]);
                 }
+            }
+
+            // Update the associated charge transaction to reflect new total.
+            // Critical: This keeps AccountService::recalculate() accurate.
+            // Find by assessment_id in meta, or by amount proximity + creation time.
+            $chargeTransaction = Transaction::where('user_id', $userId)
+                ->where('kind', 'charge')
+                ->where('status', PaymentStatus::PENDING->value)
+                ->orderByDesc('created_at')
+                ->get()
+                ->first(function ($t) use ($assessment, $oldTotal) {
+                    $meta = $t->meta ?? [];
+                    // Primary: match by assessment_id in meta
+                    if (isset($meta['assessment_id']) && $meta['assessment_id'] === $assessment->id) {
+                        return true;
+                    }
+                    // Fallback: match by creation time (within 2 mins) and old amount
+                    $createdDiff = abs($t->created_at->diffInSeconds($assessment->created_at));
+                    return $createdDiff < 120 && abs($t->amount - $oldTotal) < 0.01;
+                });
+
+            if ($chargeTransaction) {
+                $meta = $chargeTransaction->meta ?? [];
+                $meta['course'] = $validated['course'];
+                $meta['assessment_id'] = $assessment->id;  // Ensure it's set
+                $meta['items'] = $feeItems->map(fn ($item) => [
+                    'category' => $item['category'],
+                    'name'     => $item['name'],
+                    'amount'   => (float) $item['amount'],
+                ])->toArray();
+
+                $chargeTransaction->update([
+                    'amount' => $grandTotal,
+                    'meta'   => $meta,
+                ]);
+                
+                Log::info('Updated charge transaction for assessment update', [
+                    'user_id' => $userId,
+                    'assessment_id' => $assessment->id,
+                    'old_amount' => $oldTotal,
+                    'new_amount' => $grandTotal,
+                    'transaction_id' => $chargeTransaction->id,
+                ]);
+            } else {
+                Log::warning('Could not find charge transaction to update', [
+                    'user_id' => $userId,
+                    'assessment_id' => $assessment->id,
+                    'old_amount' => $oldTotal,
+                ]);
             }
 
             // Archive any other active assessments for the same year/semester.
