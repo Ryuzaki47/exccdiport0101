@@ -34,6 +34,21 @@ const breadcrumbs = [
     { title: 'Admin Users', href: route('users.index') },
 ];
 
+const adminTypes = [
+    {
+        id: 'Administrator',
+        title: 'Administrator',
+        description: 'Full system administrator with all permissions',
+        icon: '👤',
+    },
+    {
+        id: 'Accounting',
+        title: 'Accounting',
+        description: 'Accounting department user with financial permissions',
+        icon: '💰',
+    },
+];
+
 const departmentBadge = (dept: string) => {
     const map: Record<string, string> = {
         Administrator: 'bg-purple-100 text-purple-800',
@@ -67,6 +82,19 @@ const reactivate = (id: number) => {
                 <Link v-if="canManage" :href="route('users.create')">
                     <Button>+ Create Admin</Button>
                 </Link>
+            </div>
+
+            <!-- Department Cards -->
+            <div class="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div
+                    v-for="type in adminTypes"
+                    :key="type.id"
+                    class="rounded-lg border-2 border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+                >
+                    <div class="mb-4 text-4xl">{{ type.icon }}</div>
+                    <h3 class="mb-2 text-lg font-bold text-gray-900">{{ type.title }}</h3>
+                    <p class="text-sm text-gray-600">{{ type.description }}</p>
+                </div>
             </div>
 
             <!-- Stats -->
