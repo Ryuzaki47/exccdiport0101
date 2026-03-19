@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Enums\UserRoleEnum;
-use App\Enums\AdminTypeEnum;
 
 class User extends Authenticatable
 {
@@ -19,11 +18,6 @@ class User extends Authenticatable
     const STATUS_ACTIVE = 'active';
     const STATUS_GRADUATED = 'graduated';
     const STATUS_DROPPED = 'dropped';
-
-    // Admin type constants
-    const ADMIN_TYPE_SUPER = 'super';
-    const ADMIN_TYPE_MANAGER = 'manager';
-    const ADMIN_TYPE_OPERATOR = 'operator';
 
     protected $fillable = [
         'last_name',
@@ -45,7 +39,6 @@ class User extends Authenticatable
         'is_active',
         'permissions',
         'department',
-        'admin_type',
         'created_by',
         'updated_by',
         'last_login_at',
@@ -184,13 +177,7 @@ class User extends Authenticatable
         return $this->role === UserRoleEnum::ADMIN;
     }
 
-    /**
-     * Check if user is a super admin
-     */
-    public function isSuperAdmin(): bool
-    {
-        return $this->isAdmin() && $this->admin_type === self::ADMIN_TYPE_SUPER;
-    }
+
 
     /**
      * Check if user has accepted terms & conditions
@@ -218,22 +205,9 @@ class User extends Authenticatable
             return false;
         }
 
-        // Super admins have all permissions
-        if ($this->isSuperAdmin()) {
-            return true;
-        }
-
-        // Check role-based permissions (implement based on admin_type)
+        // All admins have all permissions
         if ($this->isAdmin()) {
-            // Define permissions by admin type
-            $permissionsByType = [
-                self::ADMIN_TYPE_SUPER => ['*'], // all permissions
-                self::ADMIN_TYPE_MANAGER => ['manage_fees', 'manage_workflows', 'approve_payments', 'view_users', 'manage_admins', 'view_audit_logs'],
-                self::ADMIN_TYPE_OPERATOR => ['approve_payments', 'view_users', 'view_audit_logs'],
-            ];
-
-            $allowedPermissions = $permissionsByType[$this->admin_type] ?? [];
-            return in_array('*', $allowedPermissions) || in_array($permission, $allowedPermissions);
+            return true;
         }
 
         return false;
@@ -305,7 +279,6 @@ class User extends Authenticatable
             'middle_initial' => 'nullable|string|max:1',
             'email' => "required|email|{$uniqueEmail}",
             'password' => $userId ? 'nullable|min:8|confirmed' : 'required|min:8|confirmed',
-            'admin_type' => 'required|in:super,manager,operator',
             'department' => 'nullable|string|max:100',
             'is_active' => 'boolean',
         ];

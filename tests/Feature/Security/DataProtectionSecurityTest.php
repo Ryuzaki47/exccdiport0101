@@ -20,7 +20,6 @@ class DataProtectionSecurityTest extends TestCase
 
         $this->admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
             'is_active' => true,
             'terms_accepted_at' => now(),
         ]);
@@ -81,7 +80,6 @@ class DataProtectionSecurityTest extends TestCase
                 'email' => 'test@test.com',
                 'password' => 'TestPassword123!',
                 'password_confirmation' => 'TestPassword123!',
-                'admin_type' => 'manager',
             ]);
 
         // Password in request body, not URL - GOOD
@@ -207,7 +205,6 @@ class DataProtectionSecurityTest extends TestCase
         // - first_name, last_name, middle_initial ✓ Needed for identification
         // - email ✓ Needed for login
         // - password ✓ Needed for authentication
-        // - admin_type ✓ Needed for authorization
         // - department ✓ Optional, helps organization
         // - is_active ✓ Needed for status control
         // - terms_accepted_at ✓ Needed for compliance

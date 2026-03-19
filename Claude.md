@@ -32,6 +32,65 @@ Your core expertise:
 
 ---
 
+## Workflow Orchestration (Boris Cherny Rules)
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+---
+
+## Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+---
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Only touch what's necessary. No side effects with new bugs.
+
+---
+
 ## Token Efficiency Rules (Apply to Every Session)
 
 These rules exist because long agentic sessions consume tokens 10× faster than necessary. Follow them without being asked.
@@ -40,30 +99,47 @@ These rules exist because long agentic sessions consume tokens 10× faster than 
 When fixing a mistake, edit the original file in place. Never create `_v2` files or add corrected code below existing wrong code. Replace; don't accumulate.
 
 ### 2 — Start fresh on context overload
-If the conversation history is getting large and you're re-reading the same context repeatedly, summarise the current state and continue from that summary. Don't keep the full history alive.
+If the conversation history is getting large and you're re-reading the same context repeatedly, summarise the current state and continue from that summary. Don't keep the full history alive. Start fresh every 15–20 messages — long chats are expensive chats.
 
 ### 3 — Batch related changes
-Never make one file change per message when multiple files need to change together. A controller change and its corresponding Vue page change are one logical unit — ship them together.
+Never make one file change per message when multiple files need to change together. A controller change and its corresponding Vue page change are one logical unit — ship them together. Three changes. One message. Always.
 
 ### 4 — Use Projects / persistent context
-Recurring files (migrations, models, route lists) don't need to be re-read on every turn. Reference them by name once they've been read. Re-read only when verifying a specific detail.
+Recurring files (migrations, models, route lists) don't need to be re-read on every turn. Reference them by name once they've been read. Re-read only when verifying a specific detail. Upload once. Stop paying every time.
 
 ### 5 — Toggle tools off when not needed
-Don't run web search for questions answerable from project files. Don't run `php artisan` commands speculatively. Only use tools when the task explicitly requires them.
+Don't run web search for questions answerable from project files. Don't run `php artisan` commands speculatively. Only use tools when the task explicitly requires them. If you didn't turn it on, turn it off.
 
 ### 6 — Pick the right model for the task
+
 | Task | Right approach |
 |---|---|
-| Reading a file, syntax fix | Minimal context, no elaboration |
-| Architecture decision | Full analysis before any code |
-| Debugging a runtime error | Read the relevant files first, then diagnose |
-| New feature | Propose architecture, confirm, then implement |
+| Reading a file, syntax fix | Minimal context, no elaboration — use Haiku |
+| Architecture decision | Full analysis before any code — use Opus |
+| Debugging a runtime error | Read the relevant files first, then diagnose — use Sonnet |
+| New feature | Propose architecture, confirm, then implement — use Sonnet/Opus |
+
+> **Model selection guide:**
+>
+> | Task Complexity | Model | Cost |
+> |---|---|---|
+> | Quick answers, brainstorms, formatting, grammar | **Haiku** | Very Low |
+> | Content writing, analysis, coding, drafts | **Sonnet** | Medium |
+> | Deep research, hard logic, long document review | **Opus** | High |
+>
+> *"Haiku for drafts. Sonnet for real work. Opus for the hard stuff."*
 
 ### 7 — Split large sessions
-A session that touches more than ~8 files is too large. Break it into: (1) audit + plan, (2) implementation, (3) verification. Each session starts with a fresh summary of where things stand.
+A session that touches more than ~8 files is too large. Break it into: (1) audit + plan, (2) implementation, (3) verification. Each session starts with a fresh summary of where things stand. Don't sprint. Pace yourself.
 
 ### 8 — Always state what you're about to do before doing it
 One sentence of intent before each file write. This prevents re-doing work and keeps the session auditable.
+
+### 9 — Use Haiku for simple in-session tasks
+Grammar checks, renaming variables, quick formatting fixes, translating comments — all Haiku. Reserve Sonnet/Opus budget for actual architectural and logic work. Haiku all day for simple work frees up 50–70% of budget for tasks that actually need bigger models.
+
+### 10 — Set up memory and custom instructions once
+Every conversation started without context burns setup messages re-explaining the project. Use Projects with this CLAUDE.md pinned. Set it once. It runs forever.
 
 ---
 
@@ -181,7 +257,7 @@ $user->role->value === 'student'
 $user->role === 'student'
 ```
 
-Admin sub-types (`super`, `manager`, `operator`) live on `users.admin_type` — separate from role.
+Admin sub-types have been removed from the system — all admins now have equal permissions.
 
 Route middleware usage: `->middleware(['auth', 'verified', 'role:admin'])` etc.
 
@@ -240,7 +316,7 @@ The `auth.user` object includes these fields (set in `HandleInertiaRequests`):
 - `id`, `name` (computed "LAST, First MI." format), `first_name`, `last_name`, `middle_initial`
 - `email`, `role` (string value), `avatar` (full URL or null), `profile_picture` (raw path)
 - `account_id`, `course`, `year_level`, `is_irregular`, `birthday`, `phone`, `address`
-- `faculty`, `status`, `admin_type`, `department`, `is_active`
+- `faculty`, `status`, `department`, `is_active`
 
 ---
 
@@ -447,7 +523,6 @@ Tailwind CSS v4. Utility classes only. No custom CSS unless absolutely required.
 ```
 User
   ├── role: UserRoleEnum (admin | accounting | student)  ← CAST ENUM
-  ├── admin_type: string (super | manager | operator)    ← admin only
   ├── account_id: string (nullable, unique)              ← student account number
   ├── profile_picture: string (nullable)                 ← raw storage path
   ├── hasOne Student       (via students.user_id)
@@ -534,6 +609,9 @@ Workflow → WorkflowInstance → WorkflowApproval
 | Reading `user.avatar` as a raw path | It's already a full URL — use directly in `<img :src>` |
 | Fetching `StudentPaymentTerm` outside of `StudentAssessment` scope | Always query through assessment for correct isolation |
 | Assuming `name` column exists on `users` | It was dropped — use `first_name` + `last_name` |
+| Stacking follow-up messages when something is wrong | Edit the original prompt and regenerate instead |
+| Running 8+ file changes in one session | Split into audit → implement → verify sessions |
+| Using Opus/Sonnet for a simple rename or grammar fix | Use Haiku — save the budget for real work |
 
 ---
 
@@ -552,3 +630,14 @@ Before submitting any code:
 - [ ] Balance sourced from `StudentPaymentTerm.balance`, not transaction sum
 - [ ] No debug routes or scripts included in deliverable
 - [ ] `storage:link` noted if new file uploads are involved
+
+---
+
+## Session Habits (Token & Cost Control)
+
+- [ ] Quick tasks: Edit prompt, don't stack messages
+- [ ] Deep sessions: Split chats every 15–20 messages
+- [ ] Recurring files: Keep in Project — don't re-upload every session
+- [ ] All tasks: Pick right model — Haiku / Sonnet / Opus
+- [ ] Large changes (8+ files): Split into audit → implement → verify
+- [ ] Don't sprint: Spread heavy work across 2–3 sessions per day

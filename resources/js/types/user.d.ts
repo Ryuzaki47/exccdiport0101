@@ -15,7 +15,6 @@ export interface User {
     is_active?: boolean;
     faculty?: string | null;
     department?: string | null;
-    admin_type?: 'super' | 'manager' | 'operator' | null;
 
     created_at?: string;
     updated_at?: string;

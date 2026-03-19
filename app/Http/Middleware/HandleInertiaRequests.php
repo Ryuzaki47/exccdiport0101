@@ -86,7 +86,6 @@ class HandleInertiaRequests extends Middleware
             'address'         => $user->address,
             'faculty'         => $user->faculty,
             'status'          => $user->status,
-            'admin_type'      => $user->admin_type,
             'department'      => $user->department,
             'is_active'       => $user->is_active,
             'email_verified_at' => $user->email_verified_at,

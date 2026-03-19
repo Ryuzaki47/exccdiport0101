@@ -22,21 +22,18 @@ class AuthorizationSecurityTest extends TestCase
 
         $this->superAdmin = User::factory()->create([
             'role'              => UserRoleEnum::ADMIN,
-            'admin_type'        => 'super',
             'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
         $this->manager = User::factory()->create([
             'role'              => UserRoleEnum::ADMIN,
-            'admin_type'        => 'manager',
             'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
 
         $this->operator = User::factory()->create([
             'role'              => UserRoleEnum::ADMIN,
-            'admin_type'        => 'operator',
             'is_active'         => true,
             'terms_accepted_at' => now(),
         ]);
@@ -53,7 +50,6 @@ class AuthorizationSecurityTest extends TestCase
             'first_name' => 'Elevated',
             'last_name'  => 'Manager',
             'email'      => $this->manager->email,
-            'admin_type' => 'super',
         ];
 
         $response = $this->actingAs($this->manager)
@@ -64,22 +60,12 @@ class AuthorizationSecurityTest extends TestCase
     }
 
     /** @test */
-    public function non_super_admin_cannot_grant_permissions(): void
+    public function all_admins_have_equal_permissions(): void
     {
-        $targetAdmin = User::factory()->create([
-            'role'       => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
-        ]);
-
-        $response = $this->actingAs($this->manager)
-            ->put(route('users.update', $targetAdmin->id), [
-                'first_name' => $targetAdmin->first_name,
-                'last_name'  => $targetAdmin->last_name,
-                'email'      => $targetAdmin->email,
-                'admin_type' => 'super',
-            ]);
-
-        $response->assertStatus(403);
+        // After admin_type removal, all active admins have identical permissions
+        $this->assertTrue($this->superAdmin->hasPermission('users.view'));
+        $this->assertTrue($this->manager->hasPermission('users.view'));
+        $this->assertTrue($this->operator->hasPermission('users.view'));
     }
 
     /** @test */
@@ -98,7 +84,6 @@ class AuthorizationSecurityTest extends TestCase
     {
         $inactiveAdmin = User::factory()->create([
             'role'       => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
             'is_active'  => false,
         ]);
 
@@ -113,7 +98,6 @@ class AuthorizationSecurityTest extends TestCase
     {
         $secondAdmin = User::factory()->create([
             'role'       => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
         ]);
 
         $response = $this->actingAs($this->operator)
@@ -139,22 +123,19 @@ class AuthorizationSecurityTest extends TestCase
     }
 
     /** @test */
-    public function operator_cannot_perform_manager_actions(): void
+    public function all_active_admins_can_perform_admin_actions(): void
     {
-        $targetAdmin = User::factory()->create([
-            'role'       => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
-        ]);
-
         $response = $this->actingAs($this->operator)
-            ->get(route('users.create'));
-        $response->assertStatus(403);
+            ->get(route('users.index'));
+        $response->assertStatus(200);
 
-        $response = $this->actingAs($this->operator)
-            ->post(route('admin.users.deactivate', $targetAdmin->id));
-        $response->assertStatus(403);
+        $response = $this->actingAs($this->manager)
+            ->get(route('users.index'));
+        $response->assertStatus(200);
 
-        $this->assertTrue($this->operator->hasPermission('approve_payments'));
+        $response = $this->actingAs($this->superAdmin)
+            ->get(route('users.index'));
+        $response->assertStatus(200);
     }
 
     /** @test */
@@ -170,43 +151,29 @@ class AuthorizationSecurityTest extends TestCase
     public function role_change_only_by_super_admin(): void
     {
         $targetAdmin = User::factory()->create([
-            'role'       => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
-            'is_active'  => true,
-        ]);
-
+            'role'  admin_can_update_own_profile(): void
+    {
         $response = $this->actingAs($this->manager)
-            ->put(route('users.update', $targetAdmin->id), [
-                'first_name' => 'Test',
-                'last_name'  => 'User',
-                'email'      => $targetAdmin->email,
-                'admin_type' => 'manager',
-            ]);
-        $response->assertStatus(403);
-
-        $response = $this->actingAs($this->superAdmin)
-            ->put(route('users.update', $targetAdmin->id), [
-                'first_name' => 'Test',
-                'last_name'  => 'User',
-                'email'      => $targetAdmin->email,
-                'admin_type' => 'manager',
+            ->put(route('users.update', $this->manager->id), [
+                'first_name' => 'Updated',
+                'last_name'  => 'Name',
+                'email'      => $this->manager->email,
             ]);
 
-        $this->assertEquals('manager', $targetAdmin->refresh()->admin_type);
-    }
+        $response->assertStatus(302); // Redirect on success
 
-    /** @test */
+        $this->manager->refresh();
+        $this->assertEquals('Updated', $this->manager->first_nam
     public function permission_check_on_every_request(): void
     {
         $admin = User::factory()->create([
             'role'       => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
             'is_active'  => true,
         ]);
 
         $this->actingAs($admin)
             ->get(route('users.index'))
-            ->assertStatus(403);
+            ->assertStatus(200);
 
         $admin->update(['is_active' => false]);
 
@@ -220,7 +187,6 @@ class AuthorizationSecurityTest extends TestCase
     {
         $otherAdmin = User::factory()->create([
             'role'       => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
         ]);
 
         $response = $this->actingAs($this->operator)

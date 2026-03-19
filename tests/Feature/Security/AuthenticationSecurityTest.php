@@ -20,7 +20,6 @@ class AuthenticationSecurityTest extends TestCase
 
         $this->admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
             'is_active' => true,
             'password' => bcrypt('SecurePassword123!'),
         ]);
@@ -36,7 +35,6 @@ class AuthenticationSecurityTest extends TestCase
             'email' => 'short@test.com',
             'password' => 'Short1!', // 7 characters
             'password_confirmation' => 'Short1!',
-            'admin_type' => 'manager',
         ];
 
         $response = $this->actingAs($this->admin)
@@ -57,9 +55,8 @@ class AuthenticationSecurityTest extends TestCase
             'email' => 'nocase@test.com',
             'password' => 'lowercaseonly123!', // No uppercase
             'password_confirmation' => 'lowercaseonly123!',
-            'admin_type' => 'manager',
         ];
-
+        
         // Note: Current validation allows this in the implementation
         // This test documents current behavior - could be enhanced
         $response = $this->actingAs($this->admin)
@@ -79,8 +76,8 @@ class AuthenticationSecurityTest extends TestCase
             'email' => 'noconfirm@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password456!', // Mismatch
-            'admin_type' => 'manager',
         ];
+
 
         $response = $this->actingAs($this->admin)
             ->post(route('users.store'), $data);
@@ -106,7 +103,6 @@ class AuthenticationSecurityTest extends TestCase
                 'email' => 'weak' . rand(1, 9999) . '@test.com',
                 'password' => $weakPassword,
                 'password_confirmation' => $weakPassword,
-                'admin_type' => 'manager',
             ];
 
             // Current implementation accepts these

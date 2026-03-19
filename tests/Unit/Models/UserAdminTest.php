@@ -16,50 +16,11 @@ class UserAdminTest extends TestCase
     {
         $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
             'is_active' => true,
         ]);
 
         $this->assertTrue($admin->isAdmin());
-        $this->assertFalse($admin->isSuperAdmin());
         $this->assertTrue($admin->is_active);
-    }
-
-    /** @test */
-    public function super_admin_is_identified_correctly(): void
-    {
-        $superAdmin = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
-            'is_active' => true,
-        ]);
-
-        $this->assertTrue($superAdmin->isAdmin());
-        $this->assertTrue($superAdmin->isSuperAdmin());
-    }
-
-    /** @test */
-    public function manager_admin_is_not_super_admin(): void
-    {
-        $manager = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
-        ]);
-
-        $this->assertTrue($manager->isAdmin());
-        $this->assertFalse($manager->isSuperAdmin());
-    }
-
-    /** @test */
-    public function operator_admin_is_not_super_admin(): void
-    {
-        $operator = User::factory()->create([
-            'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
-        ]);
-
-        $this->assertTrue($operator->isAdmin());
-        $this->assertFalse($operator->isSuperAdmin());
     }
 
     /** @test */
@@ -110,61 +71,55 @@ class UserAdminTest extends TestCase
     /** @test */
     public function super_admin_has_all_permissions(): void
     {
-        $superAdmin = User::factory()->create([
+        $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
             'is_active' => true,
         ]);
 
-        $this->assertTrue($superAdmin->hasPermission('manage_users'));
-        $this->assertTrue($superAdmin->hasPermission('manage_admins'));
-        $this->assertTrue($superAdmin->hasPermission('manage_fees'));
-        $this->assertTrue($superAdmin->hasPermission('approve_payments'));
-        $this->assertTrue($superAdmin->hasPermission('manage_workflows'));
-        $this->assertTrue($superAdmin->hasPermission('view_audit_logs'));
-        $this->assertTrue($superAdmin->hasPermission('system_settings'));
+        // All admins have all permissions now
+        $this->assertTrue($admin->hasPermission('manage_users'));
+        $this->assertTrue($admin->hasPermission('manage_admins'));
+        $this->assertTrue($admin->hasPermission('manage_fees'));
+        $this->assertTrue($admin->hasPermission('approve_payments'));
+        $this->assertTrue($admin->hasPermission('manage_workflows'));
+        $this->assertTrue($admin->hasPermission('view_audit_logs'));
+        $this->assertTrue($admin->hasPermission('system_settings'));
         // Any permission should return true
-        $this->assertTrue($superAdmin->hasPermission('any_random_permission'));
+        $this->assertTrue($admin->hasPermission('any_random_permission'));
     }
 
     /** @test */
     public function manager_has_specific_permissions(): void
     {
-        $manager = User::factory()->create([
+        $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
             'is_active' => true,
         ]);
 
-        // Manager should have these permissions
-        $this->assertTrue($manager->hasPermission('manage_fees'));
-        $this->assertTrue($manager->hasPermission('approve_payments'));
-        $this->assertTrue($manager->hasPermission('manage_workflows'));
-        $this->assertTrue($manager->hasPermission('view_users'));
-
-        // Manager should NOT have these permissions
-        $this->assertFalse($manager->hasPermission('manage_users'));
-        $this->assertFalse($manager->hasPermission('system_settings'));
+        // All admins have all permissions now
+        $this->assertTrue($admin->hasPermission('manage_fees'));
+        $this->assertTrue($admin->hasPermission('approve_payments'));
+        $this->assertTrue($admin->hasPermission('manage_workflows'));
+        $this->assertTrue($admin->hasPermission('view_users'));
+        $this->assertTrue($admin->hasPermission('manage_users'));
+        $this->assertTrue($admin->hasPermission('system_settings'));
     }
 
     /** @test */
     public function operator_has_limited_permissions(): void
     {
-        $operator = User::factory()->create([
+        $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
             'is_active' => true,
         ]);
 
-        // Operator should have these permissions
-        $this->assertTrue($operator->hasPermission('approve_payments'));
-        $this->assertTrue($operator->hasPermission('view_users'));
-        $this->assertTrue($operator->hasPermission('view_audit_logs'));
-
-        // Operator should NOT have these permissions
-        $this->assertFalse($operator->hasPermission('manage_fees'));
-        $this->assertFalse($operator->hasPermission('manage_users'));
-        $this->assertFalse($operator->hasPermission('system_settings'));
+        // All admins have all permissions now
+        $this->assertTrue($admin->hasPermission('approve_payments'));
+        $this->assertTrue($admin->hasPermission('view_users'));
+        $this->assertTrue($admin->hasPermission('view_audit_logs'));
+        $this->assertTrue($admin->hasPermission('manage_fees'));
+        $this->assertTrue($admin->hasPermission('manage_users'));
+        $this->assertTrue($admin->hasPermission('system_settings'));
     }
 
     /** @test */
@@ -172,7 +127,6 @@ class UserAdminTest extends TestCase
     {
         $inactiveAdmin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
             'is_active' => false,
         ]);
 
@@ -181,41 +135,38 @@ class UserAdminTest extends TestCase
     }
 
     /** @test */
-    public function has_any_permission_returns_true_if_one_permission_matches(): void
+    public function has_any_permission_returns_true_for_active_admin(): void
     {
-        $manager = User::factory()->create([
+        $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
             'is_active' => true,
         ]);
 
-        $this->assertTrue($manager->hasAnyPermission(['manage_fees', 'system_settings']));
-        $this->assertTrue($manager->hasAnyPermission(['system_settings', 'manage_fees']));
+        $this->assertTrue($admin->hasAnyPermission(['manage_fees', 'system_settings']));
+        $this->assertTrue($admin->hasAnyPermission(['system_settings', 'manage_fees']));
     }
 
     /** @test */
-    public function has_any_permission_returns_false_if_no_permissions_match(): void
+    public function has_any_permission_returns_false_for_inactive_admin(): void
     {
-        $operator = User::factory()->create([
+        $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'operator',
-            'is_active' => true,
+            'is_active' => false,
         ]);
 
-        $this->assertFalse($operator->hasAnyPermission(['manage_users', 'system_settings']));
+        $this->assertFalse($admin->hasAnyPermission(['manage_users', 'system_settings']));
     }
 
     /** @test */
-    public function has_all_permissions_returns_true_only_if_all_match(): void
+    public function has_all_permissions_returns_true_for_active_admin(): void
     {
-        $manager = User::factory()->create([
+        $admin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'manager',
             'is_active' => true,
         ]);
 
-        $this->assertTrue($manager->hasAllPermissions(['manage_fees', 'approve_payments']));
-        $this->assertFalse($manager->hasAllPermissions(['manage_fees', 'system_settings']));
+        $this->assertTrue($admin->hasAllPermissions(['manage_fees', 'approve_payments']));
+        $this->assertTrue($admin->hasAllPermissions(['manage_fees', 'system_settings']));
     }
 
     /** @test */
@@ -324,18 +275,6 @@ class UserAdminTest extends TestCase
         $this->assertArrayHasKey('password', $rules);
         $this->assertStringContainsString('nullable', $rules['password']);
         $this->assertStringNotContainsString('required', $rules['password']);
-    }
-
-    /** @test */
-    public function get_admin_validation_rules_validates_admin_type(): void
-    {
-        $rules = User::getAdminValidationRules();
-
-        $this->assertArrayHasKey('admin_type', $rules);
-        $this->assertStringContainsString('required', $rules['admin_type']);
-        $this->assertStringContainsString('super', $rules['admin_type']);
-        $this->assertStringContainsString('manager', $rules['admin_type']);
-        $this->assertStringContainsString('operator', $rules['admin_type']);
     }
 
     /** @test */

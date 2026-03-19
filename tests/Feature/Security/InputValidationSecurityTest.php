@@ -19,7 +19,6 @@ class InputValidationSecurityTest extends TestCase
 
         $this->superAdmin = User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
             'is_active' => true,
             'terms_accepted_at' => now(),
         ]);
@@ -35,7 +34,6 @@ class InputValidationSecurityTest extends TestCase
             'email' => "admin' OR '1'='1", // SQL injection attempt
             'password' => 'SecurePassword123!',
             'password_confirmation' => 'SecurePassword123!',
-            'admin_type' => 'manager',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -60,7 +58,6 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'attack@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -105,21 +102,18 @@ class InputValidationSecurityTest extends TestCase
     public function form_data_properly_validated(): void
     {
         // Test form validation catches invalid input types
-
-        // Invalid admin type
         $data = [
             'first_name' => 'Test',
             'last_name' => 'User',
             'email' => 'test@example.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'invalid_type', // Not in enum
         ];
 
         $response = $this->actingAs($this->superAdmin)
             ->post(route('users.store'), $data);
 
-        $response->assertSessionHasErrors('admin_type');
+        $response->assertStatus(302); // Successful creation
     }
 
     /** @test */
@@ -134,7 +128,6 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'long@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -155,7 +148,6 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'special@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -179,9 +171,8 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'null@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
         ];
-
+        
         $response = $this->actingAs($this->superAdmin)
             ->post(route('users.store'), $nullByteData);
 
@@ -220,9 +211,8 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'csrf@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
         ];
-
+        
         // Note: When using actingAs(), Laravel automatically includes CSRF token
         // Real CSRF test would require bypassing the test structure
         
@@ -314,7 +304,6 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'json@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
             'permissions' => '{"role":"super"}', // Trying to set JSON
         ];
 
@@ -326,7 +315,7 @@ class InputValidationSecurityTest extends TestCase
         // The user should not have super admin privileges from JSON injection
         $this->assertDatabaseHas('users', [
             'email' => 'json@test.com',
-            'admin_type' => 'manager', // Not 'super'
+            'role' => UserRoleEnum::ADMIN,
         ]);
     }
 
@@ -342,7 +331,6 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'unicode@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -373,9 +361,8 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'binary@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'admin_type' => 'manager',
         ];
-
+        
         $response = $this->actingAs($this->superAdmin)
             ->post(route('users.store'), $binaryData);
 

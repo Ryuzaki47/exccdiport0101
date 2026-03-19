@@ -35,7 +35,6 @@ class AdminService
             'email'          => $validated['email'],
             'password'       => Hash::make($validated['password']),
             'role'           => UserRoleEnum::ADMIN,
-            'admin_type'     => $validated['admin_type'],
             'department'     => $validated['department'] ?? null,
             'is_active'      => $validated['is_active'] ?? true,
             'updated_by'     => $createdBy?->id,
@@ -71,7 +70,6 @@ class AdminService
             'last_name'      => $validated['last_name']    ?? $admin->last_name,
             'first_name'     => $validated['first_name']   ?? $admin->first_name,
             'middle_initial' => $validated['middle_initial'] ?? $admin->middle_initial,
-            'admin_type'     => $validated['admin_type']   ?? $admin->admin_type,
             'department'     => array_key_exists('department', $validated) ? $validated['department'] : $admin->department,
             'is_active'      => $validated['is_active']    ?? $admin->is_active,
             'updated_by'     => $updatedBy?->id,
@@ -90,9 +88,7 @@ class AdminService
     /**
      * Deactivate an admin user
      *
-     * Prevents:
-     * - Self-deactivation (must have another admin perform the action)
-     * - Deactivating the last active super admin
+     * Prevents self-deactivation (must have another admin perform the action)
      */
     public function deactivateAdmin(User $admin, ?User $performedBy = null): bool
     {
@@ -103,18 +99,6 @@ class AdminService
         // Prevent self-deactivation: admin cannot deactivate their own account
         if ($performedBy && $performedBy->id === $admin->id) {
             throw new \InvalidArgumentException('You cannot deactivate your own account. Ask another admin to deactivate you.');
-        }
-
-        // Prevent deactivating the last active super admin
-        if ($admin->admin_type === User::ADMIN_TYPE_SUPER && $admin->is_active) {
-            $activeSuperAdmins = User::admins()
-                ->where('admin_type', User::ADMIN_TYPE_SUPER)
-                ->where('is_active', true)
-                ->count();
-
-            if ($activeSuperAdmins <= 1) {
-                throw new \InvalidArgumentException('Cannot deactivate the last super admin');
-            }
         }
 
         return $admin->update(['is_active' => false]);
@@ -151,18 +135,6 @@ class AdminService
     {
         return User::admins()
             ->where('is_active', true)
-            ->with(['createdByUser', 'updatedByUser'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-    }
-
-    /**
-     * Get admins by type
-     */
-    public function getAdminsByType(string $type)
-    {
-        return User::admins()
-            ->where('admin_type', $type)
             ->with(['createdByUser', 'updatedByUser'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -209,9 +181,6 @@ class AdminService
         return [
             'total_admins'        => $allAdmins->count(),
             'total_active_admins' => $activeAdmins->count(),
-            'super_admins'        => $allAdmins->where('admin_type', User::ADMIN_TYPE_SUPER)->count(),
-            'managers'            => $allAdmins->where('admin_type', User::ADMIN_TYPE_MANAGER)->count(),
-            'operators'           => $allAdmins->where('admin_type', User::ADMIN_TYPE_OPERATOR)->count(),
             'terms_accepted'      => $allAdmins->filter(fn($a) => $a->terms_accepted_at !== null)->count(),
             'last_login_avg_days' => $this->calculateAverageLastLogin($activeAdmins),
         ];

@@ -16,7 +16,6 @@ class WorkflowControllerTest extends TestCase
     {
         return User::factory()->create([
             'role' => UserRoleEnum::ADMIN,
-            'admin_type' => 'super',
             'is_active' => true,
             'terms_accepted_at' => now(),
         ]);
