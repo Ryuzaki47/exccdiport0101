@@ -366,6 +366,10 @@ class StudentFeeController extends Controller
                 'school_year'      => $a->school_year,
                 'year_level'       => $a->year_level,
                 'total_assessment' => (float) $a->total_assessment,
+                // Include fee breakdown for client-side filtering
+                'tuition_fee'      => (float) $a->tuition_fee,
+                'other_fees'       => (float) $a->other_fees,
+                'fee_breakdown'    => $a->fee_breakdown ?? [],
             ]);
 
         $latestAssessment = StudentAssessment::where('user_id', $userId)
@@ -414,6 +418,7 @@ class StudentFeeController extends Controller
                 'reference_number' => $p->reference_number,
                 'status'           => $p->status,
                 'paid_at'          => $p->paid_at,
+                'assessment_id'    => $p->assessment_id,
                 'semester'         => $p->assessment?->semester ?? null,
                 'school_year'      => $p->assessment?->school_year ?? null,
                 'year_level'       => $p->assessment?->year_level ?? null,

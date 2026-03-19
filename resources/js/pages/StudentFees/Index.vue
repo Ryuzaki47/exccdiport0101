@@ -137,14 +137,17 @@ const getRemainingBalance = (student: Student): number => {
  * - If the first term (Upon Registration / Prelim) is unpaid → RED (behind).
  * - If at least the first term is paid → GREEN (on track).
  * - Returns null when there are no payment terms yet.
+ *
+ * NOTE: If no assessment/terms exist, a zero balance doesn't mean "Fully Paid" —
+ * it means the student is awaiting their first assessment. Return null in this case.
  */
 const getBalanceTimingStatus = (student: Student): 'red' | 'green' | 'zero' | null => {
+    const terms = student.latestAssessment?.paymentTerms;
+    if (!terms || terms.length === 0) return null;
+
     const balance = getRemainingBalance(student);
 
     if (balance === 0) return 'zero';
-
-    const terms = student.latestAssessment?.paymentTerms;
-    if (!terms || terms.length === 0) return null;
 
     const sorted = [...terms].sort((a, b) => a.term_order - b.term_order);
     const firstTerm = sorted[0];

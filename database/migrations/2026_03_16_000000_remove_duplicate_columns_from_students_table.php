@@ -48,21 +48,14 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
+     * 
+     * Note: This is a one-way migration. Restoring duplicate columns is not recommended.
+     * If you need to rollback, manually restore the students table schema or use fresh database.
      */
     public function down(): void
     {
-        Schema::table('students', function (Blueprint $table) {
-            // Restore columns in reverse order
-            $table->string('address')->nullable()->after('email');
-            $table->string('phone')->nullable()->after('birthday');
-            $table->date('birthday')->nullable()->after('year_level');
-            $table->string('year_level')->after('course');
-            $table->string('course')->after('email');
-            $table->string('email')->unique()->after('middle_initial');
-            $table->string('middle_initial')->nullable()->after('first_name');
-            $table->string('first_name')->after('last_name');
-            $table->string('last_name')->after('student_number');
-            $table->date('date_of_birth')->nullable()->after('address');
-        });
+        // This migration removes duplicate columns that should never be in students table.
+        // Rolling back would reintroduce schema duplication, which is not supported.
+        // Leave empty to prevent issues with existing data.
     }
 };

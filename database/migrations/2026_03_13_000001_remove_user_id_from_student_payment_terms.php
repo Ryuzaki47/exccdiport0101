@@ -27,14 +27,13 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
+     * 
+     * Note: This is a one-way migration. The user_id column was redundant and should not be restored.
+     * Access StudentPaymentTerms through StudentAssessment -> User relationship instead.
      */
     public function down(): void
     {
-        Schema::table('student_payment_terms', function (Blueprint $table) {
-            $table->foreignId('user_id')
-                ->after('student_assessment_id')
-                ->constrained('users')
-                ->onDelete('cascade');
-        });
+        // This migration removes a redundant column. Rolling back would reintroduce the column,
+        // defeating the purpose of the schema cleanup. Leave empty.
     }
 };

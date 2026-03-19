@@ -108,10 +108,13 @@ class ComprehensiveAssessmentSeeder extends Seeder
         $this->command->info('✓ Fees seeded: ' . Fee::count() . ' records.');
         $this->command->newLine();
 
-        $students  = User::where('role', 'student')->whereNotNull('year_level')->get();
+        $students  = User::where('role', 'student')
+            ->where('status', User::STATUS_ACTIVE)
+            ->whereNotNull('year_level')
+            ->get();
         $semesters = ['1st Sem', '2nd Sem'];
 
-        $this->command->info("📋 Creating assessments for {$students->count()} students…");
+        $this->command->info("📋 Creating assessments for {$students->count()} students (excluding graduated)…");
         $created = 0;
         $skipped = 0;
 

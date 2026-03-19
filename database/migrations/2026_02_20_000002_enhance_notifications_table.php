@@ -38,10 +38,33 @@ return new class extends Migration
     {
         if (Schema::hasTable('notifications')) {
             Schema::table('notifications', function (Blueprint $table) {
-                $table->dropForeign(['user_id']);
-                $table->dropIndex(['user_id', 'is_active']);
-                $table->dropIndex(['target_role', 'is_active']);
-                $table->dropColumn(['user_id', 'is_active', 'is_complete', 'dismissed_at']);
+                // Safely drop FK if exists
+                try {
+                    $table->dropForeign(['user_id']);
+                } catch (\Exception $e) {
+                    // FK may not exist or was already dropped
+                }
+                
+                // Safely drop indexes if they exist
+                try {
+                    $table->dropIndex(['user_id', 'is_active']);
+                } catch (\Exception $e) {
+                    // Index may not exist
+                }
+                
+                try {
+                    $table->dropIndex(['target_role', 'is_active']);
+                } catch (\Exception $e) {
+                    // Index may not exist
+                }
+                
+                // Drop columns only if they exist
+                $columnsToDrop = ['user_id', 'is_active', 'is_complete', 'dismissed_at'];
+                foreach ($columnsToDrop as $column) {
+                    if (Schema::hasColumn('notifications', $column)) {
+                        $table->dropColumn($column);
+                    }
+                }
             });
         }
     }

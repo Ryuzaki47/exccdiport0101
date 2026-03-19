@@ -27,17 +27,27 @@ return new class extends Migration {
     public function down()
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn([
-                'student_id','address','profile_picture',
-                'birthday','phone','course','year_level','status'
-            ]);
+            // Drop indexes FIRST (before columns, since indexes depend on columns)
+            // Check if columns exist before dropping indexes
+            if (Schema::hasColumn('users', 'course')) {
+                $table->dropIndex('users_course_index');
+            }
+            if (Schema::hasColumn('users', 'year_level')) {
+                $table->dropIndex('users_year_level_index');
+            }
+            if (Schema::hasColumn('users', 'status')) {
+                $table->dropIndex('users_status_index');
+            }
         });
 
-        // Drop indexes separately by index name
         Schema::table('users', function (Blueprint $table) {
-            $table->dropIndex('users_course_index');
-            $table->dropIndex('users_year_level_index');
-            $table->dropIndex('users_status_index');
+            // Drop only columns that exist (defensive against later migrations that may have renamed/removed them)
+            $columnsToDropIfExist = ['student_id','address','profile_picture','birthday','phone','course','year_level','status'];
+            foreach ($columnsToDropIfExist as $column) {
+                if (Schema::hasColumn('users', $column)) {
+                    $table->dropColumn($column);
+                }
+            }
         });
     }
 };

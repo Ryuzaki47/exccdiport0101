@@ -73,13 +73,19 @@ const totalPaid = computed(() => Math.max(0, totalAssessment.value - remainingBa
  * Payment timing status using payment terms:
  * - 'behind' : first term (Upon Registration / term_order=1) is still fully unpaid
  * - 'on_track': first term has been at least partially paid
- * - 'paid'   : no remaining balance
+ * - 'paid'   : no remaining balance AND assessment exists with terms
+ *
+ * NOTE: A student with NO assessment should NOT be marked as "Fully Paid"
+ * — they're awaiting their first assessment creation.
  */
 const paymentTimingStatus = computed((): 'behind' | 'on_track' | 'paid' => {
-    if (remainingBalance.value === 0) return 'paid';
-
     const terms: PaymentTerm[] = props.assessment?.paymentTerms ?? [];
+    
+    // If no assessment/terms exist, student isn't "fully paid" — they're awaiting assessment
     if (terms.length === 0) return 'behind';
+    
+    // If all terms are paid, no remaining balance
+    if (remainingBalance.value === 0) return 'paid';
 
     const sorted = [...terms].sort((a, b) => a.term_order - b.term_order);
     const first = sorted[0];
@@ -148,8 +154,9 @@ const paidTermsCount = computed(() => allTermsSorted.value.filter((t) => t.statu
 
 // ─── Fee breakdown enrichment ──────────────────────────────────────────────────
 /**
- * Canonical fee line items with friendly labels.
- * We enrich the raw feeBreakdown from the controller with known display names.
+ * Canonical fee line items with friendly labels from the selected assessment.
+ * When the user selects a different assessment via the dropdown, feeLineItems
+ * updates to show that assessment's breakdown instead of always showing the latest.
  */
 const feeLineItems = computed(() => {
     const labelMap: Record<string, string> = {
@@ -161,7 +168,50 @@ const feeLineItems = computed(() => {
         Registration: 'Registration Fee',
     };
 
-    return props.feeBreakdown.map((item) => ({
+    // Build breakdown from selected assessment's stored fee_breakdown
+    const breakdown: Array<{ category: string; total: number; items: number }> = [];
+    const selectedAssess = selectedAssessment.value as any;
+    
+    if (!selectedAssess) return [];
+    
+    // Add tuition if > 0
+    if (selectedAssess.tuition_fee > 0) {
+        breakdown.push({
+            category: 'Tuition',
+            total: selectedAssess.tuition_fee,
+            items: 1,
+        });
+    }
+    
+    // Add other fees from stored breakdown
+    const storedBreakdown = selectedAssess.fee_breakdown ?? [];
+    if (storedBreakdown.length > 0) {
+        const grouped: Record<string, any[]> = {};
+        for (const item of storedBreakdown) {
+            if (item.category === 'Tuition') continue; // Skip tuition, already added
+            if (!grouped[item.category]) grouped[item.category] = [];
+            grouped[item.category].push(item);
+        }
+        
+        for (const [category, items] of Object.entries(grouped)) {
+            const total = items.reduce((sum, item) => sum + parseFloat(String(item.amount)), 0);
+            breakdown.push({
+                category,
+                total: parseFloat(total.toFixed(2)),
+                items: items.length,
+            });
+        }
+    } else if (selectedAssess.other_fees > 0) {
+        // Fallback: if no detailed breakdown stored, use other_fees
+        breakdown.push({
+            category: 'Miscellaneous',
+            total: selectedAssess.other_fees,
+            items: 1,
+        });
+    }
+    
+    // Map to display labels
+    return breakdown.map((item) => ({
         ...item,
         displayLabel: labelMap[item.category] ?? item.category,
     }));
@@ -176,10 +226,33 @@ interface TxGroup {
     balance: number;
 }
 
+/**
+ * Filter transactions to only those belonging to the currently selected assessment.
+ * This ensures consistency: transactions shown match the Fee Breakdown shown.
+ *
+ * Note: The selectedAssessment's school_year and semester are used to match transaction keys.
+ * Transactions stored with (year, semester) are grouped and filtered accordingly.
+ */
+const filteredTransactions = computed(() => {
+    const selectedId = selectedAssessmentId.value;
+    if (!selectedId || !selectedAssessment.value) return props.transactions;
+    
+    const assessment = selectedAssessment.value;
+    // Match by school_year and semester
+    return props.transactions.filter((t: any) => {
+        const startYear = parseInt(String(assessment.school_year?.split('-')[0] ?? ''), 10);
+        const txYear = parseInt(String(t.year), 10);
+        return (
+            txYear === startYear &&
+            String(t.semester).trim() === String(assessment.semester).trim()
+        );
+    });
+});
+
 const transactionsByTerm = computed((): TxGroup[] => {
     const groups: Record<string, any[]> = {};
 
-    for (const t of props.transactions) {
+    for (const t of filteredTransactions.value) {
         // Build a full school-year key: "2025-2026 1st Sem" instead of "2025 1st Sem".
         // Transactions store year as the start-year string (e.g. "2025").
         let key: string;
@@ -210,20 +283,12 @@ const transactionsByTerm = computed((): TxGroup[] => {
 
 const expandedTerms = ref<Record<string, boolean>>({});
 
-// Auto-expand the term that matches the current (latest) assessment's school_year + semester.
+// Auto-expand the term that matches the currently selected assessment's school_year + semester.
 // e.g. if assessment is "2nd Year 1st Sem 2026-2027", expand "2026-2027 1st Sem".
 const currentAssessmentTermKey = computed<string | null>(() => {
-    if (!props.assessment?.school_year || !props.assessment?.semester) return null;
-    return `${props.assessment.school_year} ${props.assessment.semester}`;
+    if (!selectedAssessment.value?.school_year || !selectedAssessment.value?.semester) return null;
+    return `${selectedAssessment.value.school_year} ${selectedAssessment.value.semester}`;
 });
-
-if (transactionsByTerm.value.length > 0) {
-    const matchKey = currentAssessmentTermKey.value;
-    const autoKey  = matchKey && transactionsByTerm.value.some((g) => g.key === matchKey)
-        ? matchKey
-        : transactionsByTerm.value[0].key;
-    expandedTerms.value[autoKey] = true;
-}
 
 const toggleTerm = (key: string) => {
     expandedTerms.value[key] = !expandedTerms.value[key];
@@ -235,17 +300,6 @@ const breadcrumbs = [
     { title: 'Student Fee Management', href: route('student-fees.index') },
     { title: props.student.name },
 ];
-
-// ─── Payment History pagination ────────────────────────────────────────────────
-const PAYMENT_PAGE_SIZE = 5;
-const paymentHistoryLimit = ref(PAYMENT_PAGE_SIZE);
-
-const visiblePayments = computed(() => props.payments.slice(0, paymentHistoryLimit.value));
-const hasMorePayments  = computed(() => props.payments.length > paymentHistoryLimit.value);
-
-const loadMorePayments = () => {
-    paymentHistoryLimit.value += PAYMENT_PAGE_SIZE;
-};
 
 // ─── Semester / Assessment selector ───────────────────────────────────────────
 // When a student has multiple assessments (e.g. 1st Sem + 2nd Sem), the accounting
@@ -264,6 +318,28 @@ const exportUrl = computed(() => {
     const base = route('student-fees.export-pdf', props.student.id);
     return selectedAssessmentId.value ? `${base}?assessment_id=${selectedAssessmentId.value}` : base;
 });
+
+// ─── Payment History pagination ────────────────────────────────────────────────
+const PAYMENT_PAGE_SIZE = 5;
+const paymentHistoryLimit = ref(PAYMENT_PAGE_SIZE);
+
+/**
+ * Filter payments to only those belonging to the currently selected assessment.
+ * This ensures consistency: only show payments that match the Fee Breakdown & transactions shown.
+ */
+const filteredPayments = computed(() => {
+    const selectedId = selectedAssessmentId.value;
+    if (!selectedId) return props.payments;  // Show all if no assessment selected (shouldn't happen)
+    
+    return props.payments.filter((p: any) => p.assessment_id === selectedId);
+});
+
+const visiblePayments = computed(() => filteredPayments.value.slice(0, paymentHistoryLimit.value));
+const hasMorePayments  = computed(() => filteredPayments.value.length > paymentHistoryLimit.value);
+
+const loadMorePayments = () => {
+    paymentHistoryLimit.value += PAYMENT_PAGE_SIZE;
+};
 
 const showPaymentDialog = ref(false);
 
@@ -322,6 +398,25 @@ watch(
             paymentForm.term_id = firstUnpaidTerm.value.id;
         }
     },
+);
+
+// Reset payment form when assessment selection changes to avoid stale data
+watch(
+    () => selectedAssessmentId.value,
+    () => {
+        paymentForm.reset();
+        paymentForm.clearErrors();
+        
+        // Also reset expanded terms
+        expandedTerms.value = {};
+        if (transactionsByTerm.value.length > 0) {
+            const matchKey = currentAssessmentTermKey.value;
+            const autoKey  = matchKey && transactionsByTerm.value.some((g) => g.key === matchKey)
+                ? matchKey
+                : transactionsByTerm.value[0].key;
+            expandedTerms.value[autoKey] = true;
+        }
+    }
 );
 
 const submitPayment = () => {
@@ -632,7 +727,7 @@ const getStudentStatusColor = (status: string) => {
                         <div>
                             <CardTitle>Fee Breakdown</CardTitle>
                             <CardDescription>
-                                Assessment for {{ assessment?.year_level }} — {{ assessment?.semester }} {{ assessment?.school_year }}
+                                Assessment for {{ selectedAssessment?.year_level }} — {{ selectedAssessment?.semester }} {{ selectedAssessment?.school_year }}
                             </CardDescription>
                         </div>
                         <div class="text-right">
@@ -766,7 +861,10 @@ const getStudentStatusColor = (status: string) => {
                 <CardHeader>
                     <CardTitle>Payment History</CardTitle>
                     <CardDescription>
-                        Showing {{ visiblePayments.length }} of {{ payments.length }} payment(s)
+                        {{ filteredPayments.length }} payment(s) for {{ selectedAssessment?.year_level }} — {{ selectedAssessment?.semester }} {{ selectedAssessment?.school_year }}
+                        <span v-if="props.payments.length > filteredPayments.length" class="text-xs text-gray-500 block mt-1">
+                            ({{ props.payments.length }} total across all assessments)
+                        </span>
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="p-0">

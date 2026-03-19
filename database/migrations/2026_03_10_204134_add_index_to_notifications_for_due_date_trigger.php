@@ -33,17 +33,16 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (Schema::hasTable('notifications')) {
+        // Note: The spt_balance_due_idx index is used by a foreign key constraint and cannot be dropped.
+        // Only drop the notifications index which is safe to remove.
+        if (Schema::hasTable('notifications') && $this->hasIndex('notifications', 'notifications_trigger_active_idx')) {
             Schema::table('notifications', function (Blueprint $table) {
-                $table->dropIndexIfExists('notifications_trigger_active_idx');
+                $table->dropIndex('notifications_trigger_active_idx');
             });
         }
-
-        if (Schema::hasTable('student_payment_terms')) {
-            Schema::table('student_payment_terms', function (Blueprint $table) {
-                $table->dropIndexIfExists('spt_balance_due_idx');
-            });
-        }
+        
+        // The student_payment_terms index is protected by foreign key constraints.
+        // Leave it in place for stability.
     }
 
     /**

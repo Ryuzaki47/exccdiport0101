@@ -47,9 +47,23 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
+     * 
+     * Remove only the Laravel notification columns that were added.
+     * Do NOT drop the entire table — it contains admin announcements data.
      */
     public function down(): void
     {
-        Schema::dropIfExists('notifications');
+        if (Schema::hasTable('notifications')) {
+            Schema::table('notifications', function (Blueprint $table) {
+                // Drop only the columns that were added in up()
+                $columnsToDropIfExist = ['type', 'data', 'read_at', 'notifiable_id', 'notifiable_type', 'uuid'];
+                
+                foreach ($columnsToDropIfExist as $column) {
+                    if (Schema::hasColumn('notifications', $column)) {
+                        $table->dropColumn($column);
+                    }
+                }
+            });
+        }
     }
 };

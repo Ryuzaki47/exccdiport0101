@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -27,6 +28,13 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // Before reverting, ensure all 'type' values are valid enum values or NULL
+        // This prevents data truncation errors when changing back to enum
+        DB::table('transactions')
+            ->whereNotIn('type', ['charge', 'payment'])
+            ->whereNotNull('type')
+            ->update(['type' => 'charge']); // Default invalid values to 'charge'
+
         Schema::table('transactions', function (Blueprint $table) {
             // revert -- note: changing back to enum may require caution
             $table->enum('type', ['charge','payment'])->default('charge')->change();
