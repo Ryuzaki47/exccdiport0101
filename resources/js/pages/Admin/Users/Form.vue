@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
-import TermsAcceptance from '@/components/TermsAcceptance.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,10 +8,12 @@ import { useForm } from '@inertiajs/vue3';
 interface Props {
     admin?: any;
     isEditing?: boolean;
+    department?: 'Administrator' | 'Accounting';
 }
 
 const props = withDefaults(defineProps<Props>(), {
     isEditing: false,
+    department: 'Administrator',
 });
 
 const form = useForm({
@@ -22,9 +23,8 @@ const form = useForm({
     email: props.admin?.email ?? '',
     password: '',
     password_confirmation: '',
-    department: props.admin?.department ?? '',
+    department: props.admin?.department ?? props.department,
     is_active: props.admin?.is_active ?? true,
-    terms_accepted: props.admin?.terms_accepted_at ? true : false,
 });
 
 const submit = () => {
@@ -82,25 +82,13 @@ const goBack = () => {
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-                <Label for="department">Department</Label>
-                <Input id="department" v-model="form.department" type="text" placeholder="e.g., Finance, Operations" />
-                <InputError :message="form.errors.department" />
-            </div>
-
-            <div>
-                <Label for="is_active">Active Status</Label>
-                <select id="is_active" v-model="form.is_active" class="w-full rounded-lg border px-3 py-2">
-                    <option :value="true">Active</option>
-                    <option :value="false">Inactive</option>
-                </select>
-                <InputError :message="form.errors.is_active" />
-            </div>
-        </div>
-
-        <div v-if="!isEditing" class="mt-6">
-            <TermsAcceptance />
+        <div>
+            <Label for="is_active">Active Status</Label>
+            <select id="is_active" v-model="form.is_active" class="w-full rounded-lg border px-3 py-2">
+                <option :value="true">Active</option>
+                <option :value="false">Inactive</option>
+            </select>
+            <InputError :message="form.errors.is_active" />
         </div>
 
         <div class="flex space-x-4 pt-4">

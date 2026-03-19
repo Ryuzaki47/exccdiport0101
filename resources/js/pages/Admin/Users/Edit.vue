@@ -39,7 +39,7 @@ const breadcrumbs = [
                         </div>
                     </div>
 
-                    <AdminForm :admin="admin" :is-editing="true" />
+                    <AdminForm :admin="admin" :is-editing="true" :department="admin.department" />
                 </div>
             </div>
         </div>

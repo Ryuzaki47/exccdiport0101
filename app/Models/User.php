@@ -279,7 +279,7 @@ class User extends Authenticatable
             'middle_initial' => 'nullable|string|max:1',
             'email' => "required|email|{$uniqueEmail}",
             'password' => $userId ? 'nullable|min:8|confirmed' : 'required|min:8|confirmed',
-            'department' => 'nullable|string|max:100',
+            'department' => 'required|in:Administrator,Accounting',
             'is_active' => 'boolean',
         ];
     }
