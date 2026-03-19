@@ -354,6 +354,10 @@ class AdditionalStudentSeeder extends Seeder
             'created_by' => $this->getOrFindAdminUserId(),
         ]);
 
+        // DISABLED: Do not create charge transactions during seeding
+        // Charges should only be created when admin explicitly creates an assessment
+        // via the StudentFeeController::store() endpoint, not automatically during seed.
+        /*
         // ── Charge transaction ─────────────────────────────────────────────────
         Transaction::create([
             'user_id'   => $user->id,
@@ -369,6 +373,7 @@ class AdditionalStudentSeeder extends Seeder
                 'description'   => "Assessment — {$yearLevel} {$semester} {$schoolYear}",
             ],
         ]);
+        */
 
         // ── Payment terms ──────────────────────────────────────────────────────
         $allocated = 0.00;

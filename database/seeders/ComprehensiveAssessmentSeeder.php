@@ -215,6 +215,10 @@ class ComprehensiveAssessmentSeeder extends Seeder
             'created_by'        => $adminId,
         ]);
 
+        // DISABLED: Do not create charge transactions during seeding
+        // Charges should only be created when admin explicitly creates an assessment
+        // via the StudentFeeController::store() endpoint, not automatically during seed.
+        /*
         // Single charge transaction per assessment
         $yearNum = (int) explode('-', $this->schoolYear)[0];
         Transaction::create([
@@ -232,6 +236,7 @@ class ComprehensiveAssessmentSeeder extends Seeder
                 'description'     => "Tuition Fee — {$yearLevel} {$semester} {$this->schoolYear}",
             ],
         ]);
+        */
 
         // 5 payment terms
         $semStart = ($semester === '1st Sem')

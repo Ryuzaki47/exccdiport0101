@@ -399,6 +399,10 @@ const getStudentStatusColor = (status: string) => {
                             <!-- Show assessment year_level (accurate) when available -->
                             <span v-if="selectedAssessment?.year_level" class="font-medium text-blue-700">{{ selectedAssessment.year_level }}</span>
                             <span v-else>{{ student.year_level }}</span>
+                            &middot;
+                            <!-- Student classification (Regular/Irregular) -->
+                            <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold inline-flex ml-2',
+                                           student.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">{{ student.is_irregular ? 'Irregular' : 'Regular' }}</span>
                         </p>
                     </div>
                 </div>

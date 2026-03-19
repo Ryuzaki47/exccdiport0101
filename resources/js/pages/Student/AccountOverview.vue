@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { AlertCircle, CalendarClock, CheckCircle, Clock, CreditCard, XCircle } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
@@ -89,6 +89,10 @@ type Notification = {
     dismissed_at?: string | null;
     created_at: string;
 };
+
+// ── User data ──────────────────────────────────────────────────────────────────
+const page = usePage();
+const user = computed(() => page.props.auth?.user);
 
 const props = withDefaults(
     defineProps<{
@@ -704,8 +708,21 @@ const accountBalance = computed(() => {
             <!-- Header -->
             <div class="mb-6">
                 <h1 class="text-3xl font-bold">My Account Overview</h1>
-                <p v-if="latestAssessment" class="mt-1 text-gray-600">{{ latestAssessment.semester }} - {{ latestAssessment.school_year }}</p>
-                <p v-if="latestAssessment" class="mt-1 text-sm text-gray-500">Assessment No: {{ latestAssessment.assessment_number }}</p>
+                <div class="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                    <div v-if="latestAssessment">
+                        <span>{{ latestAssessment.semester }} - {{ latestAssessment.school_year }}</span>
+                    </div>
+                    <div v-if="latestAssessment">
+                        <span>Assessment No: {{ latestAssessment.assessment_number }}</span>
+                    </div>
+                    <div v-if="latestAssessment">
+                        <span :class="getAssessmentStatusConfig(latestAssessment.status).textColor">{{ latestAssessment.status }}</span>
+                    </div>
+                    <div v-if="user">
+                        <span :class="['rounded-full px-3 py-1 text-xs font-semibold',
+                                     user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Balance Cards -->

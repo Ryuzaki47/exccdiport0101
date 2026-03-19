@@ -337,14 +337,23 @@ const profileInitial = computed(() => {
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                             autocomplete="off"
                         >
-                            <option value="active">Active</option>
+                            <option value="active">Active - {{ user.is_irregular ? 'Irregular' : 'Regular' }}</option>
                             <option value="graduated">Graduated</option>
                             <option value="dropped">Dropped</option>
                         </select>
                         <div v-else class="w-full rounded border bg-gray-50 px-3 py-2 text-gray-700 capitalize">
-                            {{ form.status }}
+                            {{ form.status }} - 
+                            <span :class="['rounded-full px-3 py-1 text-xs font-semibold',
+                                         user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span>
                         </div>
                         <InputError class="mt-2" :message="form.errors.status" />
+                    </div>
+
+                    <!-- Student Classification Badge -->
+                    <div v-if="isStudent && isAdmin" class="text-sm text-gray-600">
+                        <span class="capitalize">Status - {{ user.status || 'active' }} - </span>
+                        <span :class="['rounded-full px-3 py-1 text-xs font-semibold',
+                                     user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span>
                     </div>
 
                     <!-- Email verification notice -->
