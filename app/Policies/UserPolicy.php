@@ -7,41 +7,41 @@ use App\Models\User;
 class UserPolicy
 {
     /**
-     * Only super admins can view the list — Manager/Operator cannot.
+     * Only active admins can view the list.
      */
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() && $user->is_active;
+        return $user->isAdmin() && $user->is_active;
     }
 
     /**
-     * Only super admins can view other users. Users can always view their own.
+     * Only active admins can view other users. Users can always view their own.
      */
     public function view(User $user, User $model): bool
     {
         if ($user->id === $model->id && $user->is_active) {
             return true;
         }
-        return $user->isSuperAdmin() && $user->is_active;
+        return $user->isAdmin() && $user->is_active;
     }
 
     /**
-     * Only super admins can create new admins.
+     * Only active admins can create new admins.
      */
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin() && $user->is_active;
+        return $user->isAdmin() && $user->is_active;
     }
 
     /**
-     * Users can update their own profile; only super admins update others.
+     * Users can update their own profile; only active admins update others.
      */
     public function update(User $user, User $model): bool
     {
         if ($user->id === $model->id && $user->is_active) {
             return true;
         }
-        return $user->isSuperAdmin() && $user->is_active;
+        return $user->isAdmin() && $user->is_active;
     }
 
     /**
@@ -54,20 +54,20 @@ class UserPolicy
 
     public function restore(User $user, User $model): bool
     {
-        return $user->isSuperAdmin() && $user->is_active;
+        return $user->isAdmin() && $user->is_active;
     }
 
     public function forceDelete(User $user, User $model): bool
     {
-        return $user->isSuperAdmin() && $user->is_active;
+        return $user->isAdmin() && $user->is_active;
     }
 
     /**
-     * Only super admins can activate/deactivate admin accounts.
+     * Only active admins can activate/deactivate admin accounts.
      */
     public function manageAdmins(User $user, User $model): bool
     {
-        return $user->isSuperAdmin() && $user->is_active;
+        return $user->isAdmin() && $user->is_active;
     }
 
     public function acceptTerms(User $user, User $model): bool

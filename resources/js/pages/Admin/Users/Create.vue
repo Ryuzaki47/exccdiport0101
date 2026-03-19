@@ -4,12 +4,6 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import AdminForm from './Form.vue';
 
-interface Props {
-    adminTypes: Array<{ value: string; label: string }>;
-}
-
-defineProps<Props>();
-
 const breadcrumbs = [
     { title: 'Admin', href: route('admin.dashboard') },
     { title: 'Admin Users', href: route('users.index') },

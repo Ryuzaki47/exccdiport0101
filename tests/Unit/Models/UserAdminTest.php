@@ -31,7 +31,6 @@ class UserAdminTest extends TestCase
         ]);
 
         $this->assertFalse($student->isAdmin());
-        $this->assertFalse($student->isSuperAdmin());
     }
 
     /** @test */

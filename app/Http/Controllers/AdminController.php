@@ -28,7 +28,7 @@ class AdminController extends Controller
         return Inertia::render('Admin/Users/Index', [
             'admins'    => $admins,
             'stats'     => $this->adminService->getAdminStats(),
-            'canManage' => auth()->user()->isSuperAdmin(),
+            'canManage' => auth()->user()->isAdmin() && auth()->user()->is_active,
         ]);
     }
 
@@ -36,13 +36,7 @@ class AdminController extends Controller
     {
         $this->authorize('create', User::class);
 
-        return Inertia::render('Admin/Users/Create', [
-            'adminTypes' => [
-                ['value' => 'super',    'label' => 'Super Admin'],
-                ['value' => 'manager',  'label' => 'Manager'],
-                ['value' => 'operator', 'label' => 'Operator'],
-            ],
-        ]);
+        return Inertia::render('Admin/Users/Create');
     }
 
     public function store(Request $request)
@@ -70,7 +64,7 @@ class AdminController extends Controller
 
         return Inertia::render('Admin/Users/Show', [
             'admin'     => $user->load(['createdByUser', 'updatedByUser']),
-            'canManage' => auth()->user()->isSuperAdmin(),
+            'canManage' => auth()->user()->isAdmin() && auth()->user()->is_active,
         ]);
     }
 
@@ -83,12 +77,7 @@ class AdminController extends Controller
         }
 
         return Inertia::render('Admin/Users/Edit', [
-            'admin'      => $user,
-            'adminTypes' => [
-                ['value' => 'super',    'label' => 'Super Admin'],
-                ['value' => 'manager',  'label' => 'Manager'],
-                ['value' => 'operator', 'label' => 'Operator'],
-            ],
+            'admin' => $user,
         ]);
     }
 

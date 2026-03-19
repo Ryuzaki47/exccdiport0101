@@ -22,7 +22,6 @@ const form = useForm({
     email: props.admin?.email ?? '',
     password: '',
     password_confirmation: '',
-    admin_type: props.admin?.admin_type ?? 'manager',
     department: props.admin?.department ?? '',
     is_active: props.admin?.is_active ?? true,
     terms_accepted: props.admin?.terms_accepted_at ? true : false,
@@ -85,19 +84,18 @@ const goBack = () => {
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-                <Label for="admin_type">Admin Type *</Label>
-                <select id="admin_type" v-model="form.admin_type" class="w-full rounded-lg border px-3 py-2" required>
-                    <option value="super">Super Admin</option>
-                    <option value="manager">Manager</option>
-                    <option value="operator">Operator</option>
-                </select>
-                <InputError :message="form.errors.admin_type" />
-            </div>
-
-            <div>
                 <Label for="department">Department</Label>
                 <Input id="department" v-model="form.department" type="text" placeholder="e.g., Finance, Operations" />
                 <InputError :message="form.errors.department" />
+            </div>
+
+            <div>
+                <Label for="is_active">Active Status</Label>
+                <select id="is_active" v-model="form.is_active" class="w-full rounded-lg border px-3 py-2">
+                    <option :value="true">Active</option>
+                    <option :value="false">Inactive</option>
+                </select>
+                <InputError :message="form.errors.is_active" />
             </div>
         </div>
 

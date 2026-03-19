@@ -6,7 +6,6 @@ import AdminForm from './Form.vue';
 
 interface Props {
     admin: any;
-    adminTypes: Array<{ value: string; label: string }>;
 }
 
 const props = defineProps<Props>();
