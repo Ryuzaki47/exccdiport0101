@@ -296,8 +296,8 @@ const toggleTerm = (key: string) => {
 
 // ─── Payment form ──────────────────────────────────────────────────────────────
 const breadcrumbs = [
-    { title: 'Dashboard', href: route('dashboard') },
-    { title: 'Student Fee Management', href: route('student-fees.index') },
+    { title: 'Dashboard', href: route('admin.dashboard') },
+    { title: 'Archives', href: route('students.archive') },
     { title: props.student.name },
 ];
 

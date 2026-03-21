@@ -97,7 +97,17 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.patch(route('profile.update'));
+    form.patch(route('profile.update'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            // After successful update, reload auth data to ensure avatar/email changes are reflected
+            router.reload({ only: ['auth'] });
+        },
+        onError: (errors: any) => {
+            // Validation errors will be shown via form.errors
+            console.error('Profile update errors:', errors);
+        },
+    });
 };
 
 // ─── PROFILE PICTURE ─────────────────────────────────────────────────────────

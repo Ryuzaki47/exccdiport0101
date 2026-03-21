@@ -23,6 +23,8 @@ interface Props {
     stats?: {
         total_admins: number;
         total_active_admins: number;
+        total_accounting: number;
+        total_active_accounting: number;
     };
     canManage: boolean;
 }
@@ -32,21 +34,6 @@ defineProps<Props>();
 const breadcrumbs = [
     { title: 'Admin', href: route('admin.dashboard') },
     { title: 'Admin Users', href: route('users.index') },
-];
-
-const adminTypes = [
-    {
-        id: 'Administrator',
-        title: 'Administrator',
-        description: 'Full system administrator with all permissions',
-        icon: '👤',
-    },
-    {
-        id: 'Accounting',
-        title: 'Accounting',
-        description: 'Accounting department user with financial permissions',
-        icon: '💰',
-    },
 ];
 
 const departmentBadge = (dept: string) => {
@@ -80,32 +67,27 @@ const reactivate = (id: number) => {
                     <p class="mt-1 text-gray-500 text-sm">Manage administrator accounts and permissions</p>
                 </div>
                 <Link v-if="canManage" :href="route('users.create')">
-                    <Button>+ Create Admin</Button>
+                    <Button>+ Create Staff</Button>
                 </Link>
             </div>
 
-            <!-- Department Cards -->
-            <div class="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div
-                    v-for="type in adminTypes"
-                    :key="type.id"
-                    class="rounded-lg border-2 border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
-                >
-                    <div class="mb-4 text-4xl">{{ type.icon }}</div>
-                    <h3 class="mb-2 text-lg font-bold text-gray-900">{{ type.title }}</h3>
-                    <p class="text-sm text-gray-600">{{ type.description }}</p>
+            <!-- Department Cards with Active Counts -->
+            <div v-if="stats" class="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div class="rounded-lg border-2 border-purple-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+                    <h3 class="mb-2 text-lg font-bold text-gray-900">Administrator</h3>
+                    <p class="text-sm text-gray-600 mb-4">Full system administrator with all permissions</p>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-4xl font-bold text-purple-600">{{ stats.total_active_admins }}</span>
+                        <span class="text-sm text-gray-500">Active Users</span>
+                    </div>
                 </div>
-            </div>
-
-            <!-- Stats -->
-            <div v-if="stats" class="mb-6 grid grid-cols-2 gap-4">
-                <div class="rounded-lg bg-white p-5 shadow-sm border border-gray-100">
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Admins</p>
-                    <p class="mt-1 text-3xl font-bold text-gray-900">{{ stats.total_admins }}</p>
-                </div>
-                <div class="rounded-lg bg-white p-5 shadow-sm border border-gray-100">
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active</p>
-                    <p class="mt-1 text-3xl font-bold text-green-600">{{ stats.total_active_admins }}</p>
+                <div class="rounded-lg border-2 border-blue-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+                    <h3 class="mb-2 text-lg font-bold text-gray-900">Accounting</h3>
+                    <p class="text-sm text-gray-600 mb-4">Accounting department user with financial permissions</p>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-4xl font-bold text-blue-600">{{ stats.total_active_accounting }}</span>
+                        <span class="text-sm text-gray-500">Active Users</span>
+                    </div>
                 </div>
             </div>
 

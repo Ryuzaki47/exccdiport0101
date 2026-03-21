@@ -20,7 +20,8 @@ class AdminController extends Controller
     {
         $this->authorize('viewAny', User::class);
 
-        $admins = User::admins()
+        // Include both admin and accounting users
+        $admins = User::whereIn('department', ['Administrator', 'Accounting'])
             ->with(['createdByUser', 'updatedByUser'])
             ->orderBy('created_at', 'desc')
             ->paginate(15);
@@ -48,7 +49,7 @@ class AdminController extends Controller
         try {
             $admin = $this->adminService->createAdmin($request->all(), $request->user());
             return redirect("/admin/users/{$admin->id}")
-                ->with('success', 'Admin user created successfully!');
+                ->with('success', 'Staff member created successfully!');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors());
         }
@@ -58,7 +59,8 @@ class AdminController extends Controller
     {
         $this->authorize('view', $user);
 
-        if (! $user->isAdmin()) {
+        // Allow viewing both admin and accounting users
+        if (! in_array($user->department, ['Administrator', 'Accounting'])) {
             abort(404);
         }
 
@@ -72,7 +74,8 @@ class AdminController extends Controller
     {
         $this->authorize('update', $user);
 
-        if (! $user->isAdmin()) {
+        // Allow editing both admin and accounting users
+        if (! in_array($user->department, ['Administrator', 'Accounting'])) {
             abort(404);
         }
 
@@ -85,14 +88,15 @@ class AdminController extends Controller
     {
         $this->authorize('update', $user);
 
-        if (! $user->isAdmin()) {
+        // Allow updating both admin and accounting users
+        if (! in_array($user->department, ['Administrator', 'Accounting'])) {
             abort(404);
         }
 
         try {
             $this->adminService->updateAdmin($user, $request->all(), $request->user());
             return redirect("/admin/users/{$user->id}")
-                ->with('success', 'Admin updated successfully!');
+                ->with('success', 'Staff member updated successfully!');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors());
         }
@@ -110,7 +114,7 @@ class AdminController extends Controller
 
         try {
             $this->adminService->deactivateAdmin($user, $request->user());
-            return back()->with('success', 'Admin deactivated successfully!');
+            return back()->with('success', 'Staff member deactivated successfully!');
         } catch (\InvalidArgumentException $e) {
             abort(403, $e->getMessage());
         }
@@ -120,13 +124,14 @@ class AdminController extends Controller
     {
         $this->authorize('manageAdmins', $user);
 
-        if (! $user->isAdmin()) {
+        // Allow reactivating both admin and accounting users
+        if (! in_array($user->department, ['Administrator', 'Accounting'])) {
             abort(404);
         }
 
         try {
             $this->adminService->reactivateAdmin($user);
-            return back()->with('success', 'Admin reactivated successfully!');
+            return back()->with('success', 'Staff member reactivated successfully!');
         } catch (\InvalidArgumentException $e) {
             return back()->withErrors(['error' => $e->getMessage()]);
         }

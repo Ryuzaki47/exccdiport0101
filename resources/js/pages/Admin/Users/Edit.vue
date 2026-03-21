@@ -21,7 +21,7 @@ const breadcrumbs = [
 </script>
 
 <template>
-    <Head title="Edit Admin User" />
+    <Head title="Edit Staff Member" />
 
     <AppLayout>
         <div class="w-full p-6">
@@ -29,7 +29,7 @@ const breadcrumbs = [
 
             <div class="max-w-2xl">
                 <div class="overflow-hidden rounded-lg bg-white p-6 shadow-md">
-                    <h1 class="mb-6 text-2xl font-bold text-gray-900">Edit Admin User</h1>
+                    <h1 class="mb-6 text-2xl font-bold text-gray-900">Edit Staff Member</h1>
 
                     <div class="mb-4 rounded-lg bg-gray-50 p-4">
                         <div class="text-sm text-gray-600">

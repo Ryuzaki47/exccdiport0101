@@ -30,7 +30,7 @@ const form = useForm({
 const recentlySuccessful = ref(false);
 
 const submit = () => {
-    form.post(route('password.update'), {
+    form.put(route('password.update'), {
         preserveScroll: true,
         onSuccess: () => {
             recentlySuccessful.value = true;

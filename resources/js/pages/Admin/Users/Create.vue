@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 const breadcrumbs = [
     { title: 'Admin', href: route('admin.dashboard') },
     { title: 'Admin Users', href: route('users.index') },
-    { title: 'Create New Admin', href: route('users.create') },
+    { title: 'Create New Staff', href: route('users.create') },
 ];
 
 const selectedDepartment = ref<'Administrator' | 'Accounting' | null>(null);
@@ -23,7 +23,7 @@ const adminTypes = [
     },
     {
         id: 'Accounting',
-        title: 'Accounting',
+        title: 'Accounting Staff',
         description: 'Accounting department user with financial permissions',
         icon: '💰',
     },
@@ -43,8 +43,8 @@ const selectDepartment = (dept: 'Administrator' | 'Accounting') => {
 
             <div v-if="!selectedDepartment" class="max-w-4xl">
                 <div class="mb-6">
-                    <h1 class="mb-2 text-2xl font-bold text-gray-900">Create New Admin User</h1>
-                    <p class="text-gray-600">Select the type of admin user you want to create</p>
+                    <h1 class="mb-2 text-2xl font-bold text-gray-900">Create New Staff</h1>
+                    <p class="text-gray-600">Select the type of staff member you want to create</p>
                 </div>
 
                 <div class="grid grid-cols-1 gap-6 md:grid-cols-2">

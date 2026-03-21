@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\StudentDashboardController;
 use App\Http\Controllers\StudentAccountController;
@@ -214,20 +213,8 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->group(function
 });
 
 // ============================================
-// SETTINGS ROUTES
+// SETTINGS ROUTES (see routes/settings.php for all settings-related routes)
 // ============================================
-Route::middleware('auth')->prefix('settings')->name('profile.')->group(function () {
-    Route::delete('profile', [\App\Http\Controllers\Settings\ProfileController::class, 'destroy'])->name('destroy');
-    Route::get('profile', [\App\Http\Controllers\Settings\ProfileController::class, 'edit'])->name('edit');
-    Route::patch('profile', [\App\Http\Controllers\Settings\ProfileController::class, 'update'])->name('update');
-    Route::post('profile-picture', [\App\Http\Controllers\Settings\ProfileController::class, 'updatePicture'])->name('update-picture');
-    Route::delete('profile-picture', [\App\Http\Controllers\Settings\ProfileController::class, 'removePicture'])->name('remove-picture');
-});
-
-Route::middleware('auth')->prefix('settings')->name('password.')->group(function () {
-    Route::get('password', [\App\Http\Controllers\Settings\PasswordController::class, 'edit'])->name('edit');
-    Route::put('password', [\App\Http\Controllers\Settings\PasswordController::class, 'update'])->name('update');
-});
 
 Route::middleware('auth')->prefix('settings')->group(function () {
     Route::get('appearance', fn () => Inertia::render('settings/Appearance'))->name('appearance');

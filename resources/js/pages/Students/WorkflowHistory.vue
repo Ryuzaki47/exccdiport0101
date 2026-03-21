@@ -26,7 +26,7 @@ const props = defineProps<Props>();
 
 const breadcrumbs = [
     { title: 'Dashboard', href: route('admin.dashboard') },
-    { title: 'Students',  href: route('students.index')  },
+    { title: 'Archives',  href: route('students.archive')  },
     { title: `${props.account_id} — Workflow History` },
 ];
 

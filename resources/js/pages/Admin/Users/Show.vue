@@ -3,6 +3,7 @@ import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 interface Props {
     admin: any;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const showDeactivateWarning = ref(false);
 
 const breadcrumbs = [
     { title: 'Admin', href: route('admin.dashboard') },
@@ -17,27 +19,12 @@ const breadcrumbs = [
     { title: `${props.admin.last_name}, ${props.admin.first_name}`, href: route('users.show', props.admin.id) },
 ];
 
-const typeLabel = (type: string) => {
-    const map: Record<string, string> = { super: 'Super Admin', manager: 'Manager', operator: 'Operator' };
-    return map[type] ?? type;
-};
-
-const typeBadge = (type: string) => {
-    const map: Record<string, string> = {
-        super: 'bg-purple-100 text-purple-800',
-        manager: 'bg-blue-100 text-blue-800',
-        operator: 'bg-gray-100 text-gray-700',
-    };
-    return map[type] ?? 'bg-gray-100 text-gray-700';
-};
-
 const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
-const deactivate = () => {
-    if (confirm('Deactivate this admin account?')) {
-        router.post(route('admin.users.deactivate', props.admin.id));
-    }
+const confirmDeactivate = () => {
+    showDeactivateWarning.value = false;
+    router.post(route('admin.users.deactivate', props.admin.id));
 };
 
 const reactivate = () => {
@@ -49,33 +36,51 @@ const reactivate = () => {
     <Head :title="`Admin: ${admin.last_name}, ${admin.first_name}`" />
     <AppLayout>
         <div class="w-full p-6">
-            <Breadcrumbs :items="breadcrumbs" />
+            <div class="mb-6 flex items-center justify-between">
+                <Breadcrumbs :items="breadcrumbs" />
+                <div v-if="canManage" class="flex shrink-0 gap-2">
+                    <Link :href="route('users.edit', admin.id)">
+                        <Button>Edit</Button>
+                    </Link>
+                    <Button v-if="admin.is_active" variant="destructive" @click="showDeactivateWarning = true">
+                        Deactivate
+                    </Button>
+                    <Button v-else variant="outline" @click="reactivate">Reactivate</Button>
+                </div>
+            </div>
+
+            <!-- Deactivate Warning Modal -->
+            <div v-if="showDeactivateWarning" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div class="rounded-lg bg-white p-6 shadow-lg max-w-md">
+                    <h2 class="text-lg font-bold text-gray-900">Deactivate Staff Member?</h2>
+                    <p class="mt-3 text-gray-600">
+                        This will deactivate the account for <strong>{{ admin.last_name }}, {{ admin.first_name }}</strong>.
+                    </p>
+                    <p class="mt-2 text-sm text-gray-500">
+                        They will no longer be able to access the admin panel. You can reactivate this account at any time.
+                    </p>
+                    <div class="mt-5 flex justify-end gap-3">
+                        <Button variant="outline" @click="showDeactivateWarning = false">Cancel</Button>
+                        <Button variant="destructive" @click="confirmDeactivate">Confirm Deactivate</Button>
+                    </div>
+                </div>
+            </div>
 
             <div class="max-w-4xl space-y-5">
                 <!-- Header card -->
                 <div class="rounded-lg bg-white p-6 shadow-sm border border-gray-100">
-                    <div class="flex items-start justify-between gap-4">
-                        <div>
-                            <h1 class="text-2xl font-bold text-gray-900">
-                                {{ admin.last_name }}, {{ admin.first_name }}{{ admin.middle_initial ? ' ' + admin.middle_initial + '.' : '' }}
-                            </h1>
-                            <p class="mt-1 text-gray-500">{{ admin.email }}</p>
-                            <div class="mt-3 flex items-center gap-2">
-                                <span :class="['rounded-full px-2.5 py-1 text-xs font-medium', typeBadge(admin.admin_type)]">
-                                    {{ typeLabel(admin.admin_type) }}
-                                </span>
-                                <span :class="['rounded-full px-2.5 py-1 text-xs font-medium', admin.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700']">
-                                    {{ admin.is_active ? 'Active' : 'Inactive' }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div v-if="canManage" class="flex shrink-0 gap-2">
-                            <Link :href="route('users.edit', admin.id)">
-                                <Button>Edit</Button>
-                            </Link>
-                            <Button v-if="admin.is_active" variant="destructive" @click="deactivate">Deactivate</Button>
-                            <Button v-else variant="outline" @click="reactivate">Reactivate</Button>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">
+                            {{ admin.last_name }}, {{ admin.first_name }}{{ admin.middle_initial ? ' ' + admin.middle_initial + '.' : '' }}
+                        </h1>
+                        <p class="mt-1 text-gray-500">{{ admin.email }}</p>
+                        <div class="mt-3 flex items-center gap-2">
+                            <span :class="['rounded-full px-2.5 py-1 text-xs font-medium', admin.department === 'Accounting' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800']">
+                                {{ admin.department ?? 'Administrator' }}
+                            </span>
+                            <span :class="['rounded-full px-2.5 py-1 text-xs font-medium', admin.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700']">
+                                {{ admin.is_active ? 'Active' : 'Inactive' }}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -83,15 +88,11 @@ const reactivate = () => {
                 <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                     <!-- Admin info -->
                     <div class="rounded-lg bg-white p-6 shadow-sm border border-gray-100">
-                        <h2 class="mb-4 font-semibold text-gray-800">Admin information</h2>
+                        <h2 class="mb-4 font-semibold text-gray-800">Staff information</h2>
                         <dl class="space-y-3 text-sm">
                             <div class="flex justify-between">
-                                <dt class="text-gray-500">Type</dt>
-                                <dd><span :class="['rounded-full px-2.5 py-1 text-xs font-medium', typeBadge(admin.admin_type)]">{{ typeLabel(admin.admin_type) }}</span></dd>
-                            </div>
-                            <div class="flex justify-between">
                                 <dt class="text-gray-500">Department</dt>
-                                <dd class="text-gray-900">{{ admin.department || '—' }}</dd>
+                                <dd class="text-gray-900">{{ admin.department ?? 'Administrator' }}</dd>
                             </div>
                             <div class="flex justify-between">
                                 <dt class="text-gray-500">Status</dt>

@@ -27,15 +27,18 @@ class AdminService
         // Validate input
         $validated = $this->validateAdminData($data);
 
-        // Create the admin user
+        // Create the admin user with role based on department
+        $department = $validated['department'] ?? 'Administrator';
+        $role = $department === 'Accounting' ? UserRoleEnum::ACCOUNTING : UserRoleEnum::ADMIN;
+        
         $admin = User::create([
             'last_name'      => $validated['last_name'],
             'first_name'     => $validated['first_name'],
             'middle_initial' => $validated['middle_initial'] ?? null,
             'email'          => $validated['email'],
             'password'       => Hash::make($validated['password']),
-            'role'           => UserRoleEnum::ADMIN,
-            'department'     => $validated['department'] ?? null,
+            'role'           => $role,
+            'department'     => $department,
             'is_active'      => $validated['is_active'] ?? true,
             'updated_by'     => $createdBy?->id,
         ]);
@@ -66,11 +69,16 @@ class AdminService
 
         $validated = $this->validateAdminUpdateData($data, $admin->id);
 
+        // Update department and sync role accordingly
+        $department = array_key_exists('department', $validated) ? $validated['department'] : $admin->department;
+        $role = $department === 'Accounting' ? UserRoleEnum::ACCOUNTING : UserRoleEnum::ADMIN;
+
         $updateData = [
             'last_name'      => $validated['last_name']    ?? $admin->last_name,
             'first_name'     => $validated['first_name']   ?? $admin->first_name,
             'middle_initial' => $validated['middle_initial'] ?? $admin->middle_initial,
-            'department'     => array_key_exists('department', $validated) ? $validated['department'] : $admin->department,
+            'department'     => $department,
+            'role'           => $role,
             'is_active'      => $validated['is_active']    ?? $admin->is_active,
             'updated_by'     => $updatedBy?->id,
         ];
@@ -86,17 +94,18 @@ class AdminService
     }
 
     /**
-     * Deactivate an admin user
+     * Deactivate an admin or accounting user
      *
      * Prevents self-deactivation (must have another admin perform the action)
      */
     public function deactivateAdmin(User $admin, ?User $performedBy = null): bool
     {
-        if (!$admin->isAdmin()) {
-            throw new \InvalidArgumentException('User is not an admin');
+        // Allow deactivating both admin and accounting staff
+        if (!in_array($admin->department, ['Administrator', 'Accounting'])) {
+            throw new \InvalidArgumentException('User is not an admin or accounting staff');
         }
 
-        // Prevent self-deactivation: admin cannot deactivate their own account
+        // Prevent self-deactivation: can't deactivate their own account
         if ($performedBy && $performedBy->id === $admin->id) {
             throw new \InvalidArgumentException('You cannot deactivate your own account. Ask another admin to deactivate you.');
         }
@@ -105,12 +114,13 @@ class AdminService
     }
 
     /**
-     * Reactivate an admin user
+     * Reactivate an admin or accounting user
      */
     public function reactivateAdmin(User $admin): bool
     {
-        if (!$admin->isAdmin()) {
-            throw new \InvalidArgumentException('User is not an admin');
+        // Allow reactivating both admin and accounting staff
+        if (!in_array($admin->department, ['Administrator', 'Accounting'])) {
+            throw new \InvalidArgumentException('User is not an admin or accounting staff');
         }
 
         return $admin->update(['is_active' => true]);
@@ -175,12 +185,19 @@ class AdminService
      */
     public function getAdminStats(): array
     {
-        $allAdmins = User::admins()->get();
+        // Get both admin and accounting users
+        $allUsers = User::whereIn('department', ['Administrator', 'Accounting'])->get();
+        $allAdmins = $allUsers->where('department', 'Administrator');
+        $allAccounting = $allUsers->where('department', 'Accounting');
+        
         $activeAdmins = $allAdmins->where('is_active', true);
+        $activeAccounting = $allAccounting->where('is_active', true);
 
         return [
             'total_admins'        => $allAdmins->count(),
             'total_active_admins' => $activeAdmins->count(),
+            'total_accounting'    => $allAccounting->count(),
+            'total_active_accounting' => $activeAccounting->count(),
             'terms_accepted'      => $allAdmins->filter(fn($a) => $a->terms_accepted_at !== null)->count(),
             'last_login_avg_days' => $this->calculateAverageLastLogin($activeAdmins),
         ];
