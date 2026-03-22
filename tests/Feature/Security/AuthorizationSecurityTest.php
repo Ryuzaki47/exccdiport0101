@@ -151,7 +151,20 @@ class AuthorizationSecurityTest extends TestCase
     public function role_change_only_by_super_admin(): void
     {
         $targetAdmin = User::factory()->create([
-            'role'  admin_can_update_own_profile(): void
+            'role'       => UserRoleEnum::ADMIN,
+            'is_active'  => true,
+        ]);
+
+        $response = $this->actingAs($this->manager)
+            ->put(route('users.update', $targetAdmin->id), [
+                'role' => UserRoleEnum::STUDENT,
+            ]);
+
+        $response->assertStatus(403);
+    }
+
+    /** @test */
+    public function admin_can_update_own_profile(): void
     {
         $response = $this->actingAs($this->manager)
             ->put(route('users.update', $this->manager->id), [
@@ -163,7 +176,10 @@ class AuthorizationSecurityTest extends TestCase
         $response->assertStatus(302); // Redirect on success
 
         $this->manager->refresh();
-        $this->assertEquals('Updated', $this->manager->first_nam
+        $this->assertEquals('Updated', $this->manager->first_name);
+    }
+
+    /** @test */
     public function permission_check_on_every_request(): void
     {
         $admin = User::factory()->create([

@@ -23,12 +23,9 @@ class RoleMiddleware
     /**
      * Handle an incoming request.
      *
-     * If the authenticated user does not hold one of the required $roles,
-     * redirect them to their own dashboard with a descriptive warning flash
-     * instead of throwing a raw 403 error page.
-     *
-     * If the user is not authenticated at all, fall through to the standard
-     * Laravel auth redirect (handled by the 'auth' middleware upstream).
+     * Checks two things in order:
+     *   1. Is the user's account active? If not, log them out immediately.
+     *   2. Does the user hold one of the required roles? If not, redirect to their dashboard.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      * @param  string  ...$roles  Allowed roles for this route (e.g. 'admin', 'accounting')
@@ -42,6 +39,21 @@ class RoleMiddleware
             return redirect()->route('login');
         }
 
+        // ── DEACTIVATION GATE ──────────────────────────────────────────────────
+        // If the account has been deactivated since this session was created,
+        // destroy the session immediately and send them back to login.
+        // This closes the window where a deactivated user stays browsable
+        // until their session naturally expires.
+        if (! $user->is_active) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')
+                ->with('flash.error', 'Your account has been deactivated. Please contact an administrator.');
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
         $userRole = $user->role instanceof UserRoleEnum
             ? $user->role->value
             : (string) $user->role;
@@ -52,7 +64,6 @@ class RoleMiddleware
         }
 
         // Role mismatch — redirect to the user's own dashboard with a flash warning.
-        // This is friendlier than a raw 403 page and matches documented behavior.
         $dashboardRoute = self::ROLE_DASHBOARDS[$userRole] ?? 'dashboard';
 
         return redirect()

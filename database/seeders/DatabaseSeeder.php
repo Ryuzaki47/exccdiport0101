@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
         $this->command->newLine();
 
         // Step 2: EnhancedSubjectSeeder — DISABLED (Subject Management removed)
-        // $this->call(EnhancedSubjectSeeder::class);
+        $this->call(EnhancedSubjectSeeder::class);
 
         // Step 3: FeeSeeder — DISABLED (Fee Management removed)
         // $this->call(FeeSeeder::class);

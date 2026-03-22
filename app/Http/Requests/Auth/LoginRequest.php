@@ -26,15 +26,15 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'email'    => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
-            'role' => ['required', 'string', 'in:admin,accounting,student'],
+            'role'     => ['required', 'string', 'in:admin,accounting,student'],
         ];
     }
 
     /**
      * Attempt to authenticate the request's credentials.
-     * Only allows login if the user's role matches the selected role.
+     * Enforces: credentials match → role match → account is active.
      *
      * @throws \Illuminate\Validation\ValidationException
      */
@@ -42,11 +42,11 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        $credentials = $this->only('email', 'password');
+        $credentials  = $this->only('email', 'password');
         $selectedRole = $this->input('role');
 
-        // Attempt to authenticate with basic credentials
-        if (!Auth::attempt($credentials, $this->boolean('remember'))) {
+        // Step 1 — Verify credentials.
+        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
@@ -54,58 +54,60 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        // Get the authenticated user
-        $user = Auth::user();
-        
-        // Get user's actual role (handle both string and enum)
+        $user     = Auth::user();
         $userRole = $this->getUserRole($user);
 
-        // Verify the user's role matches the selected role
+        // Step 2 — Verify the selected role matches the user's actual role.
         if ($userRole !== $selectedRole) {
-            // Log the user out immediately
             Auth::logout();
-            
-            // Hit rate limiter for security
             RateLimiter::hit($this->throttleKey());
 
-            // Return specific error message based on what they selected
             $roleLabel = $this->getRoleLabel($selectedRole);
-            
+
             throw ValidationException::withMessages([
                 'email' => "Invalid {$roleLabel} credentials. Please check your role selection or use the correct login portal.",
             ]);
         }
 
-        // Clear rate limiter on successful authentication
+        // Step 3 — Verify the account is active.
+        // Deactivated users must not be allowed to create a new session.
+        if (! $user->is_active) {
+            Auth::logout();
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Your account has been deactivated. Please contact an administrator.',
+            ]);
+        }
+
+        // All checks passed — clear rate limiter.
         RateLimiter::clear($this->throttleKey());
     }
 
     /**
-     * Get the user's role, handling both string and enum types
+     * Get the user's role, handling both string and enum types.
      */
     protected function getUserRole($user): string
     {
         $role = $user->role;
-        
-        // Handle enum or object with value property
+
         if (is_object($role)) {
             return $role->value ?? (string) $role;
         }
-        
-        // Handle string
+
         return (string) $role;
     }
 
     /**
-     * Get human-readable role label
+     * Get human-readable role label.
      */
     protected function getRoleLabel(string $role): string
     {
-        return match($role) {
-            'admin' => 'Administrator',
+        return match ($role) {
+            'admin'      => 'Administrator',
             'accounting' => 'Accounting Staff',
-            'student' => 'Student',
-            default => ucfirst($role),
+            'student'    => 'Student',
+            default      => ucfirst($role),
         };
     }
 
@@ -134,28 +136,28 @@ class LoginRequest extends FormRequest
 
     /**
      * Get the rate limiting throttle key for the request.
-     * Include role in throttle key to prevent role enumeration
+     * Role is included to prevent role enumeration attacks.
      */
     public function throttleKey(): string
     {
         return $this->string('email')
             ->lower()
-            ->append('|'.$this->input('role'))
-            ->append('|'.$this->ip())
+            ->append('|' . $this->input('role'))
+            ->append('|' . $this->ip())
             ->transliterate()
             ->value();
     }
 
     /**
-     * Get custom error messages
+     * Get custom error messages.
      */
     public function messages(): array
     {
         return [
-            'role.required' => 'Please select a role to continue.',
-            'role.in' => 'Invalid role selected.',
-            'email.required' => 'Email address is required.',
-            'email.email' => 'Please enter a valid email address.',
+            'role.required'     => 'Please select a role to continue.',
+            'role.in'           => 'Invalid role selected.',
+            'email.required'    => 'Email address is required.',
+            'email.email'       => 'Please enter a valid email address.',
             'password.required' => 'Password is required.',
         ];
     }

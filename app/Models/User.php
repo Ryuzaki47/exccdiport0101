@@ -15,9 +15,9 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     // Status constants
-    const STATUS_ACTIVE = 'active';
+    const STATUS_ACTIVE    = 'active';
     const STATUS_GRADUATED = 'graduated';
-    const STATUS_DROPPED = 'dropped';
+    const STATUS_DROPPED   = 'dropped';
 
     protected $fillable = [
         'last_name',
@@ -72,14 +72,14 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'role' => UserRoleEnum::class,
-            'birthday' => 'date',
+            'password'          => 'hashed',
+            'role'              => UserRoleEnum::class,
+            'birthday'          => 'date',
             'terms_accepted_at' => 'datetime',
-            'permissions' => 'json',
-            'is_active' => 'boolean',
-            'is_irregular' => 'boolean',
-            'last_login_at' => 'datetime',
+            'permissions'       => 'json',
+            'is_active'         => 'boolean',
+            'is_irregular'      => 'boolean',
+            'last_login_at'     => 'datetime',
         ];
     }
 
@@ -177,8 +177,6 @@ class User extends Authenticatable
         return $this->role === UserRoleEnum::ADMIN;
     }
 
-
-
     /**
      * Check if user has accepted terms & conditions
      */
@@ -201,7 +199,7 @@ class User extends Authenticatable
     public function hasPermission(string $permission): bool
     {
         // Inactive users have no permissions regardless of role
-        if (!$this->is_active) {
+        if (! $this->is_active) {
             return false;
         }
 
@@ -232,7 +230,7 @@ class User extends Authenticatable
     public function hasAllPermissions(array $permissions): bool
     {
         foreach ($permissions as $permission) {
-            if (!$this->hasPermission($permission)) {
+            if (! $this->hasPermission($permission)) {
                 return false;
             }
         }
@@ -250,19 +248,22 @@ class User extends Authenticatable
     // ========== VALIDATION RULES ==========
 
     /**
-     * Get validation rules for user updates
+     * Get validation rules for user updates.
+     * NOTE: profile_picture mimes must stay in sync with
+     * Settings/ProfileController::updatePicture() validation.
      */
     public static function getValidationRules($userId = null): array
     {
         return [
-            'account_id' => 'nullable|string|unique:users,account_id,' . $userId,
-            'address' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:20',
-            'course' => 'nullable|string|max:100',
-            'year_level' => 'nullable|string|max:50',
-            'faculty' => 'nullable|string|max:100',
-            'status' => 'required|in:active,graduated,dropped',
-            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'account_id'      => 'nullable|string|unique:users,account_id,' . $userId,
+            'address'         => 'nullable|string|max:255',
+            'phone'           => 'nullable|string|max:20',
+            'course'          => 'nullable|string|max:100',
+            'year_level'      => 'nullable|string|max:50',
+            'faculty'         => 'nullable|string|max:100',
+            'status'          => 'required|in:active,graduated,dropped',
+            // webp included — must match ProfileController::updatePicture() mimes rule
+            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ];
     }
 
@@ -274,13 +275,13 @@ class User extends Authenticatable
         $uniqueEmail = $userId ? "unique:users,email,{$userId}" : 'unique:users,email';
 
         return [
-            'last_name' => 'required|string|max:100',
-            'first_name' => 'required|string|max:100',
+            'last_name'      => 'required|string|max:100',
+            'first_name'     => 'required|string|max:100',
             'middle_initial' => 'nullable|string|max:1',
-            'email' => "required|email|{$uniqueEmail}",
-            'password' => $userId ? 'nullable|min:8|confirmed' : 'required|min:8|confirmed',
-            'department' => 'required|in:Administrator,Accounting',
-            'is_active' => 'boolean',
+            'email'          => "required|email|{$uniqueEmail}",
+            'password'       => $userId ? 'nullable|min:8|confirmed' : 'required|min:8|confirmed',
+            'department'     => 'required|in:Administrator,Accounting',
+            'is_active'      => 'boolean',
         ];
     }
 }

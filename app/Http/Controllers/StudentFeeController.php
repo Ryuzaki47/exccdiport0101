@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\Student;
 use App\Models\StudentAssessment;
 use App\Models\StudentPaymentTerm;
+use App\Models\Subject;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\StudentStatusLog;
@@ -26,17 +27,70 @@ class StudentFeeController extends Controller
     // FEE CONFIGURATION
     // =========================================================================
     //
-    // Fee presets, allowed categories, and payment term definitions have been
-    // moved to config/fees.php so school administrators can update them each
-    // year without a code deploy.
+    // Billing model (AY 2025-2026, Rate of Conduct of Consultation April 2025):
+    //   Total = (Σ selected units × ₱364) + (Σ lab subjects × ₱1,656) + ₱6,956 misc
     //
-    // Read presets  : config('fees.presets')
-    // Read categories: config('fees.categories')
-    // Read terms    : config('fees.terms')
+    // config('fees.tuition_per_unit')    → 364.00
+    // config('fees.lab_fee_per_subject') → 1656.00
+    // config('fees.miscellaneous')       → itemized fixed block, total 6956.00
+    // config('fees.terms')               → 5 payment term definitions
     //
     // After editing config/fees.php run: php artisan config:clear
     // =========================================================================
 
+    // =========================================================================
+    // SHARED HELPER — Course list
+    // =========================================================================
+
+    private function allCourses(): \Illuminate\Support\Collection
+    {
+        return collect(array_unique(array_merge(
+            Subject::distinct()->pluck('course')->toArray(),
+            User::where('role', 'student')
+                ->whereNotNull('course')
+                ->distinct()
+                ->pluck('course')
+                ->toArray(),
+        )))->sort()->values();
+    }
+
+    // =========================================================================
+    // SHARED HELPER — Build subjectMap for the Create Assessment form
+    // Returns: subjectMap[course][year_level][semester] = SubjectItem[]
+    // =========================================================================
+
+    private function buildSubjectMap(): array
+    {
+        $rate   = (float) config('fees.tuition_per_unit',    364.00);
+        $labFee = (float) config('fees.lab_fee_per_subject', 1656.00);
+
+        return Subject::where('is_active', true)
+            ->orderBy('course')
+            ->orderByRaw("FIELD(year_level,'1st Year','2nd Year','3rd Year','4th Year')")
+            ->orderByRaw("FIELD(semester,'1st Sem','2nd Sem','Summer')")
+            ->orderBy('code')
+            ->get()
+            ->groupBy('course')
+            ->map(fn ($byCourse) => $byCourse
+                ->groupBy('year_level')
+                ->map(fn ($byYear) => $byYear
+                    ->groupBy('semester')
+                    ->map(fn ($bySem) => $bySem->map(fn ($s) => [
+                        'id'             => $s->id,
+                        'code'           => $s->code,
+                        'name'           => $s->name,
+                        'units'          => $s->units,
+                        'price_per_unit' => $rate,
+                        'has_lab'        => (bool) $s->has_lab,
+                        'lab_fee'        => $s->has_lab ? $labFee : 0,
+                        'total_cost'     => round($s->units * $rate + ($s->has_lab ? $labFee : 0), 2),
+                        'year_level'     => $s->year_level,
+                        'semester'       => $s->semester,
+                    ])->values()->toArray())
+                    ->toArray())
+                ->toArray())
+            ->toArray();
+    }
 
     // =========================================================================
     // INDEX
@@ -71,10 +125,7 @@ class StudentFeeController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $courses = User::where('role', 'student')
-            ->whereNotNull('course')
-            ->distinct()
-            ->pluck('course');
+        $courses = $this->allCourses();
 
         $yearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
         $statuses   = [
@@ -153,15 +204,9 @@ class StudentFeeController extends Controller
                 ];
             });
 
-        // Subject management has been disabled; pass an empty map so the Irregular
-        // picker on the frontend renders gracefully (no subjects available).
-        $subjectMap = collect();
-
-        // Course list: presets + existing student courses (subjects no longer contribute)
-        $allCourses = collect(array_unique(array_merge(
-            array_keys(config('fees.presets', [])),
-            User::where('role', 'student')->whereNotNull('course')->distinct()->pluck('course')->toArray(),
-        )))->sort()->values();
+        // Build miscellaneous fee lines for display
+        $miscItems = config('fees.miscellaneous', []);
+        $miscTotal = collect($miscItems)->sum('amount');
 
         return Inertia::render('StudentFees/Create', [
             'students'    => $students,
@@ -174,10 +219,14 @@ class StudentFeeController extends Controller
                 ($currentYear + 1) . '-' . ($currentYear + 2),
                 ($currentYear + 2) . '-' . ($currentYear + 3),
             ],
-            'feePresets'  => config('fees.presets', []),
-            // Irregular subject picker — empty because Subject management is disabled.
-            'subjectMap'  => $subjectMap,
-            'courses'     => $allCourses,
+            // Real subjects from DB — subjectMap[course][year_level][semester] = Subject[]
+            'subjectMap'     => $this->buildSubjectMap(),
+            'courses'        => $this->allCourses(),
+            // Fee rate info for client-side total calculation
+            'tuitionPerUnit' => (float) config('fees.tuition_per_unit',    364.00),
+            'labFeePerSubject' => (float) config('fees.lab_fee_per_subject', 1656.00),
+            'miscItems'      => $miscItems,
+            'miscTotal'      => $miscTotal,
         ]);
     }
 
@@ -185,87 +234,101 @@ class StudentFeeController extends Controller
     // STORE — Save a new assessment
     // =========================================================================
     //
-    // Supports two modes via the `assessment_type` field:
+    // Accepts selected_subjects[]: array of subject IDs.
+    // Controller fetches each Subject from DB, calculates:
+    //   tuition = Σ (subject.units × tuition_per_unit)
+    //   labs    = Σ (subject.has_lab ? lab_fee_per_subject : 0)
+    //   misc    = fixed miscellaneous block from config
+    //   total   = tuition + labs + misc
     //
-    //   regular   → fee_items[]: itemised fee line (no subject FKs)
-    //   irregular → selected_subjects[]: subject data passed directly from the
-    //               request array (subject management is disabled; no DB lookup)
+    // Both Regular and Irregular use the same pathway.
+    // Regular = staff selects all subjects for the student's standard term.
+    // Irregular = staff selects a custom mix of subjects across courses/terms.
     // =========================================================================
 
     public function store(Request $request)
     {
         $base = $request->validate([
-            'user_id'         => 'required|exists:users,id',
-            'course'          => 'required|string|max:255',
-            'year_level'      => 'required|string',
-            'semester'        => 'required|in:1st Sem,2nd Sem,Summer',
-            'school_year'     => ['required', 'string', 'max:20', 'regex:/^\d{4}-\d{4}$/'],
-            'assessment_type' => 'required|in:regular,irregular',
+            'user_id'          => 'required|exists:users,id',
+            'course'           => 'required|string|max:255',
+            'year_level'       => 'required|string',
+            'semester'         => 'required|in:1st Sem,2nd Sem,Summer',
+            'school_year'      => ['required', 'string', 'max:20', 'regex:/^\d{4}-\d{4}$/'],
+            'assessment_type'  => 'required|in:regular,irregular',
+            'selected_subjects' => 'required|array|min:1',
+            'selected_subjects.*' => 'required|integer|exists:subjects,id',
         ]);
 
         $isIrregular = $base['assessment_type'] === 'irregular';
 
-        if ($isIrregular) {
-            $request->validate([
-                'selected_subjects'          => 'required|array|min:1',
-                'selected_subjects.*.name'   => 'required|string|max:255',
-                'selected_subjects.*.units'  => 'required|integer|min:1',
-                'selected_subjects.*.amount' => 'required|numeric|min:0',
-            ]);
-        } else {
-            $request->validate([
-                'fee_items'            => 'required|array|min:1',
-                'fee_items.*.category' => 'required|string|in:Tuition,Laboratory,Miscellaneous,Other',
-                'fee_items.*.name'     => 'required|string|max:100',
-                'fee_items.*.amount'   => 'required|numeric|min:0',
-            ]);
-        }
-
         DB::beginTransaction();
         try {
-            $yearNum = (int) explode('-', $base['school_year'])[0];
+            $rate   = (float) config('fees.tuition_per_unit',    364.00);
+            $labFee = (float) config('fees.lab_fee_per_subject', 1656.00);
 
-            if ($isIrregular) {
-                // ── Irregular: build fee lines from the subjects array passed by the request.
-                // Subject management is disabled; subjects are plain data, not DB records.
-                $subjects   = collect($request->selected_subjects);
-                $grandTotal = round($subjects->sum('amount'), 2);
+            // Load selected subjects from DB — trust the database, not the client
+            $subjects = Subject::whereIn('id', $base['selected_subjects'])
+                ->where('is_active', true)
+                ->get();
 
-                $feeBreakdown = $subjects->map(function ($s) {
-                    return [
-                        'category' => 'Tuition',
-                        'name'     => $s['name'],
-                        'units'    => (int) $s['units'],
-                        'amount'   => (float) $s['amount'],
-                    ];
-                })->values()->toArray();
-
-                $tuitionTotal = $grandTotal;
-                $otherTotal   = 0;
-                $subjectIds   = [];
-
-            } else {
-                // ── Regular: itemised fee breakdown from preset (editable) ──
-                $feeItems     = collect($request->fee_items);
-                $tuitionTotal = round($feeItems->where('category', 'Tuition')->sum('amount'), 2);
-                $otherTotal   = round($feeItems->whereNotIn('category', ['Tuition'])->sum('amount'), 2);
-                $grandTotal   = round($tuitionTotal + $otherTotal, 2);
-                $subjectIds   = [];
-
-                if ($grandTotal <= 0) {
-                    throw new \InvalidArgumentException('Total assessment amount must be greater than zero.');
-                }
-
-                $feeBreakdown = $feeItems->map(fn ($item) => [
-                    'category'    => $item['category'],
-                    'name'        => $item['name'],
-                    'amount'      => (float) $item['amount'],
-                    'description' => "{$item['name']} — {$base['year_level']} {$base['semester']} {$base['school_year']}",
-                ])->values()->toArray();
+            if ($subjects->isEmpty()) {
+                throw new \InvalidArgumentException('No valid active subjects found for the selected IDs.');
             }
 
-            // Archive any existing active assessments for the same year/semester combination.
-            // Ensures only ONE assessment per year/semester (prevents duplicates when admin corrects course selection).
+            $yearNum = (int) explode('-', $base['school_year'])[0];
+
+            // ── Fee calculation ──────────────────────────────────────────────
+            $tuitionTotal = round($subjects->sum(fn ($s) => $s->units * $rate), 2);
+            $labTotal     = round($subjects->filter(fn ($s) => $s->has_lab)->count() * $labFee, 2);
+
+            // Fixed miscellaneous block — same every semester
+            $miscItems = collect(config('fees.miscellaneous', []));
+            $miscTotal = round($miscItems->sum('amount'), 2);
+
+            $grandTotal = round($tuitionTotal + $labTotal + $miscTotal, 2);
+
+            if ($grandTotal <= 0) {
+                throw new \InvalidArgumentException('Total assessment amount must be greater than zero.');
+            }
+
+            // ── Build fee breakdown for storage ──────────────────────────────
+            $feeBreakdown = [];
+
+            // Tuition lines — one per subject
+            foreach ($subjects as $subject) {
+                $feeBreakdown[] = [
+                    'category'   => 'Tuition',
+                    'name'       => $subject->name,
+                    'code'       => $subject->code,
+                    'units'      => $subject->units,
+                    'amount'     => round($subject->units * $rate, 2),
+                    'subject_id' => $subject->id,
+                ];
+            }
+
+            // Lab lines — one per lab subject
+            foreach ($subjects->filter(fn ($s) => $s->has_lab) as $subject) {
+                $feeBreakdown[] = [
+                    'category'   => 'Laboratory',
+                    'name'       => 'Laboratory Fee — ' . $subject->name,
+                    'code'       => $subject->code . '-LAB',
+                    'units'      => 0,
+                    'amount'     => $labFee,
+                    'subject_id' => $subject->id,
+                ];
+            }
+
+            // Fixed miscellaneous lines
+            foreach ($miscItems as $item) {
+                $feeBreakdown[] = [
+                    'category' => $item['category'],
+                    'name'     => $item['name'],
+                    'units'    => 0,
+                    'amount'   => (float) $item['amount'],
+                ];
+            }
+
+            // Archive any existing active assessments for the same year/semester.
             StudentAssessment::where('user_id', $base['user_id'])
                 ->where('status', 'active')
                 ->where('year_level', $base['year_level'])
@@ -280,16 +343,15 @@ class StudentFeeController extends Controller
                 'year_level'        => $base['year_level'],
                 'semester'          => $base['semester'],
                 'school_year'       => $base['school_year'],
-                'tuition_fee'       => $tuitionTotal,
-                'other_fees'        => $otherTotal,
+                'tuition_fee'       => $tuitionTotal + $labTotal,
+                'other_fees'        => $miscTotal,
                 'total_assessment'  => $grandTotal,
-                'subjects'          => $subjectIds,
+                'subjects'          => $base['selected_subjects'],
                 'fee_breakdown'     => $feeBreakdown,
                 'created_by'        => auth()->id(),
                 'status'            => 'active',
             ]);
 
-            // Single charge transaction (one per assessment keeps it clean)
             Transaction::create([
                 'user_id'   => $base['user_id'],
                 'reference' => 'ASMT-' . Str::upper(Str::random(8)),
@@ -300,26 +362,30 @@ class StudentFeeController extends Controller
                 'amount'    => $grandTotal,
                 'status'    => PaymentStatus::PENDING->value,
                 'meta'      => [
-                    'assessment_id'   => $assessment->id,
-                    'assessment_type' => $base['assessment_type'],
-                    'course'          => $base['course'],
-                    'description'     => $isIrregular
-                        ? 'Irregular — ' . count($feeBreakdown) . ' subject(s)'
-                        : "Tuition Fee — {$base['year_level']} {$base['semester']}",
-                    'items'           => $feeBreakdown,
+                    'assessment_id'    => $assessment->id,
+                    'assessment_type'  => $base['assessment_type'],
+                    'course'           => $base['course'],
+                    'subjects_count'   => $subjects->count(),
+                    'total_units'      => $subjects->sum('units'),
+                    'lab_subjects'     => $subjects->filter(fn ($s) => $s->has_lab)->count(),
+                    'tuition_total'    => $tuitionTotal,
+                    'lab_total'        => $labTotal,
+                    'misc_total'       => $miscTotal,
+                    'description'      => $isIrregular
+                        ? "Irregular — {$subjects->count()} subjects, {$subjects->sum('units')} units"
+                        : "{$base['year_level']} {$base['semester']} — {$subjects->count()} subjects",
+                    'items'            => $feeBreakdown,
                 ],
             ]);
 
-            // 5 payment terms (same for both Regular and Irregular)
             $this->createPaymentTerms($assessment, $grandTotal);
 
             $user = User::find($base['user_id']);
-            
-            // Update the student's course if it wasn't set or if a new one is being assigned
-            if ($base['course'] && (!$user->course || $user->course === 'N/A')) {
+
+            if ($base['course'] && (! $user->course || $user->course === 'N/A')) {
                 $user->update(['course' => $base['course']]);
             }
-            
+
             \App\Services\AccountService::recalculate($user);
 
             DB::commit();
@@ -327,7 +393,7 @@ class StudentFeeController extends Controller
             $typeLabel = $isIrregular ? 'Irregular' : 'Regular';
             return redirect()
                 ->route('student-fees.show', $base['user_id'])
-                ->with('success', "{$typeLabel} assessment created! 5 payment terms generated.");
+                ->with('success', "{$typeLabel} assessment created — {$subjects->count()} subjects, {$subjects->sum('units')} units, total ₱" . number_format($grandTotal, 2) . ". 5 payment terms generated.");
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -358,15 +424,11 @@ class StudentFeeController extends Controller
             ->get()
             ->map(fn ($a) => [
                 'id'               => $a->id,
-                // FIX (Bug #4): include course so Show.vue semester selector
-                // can display the correct course badge per assessment when
-                // switching between assessments with different courses.
                 'course'           => $a->course,
                 'semester'         => $a->semester,
                 'school_year'      => $a->school_year,
                 'year_level'       => $a->year_level,
                 'total_assessment' => (float) $a->total_assessment,
-                // Include fee breakdown for client-side filtering
                 'tuition_fee'      => (float) $a->tuition_fee,
                 'other_fees'       => (float) $a->other_fees,
                 'fee_breakdown'    => $a->fee_breakdown ?? [],
@@ -429,16 +491,16 @@ class StudentFeeController extends Controller
 
             if ((float) $latestAssessment->tuition_fee > 0) {
                 $feeBreakdown->push([
-                    'category' => 'Tuition',
+                    'category' => 'Tuition + Lab',
                     'total'    => (float) $latestAssessment->tuition_fee,
-                    'items'    => 1,
+                    'items'    => count(collect($latestAssessment->fee_breakdown ?? [])->whereIn('category', ['Tuition', 'Laboratory'])->all()),
                 ]);
             }
 
             $storedBreakdown = $latestAssessment->fee_breakdown ?? [];
             if (! empty($storedBreakdown)) {
                 $grouped = collect($storedBreakdown)
-                    ->whereNotIn('category', ['Tuition'])
+                    ->whereNotIn('category', ['Tuition', 'Laboratory'])
                     ->groupBy('category');
                 foreach ($grouped as $category => $items) {
                     $feeBreakdown->push([
@@ -464,8 +526,6 @@ class StudentFeeController extends Controller
                 ]);
         }
 
-        // Resolve back URL: if the user came from Archives (?from=archive),
-        // the Back button should return to the archive list, not the fee index.
         $backUrl = $request->query('from') === 'archive'
             ? route('students.archive')
             : route('student-fees.index');
@@ -585,12 +645,6 @@ class StudentFeeController extends Controller
                 ->with('info', 'Please create an assessment for this student first.');
         }
 
-        // Subject management is disabled; courses come from presets and existing students only.
-        $courses = collect(array_unique(array_merge(
-            array_keys(config('fees.presets', [])),
-            User::where('role', 'student')->whereNotNull('course')->distinct()->pluck('course')->toArray(),
-        )))->sort()->values();
-
         return Inertia::render('StudentFees/Edit', [
             'student'       => [
                 'id'             => $student->id,
@@ -610,9 +664,13 @@ class StudentFeeController extends Controller
                 'status'         => $student->status,
             ],
             'assessment'    => $assessment,
-            'courses'       => $courses,
+            'courses'       => $this->allCourses(),
             'feeCategories' => config('fees.categories', []),
-            'presets'       => config('fees.presets', []),
+            // For edit, still support manual fee items in case subjects change
+            'subjectMap'    => $this->buildSubjectMap(),
+            'tuitionPerUnit'  => (float) config('fees.tuition_per_unit',    364.00),
+            'labFeePerSubject' => (float) config('fees.lab_fee_per_subject', 1656.00),
+            'miscItems'       => config('fees.miscellaneous', []),
         ]);
     }
 
@@ -640,12 +698,6 @@ class StudentFeeController extends Controller
         try {
             $user = User::where('role', 'student')->findOrFail($userId);
 
-            // FIX (Bug #1): Only update the users table.
-            // The students table had last_name, first_name, middle_initial, email,
-            // birthday, phone, address, course, year_level dropped in migration
-            // 2026_03_16_000000_remove_duplicate_columns_from_students_table.
-            // Writing to those columns would throw SQLSTATE[42S22] Column not found.
-            // All personal data is now authoritative in the users table only.
             $user->update([
                 'last_name'      => $validated['last_name'],
                 'first_name'     => $validated['first_name'],
@@ -664,8 +716,8 @@ class StudentFeeController extends Controller
                 ->firstOrFail();
 
             $feeItems     = collect($validated['fee_items']);
-            $tuitionTotal = round($feeItems->where('category', 'Tuition')->sum('amount'), 2);
-            $otherTotal   = round($feeItems->whereNotIn('category', ['Tuition'])->sum('amount'), 2);
+            $tuitionTotal = round($feeItems->whereIn('category', ['Tuition', 'Laboratory'])->sum('amount'), 2);
+            $otherTotal   = round($feeItems->whereNotIn('category', ['Tuition', 'Laboratory'])->sum('amount'), 2);
             $grandTotal   = round($tuitionTotal + $otherTotal, 2);
 
             $assessment->update([
@@ -673,7 +725,6 @@ class StudentFeeController extends Controller
                 'year_level'       => $validated['year_level'],
                 'semester'         => $validated['semester'],
                 'school_year'      => $validated['school_year'],
-                'subjects'         => [],
                 'fee_breakdown'    => $feeItems->map(fn ($item) => [
                     'category' => $item['category'],
                     'name'     => $item['name'],
@@ -684,9 +735,8 @@ class StudentFeeController extends Controller
                 'total_assessment' => $grandTotal,
             ]);
 
-            // Rescale each term's amount + balance proportionally
             $terms = $assessment->paymentTerms()->orderBy('term_order')->get();
-            $oldTotal = 0;  // For transaction lookup fallback
+            $oldTotal = 0;
             if ($terms->isNotEmpty()) {
                 $oldTotal     = $terms->sum('amount');
                 $scaleFactor  = $oldTotal > 0 ? ($grandTotal / $oldTotal) : 1;
@@ -711,60 +761,41 @@ class StudentFeeController extends Controller
                 }
             }
 
-            // Update the associated charge transaction to reflect new total.
-            // Critical: This keeps AccountService::recalculate() accurate.
-            //
-            // FIX (Bug #3): Do NOT filter by status = 'pending'.
-            // After a partial payment the charge transaction status becomes 'partial'
-            // or 'paid'. Restricting to PENDING caused a silent miss and the balance
-            // stayed stale. We match on ALL statuses for charge kind.
             $chargeTransaction = Transaction::where('user_id', $userId)
                 ->where('kind', 'charge')
                 ->orderByDesc('created_at')
                 ->get()
                 ->first(function ($t) use ($assessment, $oldTotal) {
                     $meta = $t->meta ?? [];
-                    // Primary: match by assessment_id stored in meta (int-safe cast)
                     if (isset($meta['assessment_id']) && (int) $meta['assessment_id'] === (int) $assessment->id) {
                         return true;
                     }
-                    // Fallback: creation time within 2 min + amount proximity
                     $createdDiff = abs($t->created_at->diffInSeconds($assessment->created_at));
                     return $createdDiff < 120 && abs((float) $t->amount - $oldTotal) < 0.01;
                 });
 
             if ($chargeTransaction) {
                 $meta = $chargeTransaction->meta ?? [];
-                $meta['course'] = $validated['course'];
-                $meta['assessment_id'] = $assessment->id;  // Ensure it's set
-                $meta['items'] = $feeItems->map(fn ($item) => [
-                    'category' => $item['category'],
-                    'name'     => $item['name'],
-                    'amount'   => (float) $item['amount'],
-                ])->toArray();
-
+                $meta['course']        = $validated['course'];
+                $meta['assessment_id'] = $assessment->id;
                 $chargeTransaction->update([
                     'amount' => $grandTotal,
                     'meta'   => $meta,
                 ]);
-                
                 Log::info('Updated charge transaction for assessment update', [
-                    'user_id' => $userId,
-                    'assessment_id' => $assessment->id,
-                    'old_amount' => $oldTotal,
-                    'new_amount' => $grandTotal,
+                    'user_id'        => $userId,
+                    'assessment_id'  => $assessment->id,
+                    'old_amount'     => $oldTotal,
+                    'new_amount'     => $grandTotal,
                     'transaction_id' => $chargeTransaction->id,
                 ]);
             } else {
                 Log::warning('Could not find charge transaction to update', [
-                    'user_id' => $userId,
+                    'user_id'       => $userId,
                     'assessment_id' => $assessment->id,
-                    'old_amount' => $oldTotal,
                 ]);
             }
 
-            // Archive any other active assessments for the same year/semester.
-            // Ensures only ONE assessment per year/semester combination (prevents course duplicates).
             StudentAssessment::where('user_id', $userId)
                 ->where('status', 'active')
                 ->where('id', '!=', $assessment->id)
@@ -865,17 +896,9 @@ class StudentFeeController extends Controller
 
         return $pdf->download($filename);
     }
-    
-    // ── DROP STUDENT — move active/pending student to dropped ────────────────
-    /**
-     * POST /student-fees/{user}/drop
-     *
-     * {user} is resolved by Laravel route model binding (User model, PK).
-     * A non-existent or non-numeric id returns a 404 before this method fires.
-     *
-     * Accessible to both admin and accounting roles.
-     * Only active, pending, or suspended students can be dropped.
-     */
+
+    // ── DROP STUDENT ─────────────────────────────────────────────────────────
+
     public function drop(Request $request, User $user): \Illuminate\Http\RedirectResponse
     {
         $student = Student::where('user_id', $user->id)->firstOrFail();
@@ -895,9 +918,6 @@ class StudentFeeController extends Controller
 
         $fromStatus = $student->enrollment_status;
 
-        // Update both records so every view stays consistent.
-        // students.enrollment_status — drives archive / reinstate logic.
-        // users.status              — drives Student Fee Management index filter.
         $student->update(['enrollment_status' => 'dropped']);
         $user->update(['status' => User::STATUS_DROPPED]);
 
@@ -921,19 +941,8 @@ class StudentFeeController extends Controller
 
     public function createStudent()
     {
-        $courses = User::where('role', 'student')
-            ->whereNotNull('course')
-            ->distinct()
-            ->pluck('course')
-            ->sort()
-            ->values();
-
-        if ($courses->isEmpty()) {
-            $courses = collect(array_keys(config('fees.presets', [])));
-        }
-
         return Inertia::render('StudentFees/CreateStudent', [
-            'courses'    => $courses,
+            'courses'    => $this->allCourses(),
             'yearLevels' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
         ]);
     }
@@ -984,10 +993,6 @@ class StudentFeeController extends Controller
                 'password'          => Hash::make('password'),
             ]);
 
-            // Only store student-specific data. Personal info is in the user record.
-            // NOTE: total_balance was dropped in migration
-            // 2026_03_16_034638_drop_total_balance_from_students_table.
-            // Balance is exclusively in accounts.balance via AccountService.
             Student::create([
                 'user_id'           => $user->id,
                 'student_id'        => $studentId,
@@ -1016,20 +1021,6 @@ class StudentFeeController extends Controller
     // PRIVATE HELPERS
     // =========================================================================
 
-    /**
-     * Create the standard payment terms for a newly created assessment.
-     *
-     * Term definitions are read from config/fees.terms so the percentages can
-     * be updated in config/fees.php without touching this controller.
-     *
-     * The last term absorbs any cent-level rounding remainder so that
-     * SUM(term.amount) == $total exactly.
-     *
-     * NOTE: Payment terms are owned by the assessment (student_assessment_id),
-     * never directly by a user. Use term → assessment → user if needed.
-     *
-     * REQUIRES: Must be called inside an active DB::beginTransaction() block.
-     */
     private function createPaymentTerms(StudentAssessment $assessment, float $total): void
     {
         /** @var array<int, array{name: string, percentage: float}> $termDefs */
@@ -1063,9 +1054,6 @@ class StudentFeeController extends Controller
         }
     }
 
-    /**
-     * Generate a unique account ID in format: STU-NNNNN
-     */
     private function generateUniqueAccountId(): string
     {
         do {
