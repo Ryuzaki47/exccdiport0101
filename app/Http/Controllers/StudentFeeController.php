@@ -6,6 +6,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Payment;
 use App\Models\Student;
 use App\Models\StudentAssessment;
+use App\Models\StudentEnrollment;
 use App\Models\StudentPaymentTerm;
 use App\Models\Subject;
 use App\Models\Transaction;
@@ -208,11 +209,46 @@ class StudentFeeController extends Controller
         $miscItems = config('fees.miscellaneous', []);
         $miscTotal = collect($miscItems)->sum('amount');
 
+        // ── Enrolled subjects per student ─────────────────────────────────────
+        // Structure: enrollmentsMap[userId][schoolYear] = int[]
+        //
+        // IMPORTANT: keyed by school year ONLY — NOT by semester.
+        //
+        // The previous structure ([userId][schoolYear][semester]) was correct
+        // for Regular assessments (one fixed term) but broke for Irregular
+        // assessments: when a staff member browses subjects from a different
+        // semester than the assessment's own term, the semester-scoped lookup
+        // missed those enrollments and let already-enrolled subjects appear
+        // selectable.
+        //
+        // By collapsing to school-year scope, isAlreadyEnrolled() in Vue
+        // blocks any subject the student is actively enrolled in across ALL
+        // semesters of the selected school year — correct for both Regular and
+        // Irregular assessment types.
+        //
+        // Only 'enrolled' status is included. 'dropped' and 'completed'
+        // records are excluded so those subjects remain available.
+        $studentIds     = $students->pluck('id');
+        $enrollmentsMap = StudentEnrollment::where('status', 'enrolled')
+            ->whereIn('user_id', $studentIds)
+            ->get(['user_id', 'subject_id', 'school_year'])
+            ->groupBy('user_id')
+            ->map(fn ($byUser) => $byUser
+                ->groupBy('school_year')
+                ->map(fn ($byYear) => $byYear
+                    ->pluck('subject_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values()
+                    ->toArray())
+                ->toArray())
+            ->toArray();
+
         return Inertia::render('StudentFees/Create', [
-            'students'    => $students,
-            'yearLevels'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-            'semesters'   => ['1st Sem', '2nd Sem', 'Summer'],
-            'schoolYears' => [
+            'students'         => $students,
+            'yearLevels'       => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+            'semesters'        => ['1st Sem', '2nd Sem', 'Summer'],
+            'schoolYears'      => [
                 ($currentYear - 2) . '-' . ($currentYear - 1),
                 ($currentYear - 1) . '-' . ($currentYear),
                 "{$currentYear}-" . ($currentYear + 1),
@@ -220,13 +256,16 @@ class StudentFeeController extends Controller
                 ($currentYear + 2) . '-' . ($currentYear + 3),
             ],
             // Real subjects from DB — subjectMap[course][year_level][semester] = Subject[]
-            'subjectMap'     => $this->buildSubjectMap(),
-            'courses'        => $this->allCourses(),
+            'subjectMap'       => $this->buildSubjectMap(),
+            'courses'          => $this->allCourses(),
             // Fee rate info for client-side total calculation
-            'tuitionPerUnit' => (float) config('fees.tuition_per_unit',    364.00),
+            'tuitionPerUnit'   => (float) config('fees.tuition_per_unit',    364.00),
             'labFeePerSubject' => (float) config('fees.lab_fee_per_subject', 1656.00),
-            'miscItems'      => $miscItems,
-            'miscTotal'      => $miscTotal,
+            'miscItems'        => $miscItems,
+            'miscTotal'        => $miscTotal,
+            // Tells Vue which subjects are already enrolled per student/term
+            // so they can be greyed out and blocked from re-selection.
+            'enrollmentsMap'   => $enrollmentsMap,
         ]);
     }
 
@@ -273,6 +312,39 @@ class StudentFeeController extends Controller
 
             if ($subjects->isEmpty()) {
                 throw new \InvalidArgumentException('No valid active subjects found for the selected IDs.');
+            }
+
+            // ── Server-side guard: reject already-enrolled subjects ───────────
+            // Enforces the same rule the Vue form enforces visually.
+            // Protects against tampered requests and concurrent-tab race conditions.
+            //
+            // For REGULAR assessments a semester-scoped check is sufficient, but
+            // for IRREGULAR assessments subjects are drawn from multiple semesters.
+            // Using the assessment-level semester would miss subjects the student
+            // is enrolled in from a different semester of the same school year.
+            //
+            // Solution: always use the school-year-wide lookup so both Regular
+            // and Irregular assessments are protected with the same single query.
+            $alreadyEnrolled = StudentEnrollment::enrolledSubjectIdsForYear(
+                (int) $base['user_id'],
+                $base['school_year']
+            );
+
+            $blockedIds = array_intersect(
+                array_map('intval', $base['selected_subjects']),
+                $alreadyEnrolled
+            );
+
+            if (! empty($blockedIds)) {
+                $blockedCodes = $subjects
+                    ->whereIn('id', $blockedIds)
+                    ->pluck('code')
+                    ->implode(', ');
+
+                throw new \InvalidArgumentException(
+                    "The following subject(s) are already enrolled for this school year: {$blockedCodes}. " .
+                    'Please remove them from the selection.'
+                );
             }
 
             $yearNum = (int) explode('-', $base['school_year'])[0];
@@ -380,11 +452,50 @@ class StudentFeeController extends Controller
 
             $this->createPaymentTerms($assessment, $grandTotal);
 
+            // ── Write enrollment records ─────────────────────────────────────
+            // Persist one student_enrollments row per enrolled subject so that
+            // future Create Assessment calls can correctly exclude these subjects
+            // from the available selection list for this school year + semester.
+            //
+            // insertOrIgnore is safe here: the unique constraint
+            // 'student_enroll_unique' (user_id, subject_id, school_year, semester)
+            // already exists — duplicate calls silently no-op instead of throwing.
+            $now            = now();
+            $enrollmentRows = $subjects->map(fn ($subject) => [
+                'user_id'     => (int) $base['user_id'],
+                'subject_id'  => $subject->id,
+                'school_year' => $base['school_year'],
+                'semester'    => $base['semester'],
+                'status'      => 'enrolled',
+                'created_at'  => $now,
+                'updated_at'  => $now,
+            ])->toArray();
+
+            StudentEnrollment::insertOrIgnore($enrollmentRows);
+
             $user = User::find($base['user_id']);
 
+            // ── Enforce is_irregular consistency ─────────────────────────────
+            // The student's is_irregular flag must always mirror the assessment
+            // type chosen here. Without this, the Create Assessment form will
+            // pre-select the wrong type on the next visit (it seeds assessmentType
+            // from student.is_irregular), and the student list badge will be wrong.
+            //
+            // Bidirectional:
+            //   assessment_type = 'irregular' → is_irregular = true
+            //   assessment_type = 'regular'   → is_irregular = false
+            //
+            // $isIrregular is already computed at the top of this transaction
+            // as ($base['assessment_type'] === 'irregular') — reuse it directly.
+            $userUpdates = ['is_irregular' => $isIrregular];
+
+            // Preserve existing course-backfill behaviour: only overwrite course
+            // when the student has no course assigned yet (blank or 'N/A').
             if ($base['course'] && (! $user->course || $user->course === 'N/A')) {
-                $user->update(['course' => $base['course']]);
+                $userUpdates['course'] = $base['course'];
             }
+
+            $user->update($userUpdates);
 
             \App\Services\AccountService::recalculate($user);
 
@@ -530,15 +641,53 @@ class StudentFeeController extends Controller
             ? route('students.archive')
             : route('student-fees.index');
 
+        // ── enrolledSubjectsByAssessment — powers the Enrolled Subjects accordion ──
+        //
+        // Structure: enrolledSubjectsByAssessment[assessmentId] = int[]
+        //
+        // Maps student_enrollments rows back to their matching assessment ID via a
+        // (school_year || semester) term index built from $allAssessments (already
+        // loaded above). A single query retrieves all enrolled rows for this
+        // student — no N+1.
+        //
+        // Vue uses this to render a ✓ Enrolled badge (green) vs ○ Assessment-only
+        // badge (grey) per subject row in the accordion.
+        $assessmentTermIndex = $allAssessments->keyBy(
+            fn ($a) => $a['school_year'] . '||' . $a['semester']
+        );
+
+        $enrollmentRows = StudentEnrollment::where('user_id', $userId)
+            ->where('status', 'enrolled')
+            ->get(['subject_id', 'school_year', 'semester']);
+
+        $enrolledSubjectsByAssessment = [];
+
+        foreach ($enrollmentRows as $row) {
+            $termKey = $row->school_year . '||' . $row->semester;
+            if (! isset($assessmentTermIndex[$termKey])) {
+                // Enrollment exists for a term with no active assessment — skip.
+                continue;
+            }
+            $assessmentId = $assessmentTermIndex[$termKey]['id'];
+            if (! isset($enrolledSubjectsByAssessment[$assessmentId])) {
+                $enrolledSubjectsByAssessment[$assessmentId] = [];
+            }
+            $enrolledSubjectsByAssessment[$assessmentId][] = (int) $row->subject_id;
+        }
+
         return Inertia::render('StudentFees/Show', [
-            'student'          => $student,
-            'student_model_id' => $student->student->id ?? null,
-            'assessment'       => $assessmentData,
-            'allAssessments'   => $allAssessments,
-            'transactions'     => $transactions,
-            'payments'         => $payments,
-            'feeBreakdown'     => $feeBreakdown->values(),
-            'backUrl'          => $backUrl,
+            'student'                      => $student,
+            'student_model_id'             => $student->student->id ?? null,
+            'assessment'                   => $assessmentData,
+            'allAssessments'               => $allAssessments,
+            'transactions'                 => $transactions,
+            'payments'                     => $payments,
+            'feeBreakdown'                 => $feeBreakdown->values(),
+            'backUrl'                      => $backUrl,
+            // Powers the Enrolled Subjects accordion on Show.vue.
+            // enrolledSubjectsByAssessment[assessmentId] = int[] of subject IDs
+            // confirmed in student_enrollments with status = 'enrolled'.
+            'enrolledSubjectsByAssessment' => $enrolledSubjectsByAssessment,
         ]);
     }
 
@@ -546,12 +695,33 @@ class StudentFeeController extends Controller
     // STORE PAYMENT (accounting/admin side)
     // =========================================================================
 
+    // =========================================================================
+    // STORE PAYMENT (accounting/admin side)
+    // =========================================================================
+    //
+    // Auto-allocates the entered amount sequentially across all unpaid terms
+    // for the student's currently selected assessment (oldest term first by
+    // term_order ASC). No manual term selection is required from accounting.
+    //
+    // No hard upper-limit — accounting may record any valid numeric amount.
+    // If the amount exceeds all outstanding balances the excess is noted in
+    // the success message and the transaction meta; it is NOT silently dropped.
+    //
+    // Allocation per call:
+    //   1. Load all unpaid terms for the assessment ordered by term_order ASC
+    //   2. Walk terms: apply min(remaining_amount, term.balance) to each term
+    //   3. Mark each touched term PAID or PARTIAL accordingly
+    //   4. Write ONE Transaction for the full payment amount (audit trail)
+    //   5. Write ONE Payment record per term that received funds
+    //   6. Store per-term allocation breakdown in transaction.meta
+    // =========================================================================
+
     public function storePayment(Request $request, $userId)
     {
         $validated = $request->validate([
             'amount'         => 'required|numeric|min:0.01',
             'payment_method' => 'required|string|in:cash,gcash,bank_transfer,credit_card,debit_card',
-            'term_id'        => 'required|exists:student_payment_terms,id',
+            'assessment_id'  => 'required|exists:student_assessments,id',
             'payment_date'   => 'required|date',
         ]);
 
@@ -563,63 +733,160 @@ class StudentFeeController extends Controller
             return back()->withErrors(['error' => 'Student record not found. Please contact administrator.']);
         }
 
-        $paymentTerm        = StudentPaymentTerm::findOrFail($validated['term_id']);
-        $paymentService     = new StudentPaymentService();
-        $outstandingBalance = $paymentService->getTotalOutstandingBalance($student);
-
-        if ((float) $validated['amount'] > $outstandingBalance) {
-            return back()->withErrors([
-                'amount' => sprintf(
-                    'Payment amount cannot exceed outstanding balance of ₱%s',
-                    number_format($outstandingBalance, 2)
-                ),
-            ]);
-        }
-
-        if ((float) $paymentTerm->balance <= 0) {
-            return back()->withErrors([
-                'term_id' => 'This payment term has already been paid. Please select another term.',
-            ]);
-        }
-
-        $firstUnpaidTerm = StudentPaymentTerm::where('student_assessment_id', $paymentTerm->student_assessment_id)
-            ->where('balance', '>', 0)
-            ->orderBy('term_order')
+        // Confirm the assessment belongs to this student and is active
+        $assessment = StudentAssessment::where('id', $validated['assessment_id'])
+            ->where('user_id', $userId)
+            ->where('status', 'active')
             ->first();
 
-        if ($firstUnpaidTerm && (int) $paymentTerm->id !== (int) $firstUnpaidTerm->id) {
-            return back()->withErrors([
-                'term_id' => sprintf(
-                    'You must pay "%s" before paying other terms in this semester.',
-                    $firstUnpaidTerm->term_name
-                ),
-            ]);
+        if (! $assessment) {
+            return back()->withErrors(['error' => 'Assessment not found or does not belong to this student.']);
         }
 
-        try {
-            $result = $paymentService->processPayment($student, (float) $validated['amount'], [
-                'payment_method'   => $validated['payment_method'],
-                'paid_at'          => $validated['payment_date'],
-                'description'      => 'Payment recorded by accounting — ' . $paymentTerm->term_name,
-                'selected_term_id' => (int) $validated['term_id'],
-                'term_name'        => $paymentTerm->term_name,
-                'year'             => optional($paymentTerm->assessment)->school_year
-                                        ? explode('-', $paymentTerm->assessment->school_year)[0]
-                                        : now()->year,
-                'semester'         => optional($paymentTerm->assessment)->semester,
-            ], false);
+        // Load all unpaid terms for this assessment, oldest (lowest term_order) first
+        $unpaidTerms = StudentPaymentTerm::where('student_assessment_id', $assessment->id)
+            ->whereIn('status', PaymentStatus::unpaidValues())
+            ->where('balance', '>', 0)
+            ->orderBy('term_order')
+            ->get();
 
-            return back()->with('success', 'Payment recorded successfully! ' . $result['message']);
+        if ($unpaidTerms->isEmpty()) {
+            return back()->withErrors(['error' => 'This assessment has no outstanding balances to pay.']);
+        }
+
+        $paymentAmount = round((float) $validated['amount'], 2);
+        $remaining     = $paymentAmount;
+
+        DB::beginTransaction();
+        try {
+            $reference  = 'PAY-' . Str::upper(Str::random(8));
+            $paidAt     = $validated['payment_date'];
+            $method     = $validated['payment_method'];
+            $yearStart  = (int) explode('-', $assessment->school_year)[0];
+            $allocation = []; // per-term breakdown stored in meta for full audit trail
+
+            // ── Sequential allocation across unpaid terms ─────────────────────
+            foreach ($unpaidTerms as $term) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $termBalance = round((float) $term->balance, 2);
+                $applied     = round(min($remaining, $termBalance), 2);
+                $newBalance  = round($termBalance - $applied, 2);
+                $newStatus   = $newBalance <= 0
+                    ? PaymentStatus::PAID->value
+                    : PaymentStatus::PARTIAL->value;
+
+                // Update this term's balance and status
+                $term->update([
+                    'balance'   => $newBalance,
+                    'status'    => $newStatus,
+                    'paid_date' => $newStatus === PaymentStatus::PAID->value ? now() : $term->paid_date,
+                ]);
+
+                // One Payment record per term — gives per-term payment history
+                if ($student->student) {
+                    Payment::create([
+                        'student_id'            => $student->student->id,
+                        'student_assessment_id' => $assessment->id,
+                        'amount'                => $applied,
+                        'payment_method'        => $method,
+                        'reference_number'      => $reference,
+                        'description'           => 'Payment — ' . $term->term_name
+                            . ' (from ₱' . number_format($paymentAmount, 2) . ' total)',
+                        'status'                => PaymentStatus::COMPLETED->value,
+                        'paid_at'               => $paidAt,
+                    ]);
+                }
+
+                // Record allocation detail for the transaction meta audit trail
+                $allocation[] = [
+                    'term_id'        => $term->id,
+                    'term_name'      => $term->term_name,
+                    'term_order'     => $term->term_order,
+                    'applied'        => $applied,
+                    'balance_before' => $termBalance,
+                    'balance_after'  => $newBalance,
+                    'status_after'   => $newStatus,
+                ];
+
+                $remaining = round($remaining - $applied, 2);
+            }
+
+            // ── Build a human-readable transaction type/description ───────────
+            $termsLabel   = collect($allocation)->pluck('term_name')->implode(', ');
+            $totalApplied = round($paymentAmount - $remaining, 2);
+
+            $transactionType = count($allocation) > 1
+                ? 'Multi-Term Payment'
+                : ($allocation[0]['term_name'] ?? 'Payment');
+
+            $description = count($allocation) > 1
+                ? '₱' . number_format($totalApplied, 2) . ' allocated across: ' . $termsLabel
+                : 'Payment — ' . ($allocation[0]['term_name'] ?? 'Term');
+
+            // ── ONE transaction record for the full payment amount ────────────
+            Transaction::create([
+                'user_id'         => $student->id,
+                'reference'       => $reference,
+                'kind'            => 'payment',
+                'type'            => $transactionType,
+                'amount'          => $paymentAmount,
+                'status'          => PaymentStatus::PAID->value,
+                'payment_channel' => $method,
+                'paid_at'         => $paidAt,
+                'year'            => $yearStart,
+                'semester'        => $assessment->semester,
+                'meta'            => [
+                    'payment_method'    => $method,
+                    'description'       => $description,
+                    'assessment_id'     => $assessment->id,
+                    'allocation'        => $allocation,
+                    'terms_covered'     => count($allocation),
+                    'total_applied'     => $totalApplied,
+                    'unallocated'       => $remaining,
+                    'recorded_by'       => auth()->id(),
+                    'requires_approval' => false,
+                ],
+            ]);
+
+            // Recalculate account running balance after all term updates
+            AccountService::recalculate($student);
+
+            // Notify admin if all terms for this assessment are now fully paid
+            $paymentService = new StudentPaymentService();
+            $paymentService->notifyProgressionIfComplete($student, $assessment->id);
+
+            DB::commit();
+
+            // ── Success message ───────────────────────────────────────────────
+            $successMsg = '₱' . number_format($totalApplied, 2) . ' recorded successfully';
+
+            if (count($allocation) > 1) {
+                $successMsg .= ' across ' . $termsLabel;
+            } else {
+                $successMsg .= ' for ' . ($allocation[0]['term_name'] ?? 'term');
+            }
+
+            if ($remaining > 0) {
+                $successMsg .= '. Note: ₱' . number_format($remaining, 2)
+                    . ' exceeded all outstanding balances and was not applied.';
+            }
+
+            return back()->with('success', $successMsg . '.');
 
         } catch (\Exception $e) {
-            Log::error('Payment recording failed', [
-                'user_id' => $userId,
-                'term_id' => $validated['term_id'],
-                'amount'  => $validated['amount'],
-                'error'   => $e->getMessage(),
+            DB::rollBack();
+            Log::error('Accounting payment recording failed', [
+                'user_id'       => $userId,
+                'assessment_id' => $validated['assessment_id'],
+                'amount'        => $validated['amount'],
+                'error'         => $e->getMessage(),
+                'trace'         => $e->getTraceAsString(),
             ]);
             return back()->withErrors([
-                'error' => 'Failed to record payment. Please try again or contact support.',
+                'error' => 'Failed to record payment: ' . $e->getMessage(),
             ]);
         }
     }

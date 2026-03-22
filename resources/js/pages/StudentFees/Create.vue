@@ -46,6 +46,13 @@ interface MiscItem {
 // subjectMap[course][yearLevel][semester] = SubjectItem[]
 type SubjectMap = Record<string, Record<string, Record<string, SubjectItem[]>>>;
 
+// enrollmentsMap[userId][schoolYear] = subjectId[]
+//
+// Keyed by school year ONLY (not semester) so that both Regular and Irregular
+// assessment creation correctly block subjects the student is already enrolled
+// in — regardless of which semester the Irregular picker is currently browsing.
+type EnrollmentsMap = Record<number, Record<string, number[]>>;
+
 interface Props {
     students:          Student[];
     yearLevels:        string[];
@@ -53,6 +60,7 @@ interface Props {
     schoolYears:       string[];
     subjectMap:        SubjectMap;
     courses:           string[];
+    enrollmentsMap:    EnrollmentsMap;
     // New props from updated controller — safe defaults prevent crash if old controller is active
     tuitionPerUnit?:   number;
     labFeePerSubject?: number;
@@ -65,6 +73,7 @@ const props = withDefaults(defineProps<Props>(), {
     labFeePerSubject: 1656.00,
     miscItems:        () => [],
     miscTotal:        6956.00,
+    enrollmentsMap:   () => ({}),
 });
 
 // ─── Breadcrumbs ──────────────────────────────────────────────────────────────
@@ -98,6 +107,29 @@ const activeCourse = computed(() =>
 // ─── Assessment type ──────────────────────────────────────────────────────────
 
 const assessmentType = ref<'regular' | 'irregular'>('regular');
+
+// ─── Already-enrolled subjects — year-scoped ──────────────────────────────────
+//
+// Reads from enrollmentsMap[userId][schoolYear] — a flat list of subject IDs
+// the student is enrolled in across ALL semesters of the selected school year.
+//
+// Keying on school year (not semester) is the critical fix for Irregular
+// assessments: the Irregular picker browses subjects from any semester, so a
+// semester-scoped check would miss enrollments from different semesters.
+//
+// Updates reactively whenever the student or school year changes.
+// The semester dropdown does NOT affect this — intentionally.
+
+const alreadyEnrolledIds = computed<Set<number>>(() => {
+    if (!selectedStudent.value || !effectiveSchoolYear.value) return new Set();
+    const ids =
+        props.enrollmentsMap?.[selectedStudent.value.id]?.[effectiveSchoolYear.value] ?? [];
+    return new Set(ids);
+});
+
+function isAlreadyEnrolled(subjectId: number): boolean {
+    return alreadyEnrolledIds.value.has(subjectId);
+}
 
 // ─── Term fields ──────────────────────────────────────────────────────────────
 
@@ -177,6 +209,8 @@ function isSelected(id: number) {
 }
 
 function toggleSubject(id: number) {
+    // Already-enrolled subjects are blocked — clicking them is a no-op
+    if (isAlreadyEnrolled(id)) return;
     if (isSelected(id)) {
         selectedSubjectIds.value = selectedSubjectIds.value.filter((x) => x !== id);
     } else {
@@ -190,7 +224,9 @@ function removeSubject(id: number) {
 
 function addAllPickerSubjects() {
     for (const s of pickerSubjects.value) {
-        if (!isSelected(s.id)) selectedSubjectIds.value.push(s.id);
+        if (!isSelected(s.id) && !isAlreadyEnrolled(s.id)) {
+            selectedSubjectIds.value.push(s.id);
+        }
     }
 }
 
@@ -205,7 +241,10 @@ function preloadRegularSubjects() {
     if (!activeCourse.value || !yearLevel.value || !semester.value) return;
     const subjectsForTerm =
         props.subjectMap?.[activeCourse.value]?.[yearLevel.value]?.[semester.value] ?? [];
-    selectedSubjectIds.value = subjectsForTerm.map((s) => s.id);
+    // Exclude subjects the student is already enrolled in (any semester of this school year)
+    selectedSubjectIds.value = subjectsForTerm
+        .filter((s) => !isAlreadyEnrolled(s.id))
+        .map((s) => s.id);
     // Auto-expand current term group
     const key = `${yearLevel.value}||${semester.value}`;
     expandedGroups.value = new Set([key]);
@@ -218,6 +257,15 @@ watch([yearLevel, semester], () => {
         expandedGroups.value     = new Set();
         preloadRegularSubjects();
     }
+});
+
+// When school year changes, strip any already-enrolled subjects from the current
+// selection that are now blocked under the newly selected year.
+watch(effectiveSchoolYear, () => {
+    if (selectedSubjectIds.value.length === 0) return;
+    selectedSubjectIds.value = selectedSubjectIds.value.filter(
+        (id) => !isAlreadyEnrolled(id),
+    );
 });
 
 // When switching to irregular, clear preloaded selection
@@ -330,6 +378,14 @@ function submit() {
 
     if (selectedSubjectIds.value.length === 0) {
         formErrors.value.selected_subjects = 'Please select at least one subject.';
+        return;
+    }
+
+    // Client-side guard: catch any already-enrolled subject that snuck in
+    const blocked = selectedSubjectIds.value.filter((id) => isAlreadyEnrolled(id));
+    if (blocked.length > 0) {
+        formErrors.value.selected_subjects =
+            'One or more selected subjects are already enrolled for this school year. Please remove them.';
         return;
     }
 
@@ -583,6 +639,18 @@ function statusColor(status: string) {
                         </div>
                     </div>
                     <p v-if="formErrors.term" class="mt-2 text-xs text-red-500">{{ formErrors.term }}</p>
+
+                    <!-- Already-enrolled notice — visible when school year is selected and student has enrollments -->
+                    <div v-if="alreadyEnrolledIds.size > 0"
+                         class="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>
+                            <strong>{{ alreadyEnrolledIds.size }} subject{{ alreadyEnrolledIds.size !== 1 ? 's' : '' }} already enrolled</strong>
+                            in <strong>{{ effectiveSchoolYear }}</strong> — greyed out in both Regular and Irregular selection and cannot be re-selected.
+                        </span>
+                    </div>
                 </div>
 
                 <!-- Assessment Type Toggle -->
@@ -654,16 +722,34 @@ function statusColor(status: string) {
                                 </button>
                                 <div v-if="expandedGroups.has(`${yl}||${sem}`)" class="divide-y divide-gray-50">
                                     <div v-for="s in subjects" :key="s.id"
-                                         :class="['flex cursor-pointer items-center justify-between px-5 py-3 transition-colors',
-                                                  isSelected(s.id) ? 'bg-blue-50' : 'hover:bg-gray-50']"
+                                         :class="[
+                                            'flex items-center justify-between px-5 py-3 transition-colors',
+                                            isAlreadyEnrolled(s.id)
+                                                ? 'cursor-not-allowed bg-gray-50 opacity-60'
+                                                : isSelected(s.id)
+                                                    ? 'cursor-pointer bg-blue-50'
+                                                    : 'cursor-pointer hover:bg-gray-50',
+                                         ]"
                                          @click="toggleSubject(s.id)">
                                         <div class="flex items-start gap-3">
-                                            <div :class="['mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-xs font-bold',
-                                                          isSelected(s.id) ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300 bg-white']">
-                                                <span v-if="isSelected(s.id)">✓</span>
+                                            <div :class="[
+                                                    'mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-xs font-bold',
+                                                    isAlreadyEnrolled(s.id)
+                                                        ? 'border-gray-300 bg-gray-200 text-gray-400'
+                                                        : isSelected(s.id)
+                                                            ? 'border-blue-500 bg-blue-500 text-white'
+                                                            : 'border-gray-300 bg-white',
+                                                ]">
+                                                <span v-if="isAlreadyEnrolled(s.id) || isSelected(s.id)">✓</span>
                                             </div>
                                             <div>
-                                                <p class="text-sm font-medium text-gray-900">{{ s.code }} — {{ s.name }}</p>
+                                                <p class="text-sm font-medium text-gray-900">
+                                                    {{ s.code }} — {{ s.name }}
+                                                    <span v-if="isAlreadyEnrolled(s.id)"
+                                                          class="ml-2 inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                                                        Already Enrolled
+                                                    </span>
+                                                </p>
                                                 <p class="text-xs text-gray-400">
                                                     {{ s.units }} units × {{ fmt(s.price_per_unit) }}
                                                     = {{ fmt(s.units * s.price_per_unit) }}
@@ -671,7 +757,10 @@ function statusColor(status: string) {
                                                 </p>
                                             </div>
                                         </div>
-                                        <span class="ml-4 flex-shrink-0 text-sm font-semibold text-blue-700">{{ fmt(s.total_cost) }}</span>
+                                        <span class="ml-4 flex-shrink-0 text-sm font-semibold"
+                                              :class="isAlreadyEnrolled(s.id) ? 'text-gray-400' : 'text-blue-700'">
+                                            {{ fmt(s.total_cost) }}
+                                        </span>
                                     </div>
                                 </div>
                             </template>
@@ -740,23 +829,44 @@ function statusColor(status: string) {
                             </div>
                             <div class="divide-y divide-amber-100">
                                 <div v-for="s in pickerSubjects" :key="s.id"
-                                     :class="['flex cursor-pointer items-center justify-between px-4 py-2.5 transition-colors',
-                                              isSelected(s.id) ? 'bg-amber-50' : 'bg-white hover:bg-amber-50']"
+                                     :class="[
+                                        'flex items-center justify-between px-4 py-2.5 transition-colors',
+                                        isAlreadyEnrolled(s.id)
+                                            ? 'cursor-not-allowed bg-gray-50 opacity-60'
+                                            : isSelected(s.id)
+                                                ? 'cursor-pointer bg-amber-50'
+                                                : 'cursor-pointer bg-white hover:bg-amber-50',
+                                     ]"
                                      @click="toggleSubject(s.id)">
                                     <div class="flex items-center gap-3">
-                                        <div :class="['flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-xs font-bold',
-                                                      isSelected(s.id) ? 'border-amber-500 bg-amber-500 text-white' : 'border-gray-300 bg-white']">
-                                            <span v-if="isSelected(s.id)">✓</span>
+                                        <div :class="[
+                                                'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-xs font-bold',
+                                                isAlreadyEnrolled(s.id)
+                                                    ? 'border-gray-300 bg-gray-200 text-gray-400'
+                                                    : isSelected(s.id)
+                                                        ? 'border-amber-500 bg-amber-500 text-white'
+                                                        : 'border-gray-300 bg-white',
+                                            ]">
+                                            <span v-if="isAlreadyEnrolled(s.id) || isSelected(s.id)">✓</span>
                                         </div>
                                         <div>
-                                            <span class="text-sm font-medium text-gray-900">{{ s.code }} — {{ s.name }}</span>
+                                            <span class="text-sm font-medium text-gray-900">
+                                                {{ s.code }} — {{ s.name }}
+                                                <span v-if="isAlreadyEnrolled(s.id)"
+                                                      class="ml-2 inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                                                    Already Enrolled
+                                                </span>
+                                            </span>
                                             <p class="text-xs text-gray-400">
                                                 {{ s.units }} units × {{ fmt(s.price_per_unit) }}
                                                 <span v-if="s.has_lab" class="text-purple-600"> + Lab {{ fmt(s.lab_fee) }}</span>
                                             </p>
                                         </div>
                                     </div>
-                                    <span class="text-sm font-semibold text-amber-700">{{ fmt(s.total_cost) }}</span>
+                                    <span class="text-sm font-semibold"
+                                          :class="isAlreadyEnrolled(s.id) ? 'text-gray-400' : 'text-amber-700'">
+                                        {{ fmt(s.total_cost) }}
+                                    </span>
                                 </div>
                             </div>
                         </div>

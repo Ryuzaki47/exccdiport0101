@@ -311,6 +311,17 @@ class StudentPaymentService
             ->sum('balance');
     }
 
+    /**
+     * Public proxy for checkAndNotifyProgressionReady.
+     * Called by StudentFeeController::storePayment() after the multi-term
+     * allocation completes, so the controller does not need to duplicate
+     * the progression-ready notification logic.
+     */
+    public function notifyProgressionIfComplete(User $user, int $assessmentId): void
+    {
+        $this->checkAndNotifyProgressionReady($user, $assessmentId);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // PRIVATE: Semester Completion Detection + Admin Notification
     // ─────────────────────────────────────────────────────────────────────────
