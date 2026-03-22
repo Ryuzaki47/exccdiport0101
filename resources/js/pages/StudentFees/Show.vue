@@ -29,6 +29,7 @@ interface Props {
     transactions: any[];
     payments: any[];
     feeBreakdown: Array<{ category: string; total: number; items: number }>;
+    backUrl: string;
 }
 
 const props = defineProps<Props>();
@@ -235,11 +236,15 @@ interface TxGroup {
  */
 const filteredTransactions = computed(() => {
     const selectedId = selectedAssessmentId.value;
-    if (!selectedId || !selectedAssessment.value) return props.transactions;
-    
+    // Exclude charge transactions — assessment charges are shown in
+    // Workflow History, not here. This table shows payments only.
+    const paymentsOnly = props.transactions.filter((t: any) => t.kind === 'payment');
+
+    if (!selectedId || !selectedAssessment.value) return paymentsOnly;
+
     const assessment = selectedAssessment.value;
     // Match by school_year and semester
-    return props.transactions.filter((t: any) => {
+    return paymentsOnly.filter((t: any) => {
         const startYear = parseInt(String(assessment.school_year?.split('-')[0] ?? ''), 10);
         const txYear = parseInt(String(t.year), 10);
         return (
@@ -267,11 +272,15 @@ const transactionsByTerm = computed((): TxGroup[] => {
         groups[key].push(t);
     }
 
+    // totalCharges is sourced from the assessment total, not from charge transaction
+    // rows (which are now excluded from filteredTransactions). This keeps the
+    // group header "Total Assessed" accurate even without charge rows in the table.
+    const assessmentTotal = parseFloat(String(selectedAssessment.value?.total_assessment ?? props.assessment?.total_assessment ?? 0));
+
     return Object.entries(groups)
         .map(([key, txns]) => {
-            const totalCharges = txns.filter((t) => t.kind === 'charge').reduce((s, t) => s + parseFloat(t.amount), 0);
             const totalPaidAmt = txns.filter((t) => t.kind === 'payment' && t.status === 'paid').reduce((s, t) => s + parseFloat(t.amount), 0);
-            return { key, transactions: txns, totalCharges, totalPaid: totalPaidAmt, balance: totalCharges - totalPaidAmt };
+            return { key, transactions: txns, totalCharges: assessmentTotal, totalPaid: totalPaidAmt, balance: assessmentTotal - totalPaidAmt };
         })
         // Sort: most recent school year first
         .sort((a, b) => {
@@ -470,7 +479,7 @@ const getStudentStatusColor = (status: string) => {
             <!-- ── Header ── -->
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex items-center gap-4">
-                    <Link :href="route('student-fees.index')">
+                    <Link :href="backUrl">
                         <Button variant="outline" size="sm">
                             <ArrowLeft class="mr-2 h-4 w-4" />
                             Back
@@ -555,24 +564,13 @@ const getStudentStatusColor = (status: string) => {
                                     <p v-else class="text-xs text-gray-500">Maximum: {{ formatCurrency(remainingBalance) }}</p>
                                     <p v-if="paymentForm.errors.amount" class="text-sm text-red-500">{{ paymentForm.errors.amount }}</p>
                                 </div>
-                                <!-- Payment Method -->
+                                <!-- Payment Method — cash only (in-person cashier payments) -->
                                 <div class="space-y-2">
-                                    <Label for="payment_method">Payment Method *</Label>
-                                    <select
-                                        id="payment_method"
-                                        v-model="paymentForm.payment_method"
-                                        required
-                                        class="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                    >
-                                        <option value="cash">Cash</option>
-                                        <option value="gcash">GCash</option>
-                                        <option value="bank_transfer">Bank Transfer</option>
-                                        <option value="credit_card">Credit Card</option>
-                                        <option value="debit_card">Debit Card</option>
-                                    </select>
-                                    <p v-if="paymentForm.errors.payment_method" class="text-sm text-red-500">
-                                        {{ paymentForm.errors.payment_method }}
-                                    </p>
+                                    <Label>Payment Method</Label>
+                                    <div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm">
+                                        <span class="font-medium text-gray-800">Cash</span>
+                                        <span class="text-xs text-gray-400">— in-person cashier payment only</span>
+                                    </div>
                                 </div>
                                 <!-- Payment Date -->
                                 <div class="space-y-2">
@@ -941,14 +939,14 @@ const getStudentStatusColor = (status: string) => {
             <div>
                 <div class="mb-3 flex items-center justify-between px-1">
                     <div>
-                        <h2 class="text-xl font-bold text-gray-900">Transaction History</h2>
-                        <p class="text-sm text-gray-500">All charges and payments grouped by term</p>
+                        <h2 class="text-xl font-bold text-gray-900">Payment History</h2>
+                        <p class="text-sm text-gray-500">All payments grouped by term</p>
                     </div>
                 </div>
 
                 <div v-if="transactionsByTerm.length === 0" class="rounded-xl border bg-white p-10 text-center text-gray-400">
                     <AlertCircle class="mx-auto mb-2 h-8 w-8 opacity-30" />
-                    <p>No transactions found</p>
+                    <p>No payment transactions found</p>
                 </div>
 
                 <div v-for="group in transactionsByTerm" :key="group.key" class="mb-4 overflow-hidden rounded-xl border bg-white shadow-sm">
@@ -1011,11 +1009,8 @@ const getStudentStatusColor = (status: string) => {
                                     >
                                         <td class="px-4 py-3 font-mono text-xs text-gray-700">{{ t.reference }}</td>
                                         <td class="px-4 py-3">
-                                            <span
-                                                class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                                                :class="t.kind === 'charge' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'"
-                                            >
-                                                {{ t.kind }}
+                                            <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
+                                                payment
                                             </span>
                                         </td>
                                         <td class="px-4 py-3 text-sm text-gray-700">{{ t.type }}</td>
@@ -1027,10 +1022,8 @@ const getStudentStatusColor = (status: string) => {
                                             </div>
                                             <span v-else class="text-gray-400">—</span>
                                         </td>
-                                        <td class="px-4 py-3 text-sm font-semibold" :class="t.kind === 'charge' ? 'text-red-600' : 'text-green-600'">
-                                            {{ t.kind === 'charge' ? '+' : '−' }}₱{{
-                                                new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(t.amount)
-                                            }}
+                                        <td class="px-4 py-3 text-sm font-semibold text-green-600">
+                                            +₱{{ new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(t.amount) }}
                                         </td>
                                         <td class="px-4 py-3">
                                             <span

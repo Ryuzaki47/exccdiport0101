@@ -345,7 +345,7 @@ class StudentFeeController extends Controller
     // SHOW
     // =========================================================================
 
-    public function show($userId)
+    public function show(Request $request, $userId)
     {
         $student = User::with(['student', 'account'])
             ->where('role', 'student')
@@ -464,6 +464,12 @@ class StudentFeeController extends Controller
                 ]);
         }
 
+        // Resolve back URL: if the user came from Archives (?from=archive),
+        // the Back button should return to the archive list, not the fee index.
+        $backUrl = $request->query('from') === 'archive'
+            ? route('students.archive')
+            : route('student-fees.index');
+
         return Inertia::render('StudentFees/Show', [
             'student'          => $student,
             'student_model_id' => $student->student->id ?? null,
@@ -472,6 +478,7 @@ class StudentFeeController extends Controller
             'transactions'     => $transactions,
             'payments'         => $payments,
             'feeBreakdown'     => $feeBreakdown->values(),
+            'backUrl'          => $backUrl,
         ]);
     }
 

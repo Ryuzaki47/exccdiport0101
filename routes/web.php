@@ -1,24 +1,23 @@
 <?php
 
+use App\Http\Controllers\AccountingDashboardController;
+use App\Http\Controllers\AccountingTransactionController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\StudentDashboardController;
-use App\Http\Controllers\StudentAccountController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PaymentReminderController;
+use App\Http\Controllers\PaymentTermsController;
+use App\Http\Controllers\StudentAccountController;
 use App\Http\Controllers\StudentController;
+use App\Http\Controllers\StudentDashboardController;
 use App\Http\Controllers\StudentFeeController;
 use App\Http\Controllers\TransactionController;
-use App\Http\Controllers\AccountingDashboardController;
+use App\Http\Controllers\WorkflowApprovalController;
+use App\Http\Controllers\WorkflowController;
 // REMOVED: FeeController (Fee Management disabled)
 // REMOVED: SubjectController (Subject Management disabled)
-use App\Http\Controllers\AdminDashboardController;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PaymentTermsController;
-use App\Http\Controllers\PaymentReminderController;
-// NEW: Workflow Controllers
-use App\Http\Controllers\WorkflowController;
-use App\Http\Controllers\WorkflowApprovalController;
-use App\Http\Controllers\AccountingTransactionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -94,7 +93,6 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->prefix('studen
     Route::post('/', [StudentFeeController::class, 'store'])->name('student-fees.store');
 
     // Model-bound drop: {user} resolves User by PK; 404s automatically on unknown id.
-    // Replaces the old /{userId}/drop with manual User::findOrFail() inside the method.
     Route::post('/{user}/drop', [StudentFeeController::class, 'drop'])
         ->whereNumber('user')
         ->name('student-fees.drop');
@@ -213,13 +211,9 @@ Route::middleware(['auth', 'verified', 'role:admin,accounting'])->group(function
 });
 
 // ============================================
-// SETTINGS ROUTES (see routes/settings.php for all settings-related routes)
+// SETTINGS ROUTES
+// Appearance is defined in routes/settings.php — no duplicate here.
 // ============================================
-
-Route::middleware('auth')->prefix('settings')->group(function () {
-    Route::get('appearance', fn () => Inertia::render('settings/Appearance'))->name('appearance');
-});
-
 require __DIR__ . '/settings.php';
 
 if (app()->environment('local')) {

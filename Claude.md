@@ -581,6 +581,7 @@ Workflow → WorkflowInstance → WorkflowApproval
 - `students` table duplicates `last_name`, `first_name`, `email`, `course`, `year_level`, etc. from `users` — these are stale; always read personal info from `users` via the `user()` relationship
 - `users.role` is cast as `UserRoleEnum` — never compare with a raw string `=== 'student'`
 - The `name` column was dropped from `users` in migration `2025_10_20_150250` — do not reference `users.name` in queries or migrations
+- `Transaction` records with `kind = 'charge'` and reference prefix `ASMT-` are **assessment debit entries**, not payment records. They are created automatically by `StudentFeeController::store()` when an assessment is saved. They are intentionally **excluded from the Payment History table** in `StudentFees/Show.vue` because they represent the charge side of the ledger, not a cashier transaction. Do NOT re-add them to that table. They are visible in `Students/WorkflowHistory.vue` under the **Assessment History** section instead.
 
 ---
 
@@ -609,6 +610,7 @@ Workflow → WorkflowInstance → WorkflowApproval
 | Reading `user.avatar` as a raw path | It's already a full URL — use directly in `<img :src>` |
 | Fetching `StudentPaymentTerm` outside of `StudentAssessment` scope | Always query through assessment for correct isolation |
 | Assuming `name` column exists on `users` | It was dropped — use `first_name` + `last_name` |
+| Adding `kind = 'charge'` rows back to the Payment History table in `StudentFees/Show.vue` | These are assessment debit entries, not cashier payments — they belong in Workflow History (Assessment History section) only |
 | Stacking follow-up messages when something is wrong | Edit the original prompt and regenerate instead |
 | Running 8+ file changes in one session | Split into audit → implement → verify sessions |
 | Using Opus/Sonnet for a simple rename or grammar fix | Use Haiku — save the budget for real work |

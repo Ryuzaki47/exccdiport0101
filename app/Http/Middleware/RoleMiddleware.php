@@ -51,7 +51,12 @@ class RoleMiddleware
             return $next($request);
         }
 
-        // Role mismatch — abort with 403 Forbidden
-        abort(403, 'Unauthorized - insufficient role permissions');
+        // Role mismatch — redirect to the user's own dashboard with a flash warning.
+        // This is friendlier than a raw 403 page and matches documented behavior.
+        $dashboardRoute = self::ROLE_DASHBOARDS[$userRole] ?? 'dashboard';
+
+        return redirect()
+            ->route($dashboardRoute)
+            ->with('flash.warning', 'You do not have permission to access that page.');
     }
 }

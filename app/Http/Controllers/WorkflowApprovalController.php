@@ -29,7 +29,6 @@ class WorkflowApprovalController extends Controller
         if (in_array($userRole, ['accounting', 'admin'])) {
             // Accounting and admin can see ALL approvals on payment_approval workflows,
             // regardless of which specific user ID was assigned as approver.
-            // This ensures no submission is invisible due to timing of user creation.
             $query->whereHas('workflowInstance.workflow', function ($wq) {
                 $wq->where('type', 'payment_approval');
             });
@@ -39,13 +38,18 @@ class WorkflowApprovalController extends Controller
         }
 
         $approvals = $query
-            ->when($request->status, fn($q, $status) => $q->where('status', $status))
+            ->when($request->status, fn ($q, $status) => $q->where('status', $status))
             ->latest()
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
         return Inertia::render('Approvals/Index', [
             'approvals' => $approvals,
-            'filters'   => $request->only(['status']),
+            // Pass ALL three filter keys back so Vue's filters ref stays in sync
+            // with the actual URL state across page loads and filter changes.
+            // Previously only 'status' was passed, causing year/semester to be
+            // dropped on reload and the filter UI to desync from the URL.
+            'filters'   => $request->only(['status', 'year', 'semester']),
         ]);
     }
 

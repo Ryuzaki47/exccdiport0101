@@ -214,7 +214,7 @@ const canReinstate = (student: Student) =>
                             <td class="px-5 py-4">
                                 <div class="flex items-center gap-2">
                                     <Link
-                                        :href="route('student-fees.show', student.user?.id ?? student.id)"
+                                        :href="route('student-fees.show', student.user?.id ?? student.id) + '?from=archive'"
                                         class="inline-flex items-center rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-100 transition-colors"
                                     >
                                         Fee Details

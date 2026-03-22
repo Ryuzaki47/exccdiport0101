@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\Payment;
+use App\Models\StudentAssessment;
 use App\Models\StudentStatusLog;
 use App\Models\Workflow;
 use App\Services\WorkflowService;
@@ -455,9 +456,30 @@ class StudentController extends Controller
                 ];
             });
 
+        // Assessment history — each assessment is a billing event.
+        // Charge transactions were removed from the fee detail view and are
+        // surfaced here instead so staff can see exactly what was assessed,
+        // when, and for how much, without cluttering the payment table.
+        $assessments = StudentAssessment::where('user_id', $student->user_id)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn ($a) => [
+                'id'               => $a->id,
+                'course'           => $a->course,
+                'year_level'       => $a->year_level,
+                'semester'         => $a->semester,
+                'school_year'      => $a->school_year,
+                'total_assessment' => (float) $a->total_assessment,
+                'tuition_fee'      => (float) $a->tuition_fee,
+                'other_fees'       => (float) $a->other_fees,
+                'status'           => $a->status,
+                'created_at'       => $a->created_at,
+            ]);
+
         return Inertia::render('Students/WorkflowHistory', [
-            'account_id' => $student->user?->account_id ?? $student->student_id,
-            'workflows'  => $workflows,
+            'account_id'  => $student->user?->account_id ?? $student->student_id,
+            'workflows'   => $workflows,
+            'assessments' => $assessments,
         ]);
     }
 }
