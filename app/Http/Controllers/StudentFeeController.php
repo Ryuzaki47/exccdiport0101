@@ -530,6 +530,7 @@ class StudentFeeController extends Controller
 
         $allAssessments = StudentAssessment::where('user_id', $userId)
             ->where('status', 'active')
+            ->with(['paymentTerms' => fn ($q) => $q->orderBy('term_order')])
             ->orderBy('school_year')
             ->orderByRaw("FIELD(semester, '1st Sem', '2nd Sem', 'Summer')")
             ->get()
@@ -543,6 +544,21 @@ class StudentFeeController extends Controller
                 'tuition_fee'      => (float) $a->tuition_fee,
                 'other_fees'       => (float) $a->other_fees,
                 'fee_breakdown'    => $a->fee_breakdown ?? [],
+                // paymentTerms loaded here so the assessment selector in Show.vue
+                // can compute remainingBalance for any selected assessment, not
+                // just the latest one.
+                'paymentTerms'     => $a->paymentTerms->map(fn ($term) => [
+                    'id'         => $term->id,
+                    'term_name'  => $term->term_name,
+                    'term_order' => $term->term_order,
+                    'percentage' => $term->percentage,
+                    'amount'     => (float) $term->amount,
+                    'balance'    => (float) $term->balance,
+                    'due_date'   => $term->due_date,
+                    'status'     => $term->status,
+                    'remarks'    => $term->remarks,
+                    'paid_date'  => $term->paid_date,
+                ])->toArray(),
             ]);
 
         $latestAssessment = StudentAssessment::where('user_id', $userId)
@@ -591,7 +607,7 @@ class StudentFeeController extends Controller
                 'reference_number' => $p->reference_number,
                 'status'           => $p->status,
                 'paid_at'          => $p->paid_at,
-                'assessment_id'    => $p->assessment_id,
+                'assessment_id'    => $p->student_assessment_id, // FK column is student_assessment_id, not assessment_id
                 'semester'         => $p->assessment?->semester ?? null,
                 'school_year'      => $p->assessment?->school_year ?? null,
                 'year_level'       => $p->assessment?->year_level ?? null,

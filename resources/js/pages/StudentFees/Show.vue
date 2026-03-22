@@ -64,24 +64,47 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// ─── Assessment selector — declared first so all computed below can safely use
+// selectedAssessment.value without a forward-reference issue. ──────────────────
+
+const selectedAssessmentId = ref<number | null>(props.assessment?.id ?? null);
+
+const selectedAssessment = computed(() => {
+    if (!selectedAssessmentId.value) return props.assessment;
+    return props.allAssessments.find((a) => a.id === selectedAssessmentId.value) ?? props.assessment;
+});
+
+const exportUrl = computed(() => {
+    const base = route('student-fees.export-pdf', props.student.id);
+    return selectedAssessmentId.value ? `${base}?assessment_id=${selectedAssessmentId.value}` : base;
+});
+
 // ─── Balance ──────────────────────────────────────────────────────────────────
 
 const remainingBalance = computed(() => {
-    const accountBal = parseFloat(String(props.student.account?.balance ?? 0));
-    if (accountBal > 0) return accountBal;
-    const terms: PaymentTerm[] = props.assessment?.paymentTerms ?? [];
+    // Prefer the currently selected assessment's terms (now included in allAssessments).
+    // Falls back to the default latest assessment terms, then account balance.
+    const terms: PaymentTerm[] =
+        (selectedAssessment.value as any)?.paymentTerms
+        ?? props.assessment?.paymentTerms
+        ?? [];
     if (terms.length > 0) {
         const termsTotal = terms.reduce((sum, t) => sum + parseFloat(String(t.balance)), 0);
-        if (termsTotal > 0) return termsTotal;
+        if (termsTotal > 0) return Math.round(termsTotal * 100) / 100;
     }
-    return 0;
+    // Fallback: account-level balance (covers edge cases with no term data)
+    const accountBal = parseFloat(String(props.student.account?.balance ?? 0));
+    return Math.max(0, accountBal);
 });
 
-const totalAssessment = computed(() => parseFloat(String(props.assessment?.total_assessment || 0)));
+const totalAssessment = computed(() => parseFloat(String(selectedAssessment.value?.total_assessment ?? props.assessment?.total_assessment ?? 0)));
 const totalPaid       = computed(() => Math.max(0, totalAssessment.value - remainingBalance.value));
 
 const paymentTimingStatus = computed((): 'behind' | 'on_track' | 'paid' => {
-    const terms: PaymentTerm[] = props.assessment?.paymentTerms ?? [];
+    const terms: PaymentTerm[] =
+        (selectedAssessment.value as any)?.paymentTerms
+        ?? props.assessment?.paymentTerms
+        ?? [];
     if (terms.length === 0) return 'behind';
     if (remainingBalance.value === 0) return 'paid';
     const sorted = [...terms].sort((a, b) => a.term_order - b.term_order);
@@ -116,7 +139,9 @@ const balanceCardConfig = computed(() => {
 // ─── Payment Terms ─────────────────────────────────────────────────────────────
 
 const availableTermsForPayment = computed(() => {
-    const unpaidTerms: PaymentTerm[] = (props.assessment?.paymentTerms ?? [])
+    const unpaidTerms: PaymentTerm[] = ((selectedAssessment.value as any)?.paymentTerms
+        ?? props.assessment?.paymentTerms
+        ?? [])
         .filter((t: PaymentTerm) => parseFloat(String(t.balance)) > 0)
         .sort((a: PaymentTerm, b: PaymentTerm) => a.term_order - b.term_order);
     return unpaidTerms.map((term: PaymentTerm, index: number) => ({
@@ -126,25 +151,17 @@ const availableTermsForPayment = computed(() => {
     }));
 });
 
-const allTermsSorted = computed((): PaymentTerm[] =>
-    [...(props.assessment?.paymentTerms ?? [])].sort((a, b) => a.term_order - b.term_order)
-);
+const allTermsSorted = computed((): PaymentTerm[] => {
+    const terms: PaymentTerm[] =
+        (selectedAssessment.value as any)?.paymentTerms
+        ?? props.assessment?.paymentTerms
+        ?? [];
+    return [...terms].sort((a, b) => a.term_order - b.term_order);
+});
 
 const paidTermsCount = computed(() => allTermsSorted.value.filter((t) => t.status === 'paid').length);
 
-// ─── Assessment selector ───────────────────────────────────────────────────────
-
-const selectedAssessmentId = ref<number | null>(props.assessment?.id ?? null);
-
-const selectedAssessment = computed(() => {
-    if (!selectedAssessmentId.value) return props.assessment;
-    return props.allAssessments.find((a) => a.id === selectedAssessmentId.value) ?? props.assessment;
-});
-
-const exportUrl = computed(() => {
-    const base = route('student-fees.export-pdf', props.student.id);
-    return selectedAssessmentId.value ? `${base}?assessment_id=${selectedAssessmentId.value}` : base;
-});
+// (assessment selector moved above — see top of script)
 
 // ─── Fee line items ────────────────────────────────────────────────────────────
 
@@ -466,7 +483,7 @@ const getStudentStatusColor = (status: string) => {
     <Head :title="`Fee Details — ${student.name}`" />
 
     <AppLayout>
-        <div class="mx-auto max-w-6xl space-y-6 p-6">
+        <div class="w-full space-y-6 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
             <!-- ── Header ── -->
@@ -993,7 +1010,7 @@ const getStudentStatusColor = (status: string) => {
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
-                                <tr v-if="payments.length === 0">
+                                <tr v-if="filteredPayments.length === 0">
                                     <td colspan="7" class="px-6 py-10 text-center text-gray-400">
                                         <CreditCard class="mx-auto mb-2 h-8 w-8 opacity-30" />
                                         <p>No payment history found</p>
@@ -1026,7 +1043,7 @@ const getStudentStatusColor = (status: string) => {
                     </div>
                     <div v-if="hasMorePayments" class="border-t px-6 py-3 text-center">
                         <button type="button" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors" @click="loadMorePayments">
-                            See More ({{ payments.length - paymentHistoryLimit }} remaining)
+                            See More ({{ filteredPayments.length - paymentHistoryLimit }} remaining)
                         </button>
                     </div>
                 </CardContent>
@@ -1036,8 +1053,8 @@ const getStudentStatusColor = (status: string) => {
             <div>
                 <div class="mb-3 flex items-center justify-between px-1">
                     <div>
-                        <h2 class="text-xl font-bold text-gray-900">Payment History</h2>
-                        <p class="text-sm text-gray-500">All payments grouped by term</p>
+                        <h2 class="text-xl font-bold text-gray-900">Transaction Ledger</h2>
+                        <p class="text-sm text-gray-500">All payment transactions grouped by term</p>
                     </div>
                 </div>
 

@@ -2140,5 +2140,436 @@ Added to the Term Information card, visible whenever `alreadyEnrolledIds.size > 
 
 ---
 
+# 📋 Change Log — Session: UI Fixes — Password Update, Student Fee View Layout & Payment History
+
+**Date:** March 22, 2026
+**Session:** Student Fee Management & Settings — UI Consistency, Data Binding Fixes, Payment History Repair
+**Status:** ✅ Deployed
+
+---
+
+## SESSION OVERVIEW
+
+This session resolves three distinct issues discovered across the Settings and Student Fee Management modules:
+
+1. **Password.vue** — Form submission gave no visible feedback and left fields populated after success; error states did not auto-clear or refocus the relevant field.
+2. **StudentFees/Show.vue (Layout)** — Page was capped at `max-w-6xl`, wasting screen width on a data-dense accounting page.
+3. **StudentFees/Show.vue (Payment History)** — Payment records existed in the database but were never displayed. Root cause: a wrong property name in the controller's `payments` map caused every row to arrive in Vue with `assessment_id: null`, which the filter then rejected.
+4. **StudentFees/Show.vue (Assessment Selector consistency)** — Switching the semester dropdown did not update the balance, total assessment, term status badge, or allocation preview — because all those computeds referenced `props.assessment` (always the latest) instead of `selectedAssessment`.
+
+**Files Modified:** 3
+**Files Created:** 0
+**Build Step Required:** `npm run build`
+**Migration Required:** None
+
+---
+
+## 1. BACKEND — `app/Http/Controllers/StudentFeeController.php`
+
+### Change 1.1: Fix `payments` Map — Wrong FK Column Name
+
+**Location:** `show()` method — `$payments` query map (~line 594)
+**Status:** ✅ Applied
+
+**Root Cause:** The `payments` table column added by `add_assessment_id_to_payments_table` migration is named `student_assessment_id`. The `Payment` model's `assessment()` relationship also declares this FK explicitly. However, the `show()` method mapped `'assessment_id' => $p->assessment_id` — a column that does not exist. Eloquent returned `null` for every row. In Vue, `filteredPayments` filters `p.assessment_id === selectedId`, which evaluated as `null !== <real id>` for every record — resulting in an always-empty array and the "No payment history found" state, regardless of how many records existed in the DB.
+
+**Before:**
+```php
+->map(fn ($p) => [
+    ...
+    'assessment_id'    => $p->assessment_id,
+    ...
+])
+```
+
+**After:**
+```php
+->map(fn ($p) => [
+    ...
+    'assessment_id'    => $p->student_assessment_id, // FK column is student_assessment_id, not assessment_id
+    ...
+])
+```
+
+**Impact:** All existing payment records now appear in the Payment History table immediately — no data migration needed, the records were always there.
+
+---
+
+### Change 1.2: Eager-Load `paymentTerms` on All Assessments
+
+**Location:** `show()` method — `$allAssessments` query (~line 531)
+**Status:** ✅ Applied
+
+**Problem:** The `$allAssessments` query used a plain `->get()->map()` with no eager load. Only `$latestAssessment` received payment term data. When accounting switched the semester dropdown, `remainingBalance`, `totalAssessment`, `allTermsSorted`, and the payment dialog allocation preview all continued reading from the latest assessment's terms — not the selected one.
+
+**Before:**
+```php
+$allAssessments = StudentAssessment::where('user_id', $userId)
+    ->where('status', 'active')
+    ->orderBy('school_year')
+    ->orderByRaw("FIELD(semester, '1st Sem', '2nd Sem', 'Summer')")
+    ->get()
+    ->map(fn ($a) => [
+        'id'            => $a->id,
+        ...
+        'fee_breakdown' => $a->fee_breakdown ?? [],
+    ]);
+```
+
+**After:**
+```php
+$allAssessments = StudentAssessment::where('user_id', $userId)
+    ->where('status', 'active')
+    ->with(['paymentTerms' => fn ($q) => $q->orderBy('term_order')])
+    ->orderBy('school_year')
+    ->orderByRaw("FIELD(semester, '1st Sem', '2nd Sem', 'Summer')")
+    ->get()
+    ->map(fn ($a) => [
+        'id'            => $a->id,
+        ...
+        'fee_breakdown' => $a->fee_breakdown ?? [],
+        'paymentTerms'  => $a->paymentTerms->map(fn ($term) => [
+            'id'         => $term->id,
+            'term_name'  => $term->term_name,
+            'term_order' => $term->term_order,
+            'percentage' => $term->percentage,
+            'amount'     => (float) $term->amount,
+            'balance'    => (float) $term->balance,
+            'due_date'   => $term->due_date,
+            'status'     => $term->status,
+            'remarks'    => $term->remarks,
+            'paid_date'  => $term->paid_date,
+        ])->toArray(),
+    ]);
+```
+
+**Impact:** Every assessment in the `allAssessments` prop now carries its full term list. The Vue assessment selector can now drive all balance and term computeds correctly for any selected semester.
+
+---
+
+## 2. FRONTEND — `resources/js/pages/StudentFees/Show.vue`
+
+### Change 2.1: Move Assessment Selector Declarations to Top of `<script setup>`
+
+**Location:** `<script setup>` — `selectedAssessmentId`, `selectedAssessment`, `exportUrl`
+**Status:** ✅ Applied
+
+**Problem:** `selectedAssessmentId` (ref) and `selectedAssessment` (computed) were declared after `remainingBalance`, `totalAssessment`, `paymentTimingStatus`, `availableTermsForPayment`, and `allTermsSorted` — all of which referenced `selectedAssessment.value`. Vue 3 computed properties are lazy (evaluated at read time, not declaration time), so this worked at runtime. However it created a TypeScript "used before declaration" risk and made the dependency graph non-obvious.
+
+**Fix:** Moved all three declarations (`selectedAssessmentId`, `selectedAssessment`, `exportUrl`) to immediately after `defineProps<Props>()`, before any computed that depends on them. A placeholder comment is left at the original location for traceability.
+
+---
+
+### Change 2.2: `remainingBalance` — Use Selected Assessment Terms
+
+**Location:** `remainingBalance` computed
+**Status:** ✅ Applied
+
+**Before:**
+```typescript
+const remainingBalance = computed(() => {
+    const accountBal = parseFloat(String(props.student.account?.balance ?? 0));
+    if (accountBal > 0) return accountBal;
+    const terms: PaymentTerm[] = props.assessment?.paymentTerms ?? [];
+    if (terms.length > 0) {
+        const termsTotal = terms.reduce((sum, t) => sum + parseFloat(String(t.balance)), 0);
+        if (termsTotal > 0) return termsTotal;
+    }
+    return 0;
+});
+```
+
+**After:**
+```typescript
+const remainingBalance = computed(() => {
+    const terms: PaymentTerm[] =
+        (selectedAssessment.value as any)?.paymentTerms
+        ?? props.assessment?.paymentTerms
+        ?? [];
+    if (terms.length > 0) {
+        const termsTotal = terms.reduce((sum, t) => sum + parseFloat(String(t.balance)), 0);
+        if (termsTotal > 0) return Math.round(termsTotal * 100) / 100;
+    }
+    const accountBal = parseFloat(String(props.student.account?.balance ?? 0));
+    return Math.max(0, accountBal);
+});
+```
+
+**Impact:** The "Outstanding Balance" shown in the Record Payment dialog now reflects the correct semester when the dropdown is changed.
+
+---
+
+### Change 2.3: `totalAssessment` — Use Selected Assessment
+
+**Location:** `totalAssessment` computed
+**Status:** ✅ Applied
+
+**Before:**
+```typescript
+const totalAssessment = computed(() => parseFloat(String(props.assessment?.total_assessment || 0)));
+```
+
+**After:**
+```typescript
+const totalAssessment = computed(() =>
+    parseFloat(String(selectedAssessment.value?.total_assessment ?? props.assessment?.total_assessment ?? 0))
+);
+```
+
+---
+
+### Change 2.4: `paymentTimingStatus` — Use Selected Assessment Terms
+
+**Location:** `paymentTimingStatus` computed
+**Status:** ✅ Applied
+
+Updated to read terms from `selectedAssessment.value?.paymentTerms` so the Paid / On Track / Behind badge reflects the correct semester.
+
+---
+
+### Change 2.5: `allTermsSorted` — Use Selected Assessment Terms
+
+**Location:** `allTermsSorted` computed
+**Status:** ✅ Applied
+
+**Before:**
+```typescript
+const allTermsSorted = computed((): PaymentTerm[] =>
+    [...(props.assessment?.paymentTerms ?? [])].sort((a, b) => a.term_order - b.term_order)
+);
+```
+
+**After:**
+```typescript
+const allTermsSorted = computed((): PaymentTerm[] => {
+    const terms: PaymentTerm[] =
+        (selectedAssessment.value as any)?.paymentTerms
+        ?? props.assessment?.paymentTerms
+        ?? [];
+    return [...terms].sort((a, b) => a.term_order - b.term_order);
+});
+```
+
+**Impact:** The allocation preview in the Record Payment dialog now shows the terms for the selected semester, not always the latest one.
+
+---
+
+### Change 2.6: `availableTermsForPayment` — Use Selected Assessment Terms
+
+**Location:** `availableTermsForPayment` computed
+**Status:** ✅ Applied
+
+Same pattern — updated to source terms from `selectedAssessment.value?.paymentTerms` with the same fallback chain.
+
+---
+
+### Change 2.7: Full-Width Layout Container
+
+**Location:** Template — outer wrapper `<div>`
+**Status:** ✅ Applied
+
+**Before:**
+```html
+<div class="mx-auto max-w-6xl space-y-6 p-6">
+```
+
+**After:**
+```html
+<div class="w-full space-y-6 p-6">
+```
+
+**Impact:** Page content now uses the full available viewport width. Improves readability of wide tables (payment history, term breakdown, transaction ledger).
+
+---
+
+### Change 2.8: Fix Payment History Empty-State Guard
+
+**Location:** Payment History `<table>` — empty-state `<tr>`
+**Status:** ✅ Applied
+
+**Before:**
+```html
+<tr v-if="payments.length === 0">
+```
+
+**After:**
+```html
+<tr v-if="filteredPayments.length === 0">
+```
+
+**Problem:** `payments` is the raw prop (all records across all assessments). `filteredPayments` is the computed that filters by selected assessment. Using the raw prop caused two bugs: (1) the empty-state row could show alongside actual data rows when no filter match existed, and (2) it would never show even if the current filter produced zero results but other assessments had records.
+
+---
+
+### Change 2.9: Fix "See More" Remaining Count + Rename Duplicate Heading
+
+**Location:** Payment History card footer; Transaction section heading
+**Status:** ✅ Applied
+
+**See More count — Before:**
+```html
+See More ({{ payments.length - paymentHistoryLimit }} remaining)
+```
+
+**After:**
+```html
+See More ({{ filteredPayments.length - paymentHistoryLimit }} remaining)
+```
+
+**Duplicate heading fix:** The page had two `<h2>` elements both titled "Payment History" — one for the per-payment card table, one for the grouped transaction ledger below. The second heading has been renamed to **"Transaction Ledger"** to eliminate confusion between the two sections.
+
+---
+
+## 3. SETTINGS — `resources/js/pages/settings/Password.vue`
+
+### Change 3.1: Add `form.reset()` on Success
+
+**Location:** `submit()` — `onSuccess` callback
+**Status:** ✅ Applied
+
+**Before:**
+```typescript
+onSuccess: () => {
+    recentlySuccessful.value = true;
+    setTimeout(() => { recentlySuccessful.value = false; }, 3000);
+},
+```
+
+**After:**
+```typescript
+onSuccess: () => {
+    form.reset();  // ← added: clears all three fields
+    recentlySuccessful.value = true;
+    setTimeout(() => { recentlySuccessful.value = false; }, 4000);
+},
+```
+
+**Root Cause of "not working" perception:** After a successful `PUT`, Inertia redirects back to the same page (controller returns `back()`). Without `form.reset()`, all three password fields retained their typed values. The user saw no change and assumed the submit had no effect — especially since the success indicator ("Saved.") was small and low-contrast.
+
+---
+
+### Change 3.2: Add `onError` Handler with Smart Refocus
+
+**Location:** `submit()` — new `onError` callback
+**Status:** ✅ Applied
+
+**Added:**
+```typescript
+onError: () => {
+    if (form.errors.password) {
+        form.reset('password', 'password_confirmation');
+        passwordInput.value?.focus();
+    }
+    if (form.errors.current_password) {
+        form.reset('current_password');
+        currentPasswordInput.value?.focus();
+    }
+},
+```
+
+**Impact:** Wrong current password → that field clears and cursor jumps back to it. Bad new password → new password + confirmation clear and cursor goes to new password. Eliminates manual field-clearing by the user after a failed attempt.
+
+---
+
+### Change 3.3: Improve Success Feedback Visibility
+
+**Location:** Template — success indicator paragraph + submit button
+**Status:** ✅ Applied
+
+**Before:**
+```html
+<Button :disabled="form.processing" type="submit">Save password</Button>
+<p v-show="recentlySuccessful" class="text-sm text-neutral-600">Saved.</p>
+```
+
+**After:**
+```html
+<Button :disabled="form.processing" type="submit">
+    <span v-if="form.processing">Saving…</span>
+    <span v-else>Save password</span>
+</Button>
+<p v-show="recentlySuccessful" class="text-sm font-medium text-green-600">
+    ✓ Password updated successfully.
+</p>
+```
+
+Changes: button shows "Saving…" while processing; success text is green, bold, and prefixed with ✓ for immediate visual recognition; timeout extended from 3s to 4s.
+
+---
+
+## 4. SUMMARY TABLE
+
+| # | Layer | Change | File | Status |
+|---|---|---|---|---|
+| 1 | Backend | Fix `payments` map: `$p->assessment_id` → `$p->student_assessment_id` | `StudentFeeController.php` | ✅ |
+| 2 | Backend | Eager-load `paymentTerms` on all `$allAssessments` + include in map | `StudentFeeController.php` | ✅ |
+| 3 | Frontend | Move `selectedAssessmentId` / `selectedAssessment` to top of `<script setup>` | `Show.vue` | ✅ |
+| 4 | Frontend | `remainingBalance` — source from `selectedAssessment` terms | `Show.vue` | ✅ |
+| 5 | Frontend | `totalAssessment` — source from `selectedAssessment` | `Show.vue` | ✅ |
+| 6 | Frontend | `paymentTimingStatus` — source from `selectedAssessment` terms | `Show.vue` | ✅ |
+| 7 | Frontend | `allTermsSorted` — source from `selectedAssessment` terms | `Show.vue` | ✅ |
+| 8 | Frontend | `availableTermsForPayment` — source from `selectedAssessment` terms | `Show.vue` | ✅ |
+| 9 | Frontend | Layout container: `max-w-6xl mx-auto` → `w-full` | `Show.vue` | ✅ |
+| 10 | Frontend | Payment History empty-state: `payments.length` → `filteredPayments.length` | `Show.vue` | ✅ |
+| 11 | Frontend | "See More" count: `payments.length` → `filteredPayments.length` | `Show.vue` | ✅ |
+| 12 | Frontend | Rename duplicate "Payment History" `<h2>` → "Transaction Ledger" | `Show.vue` | ✅ |
+| 13 | Frontend | `form.reset()` on `onSuccess` in password update | `Password.vue` | ✅ |
+| 14 | Frontend | Add `onError` handler with per-field reset + refocus | `Password.vue` | ✅ |
+| 15 | Frontend | Improve success feedback: green text, ✓ prefix, "Saving…" button state | `Password.vue` | ✅ |
+
+---
+
+## 5. EXPECTED BEHAVIOR AFTER CHANGE
+
+| Scenario | Before | After |
+|---|---|---|
+| Open Student Fee View with payments in DB | "No payment history found" always shown | All payment records display correctly |
+| Switch assessment dropdown | Balance, terms, status badge stay on latest assessment | All values update to reflect selected semester |
+| Payment History filter | Filter never matched (assessment_id always null) | Filters correctly by selected assessment |
+| Record Payment dialog — balance | Always showed latest assessment balance | Shows selected assessment's outstanding balance |
+| Allocation preview — terms | Always showed latest assessment terms | Shows selected assessment's terms |
+| Submit password update | Fields stay populated, tiny grey "Saved." easily missed | Fields clear, green "✓ Password updated successfully." shown for 4s |
+| Submit with wrong current password | Field stays populated, no refocus | Field clears and refocuses automatically |
+| Submit with bad new password | Fields stay populated, no refocus | New password fields clear and refocus |
+| Student Fee View page width | Capped at 1152px | Full viewport width |
+
+---
+
+## 6. DEPLOYMENT CHECKLIST
+
+```
+[ ] Replace app/Http/Controllers/StudentFeeController.php
+[ ] Replace resources/js/pages/StudentFees/Show.vue
+[ ] Replace resources/js/pages/settings/Password.vue
+[ ] npm run build
+[ ] No migration needed
+[ ] No new routes needed
+[ ] php artisan optimize:clear  (optional)
+```
+
+---
+
+## 7. VERIFICATION STEPS
+
+**Payment History:**
+1. Open any student with recorded payments in Student Fee Management → View
+2. Confirm payment rows appear in the Payment History card (was previously always empty)
+3. Switch the semester dropdown → confirm Payment History filters to that semester's payments only
+4. Confirm "See More" count is accurate when more than 5 payments exist for a semester
+
+**Assessment Selector Consistency:**
+5. Switch semester dropdown → confirm Outstanding Balance, Total Assessment, term status badge, and Record Payment allocation preview all update to reflect the selected semester
+
+**Password Settings:**
+6. Go to Settings → Password, fill all three fields with correct data → submit
+7. Confirm all fields clear and green "✓ Password updated successfully." appears for ~4s
+8. Submit with wrong current password → confirm that field clears and refocuses
+9. Submit with mismatched new passwords → confirm new password fields clear and refocus
+
+**Layout:**
+10. Open Student Fee Management → View on a wide screen → confirm content uses full width with no centering cap
+
+---
+
 **End of Change Log**
 *For questions or additional information, refer to individual documentation files in docs/ folder*

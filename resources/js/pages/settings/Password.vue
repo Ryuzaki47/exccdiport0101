@@ -18,12 +18,12 @@ const breadcrumbItems: BreadcrumbItem[] = [
     },
 ];
 
-const passwordInput = ref<HTMLInputElement | null>(null);
+const passwordInput        = ref<HTMLInputElement | null>(null);
 const currentPasswordInput = ref<HTMLInputElement | null>(null);
 
 const form = useForm({
-    current_password: '',
-    password: '',
+    current_password:      '',
+    password:              '',
     password_confirmation: '',
 });
 
@@ -32,11 +32,29 @@ const recentlySuccessful = ref(false);
 const submit = () => {
     form.put(route('password.update'), {
         preserveScroll: true,
+
         onSuccess: () => {
+            // Clear all three fields so the form visually confirms completion.
+            // Without this the user sees no change and assumes the submit failed.
+            form.reset();
             recentlySuccessful.value = true;
             setTimeout(() => {
                 recentlySuccessful.value = false;
-            }, 3000);
+            }, 4000);
+        },
+
+        onError: () => {
+            // Wrong new password / confirmation mismatch — clear new password
+            // fields and refocus so the user can re-type without extra clicks.
+            if (form.errors.password) {
+                form.reset('password', 'password_confirmation');
+                passwordInput.value?.focus();
+            }
+            // Wrong current password — clear that field and refocus.
+            if (form.errors.current_password) {
+                form.reset('current_password');
+                currentPasswordInput.value?.focus();
+            }
         },
     });
 };
@@ -48,9 +66,14 @@ const submit = () => {
 
         <SettingsLayout>
             <div class="space-y-6">
-                <HeadingSmall title="Update password" description="Ensure your account is using a long, random password to stay secure" />
+                <HeadingSmall
+                    title="Update password"
+                    description="Ensure your account is using a long, random password to stay secure"
+                />
 
                 <form @submit.prevent="submit" class="space-y-6">
+
+                    <!-- Current Password -->
                     <div class="grid gap-2">
                         <Label for="current_password">Current password</Label>
                         <Input
@@ -66,6 +89,7 @@ const submit = () => {
                         <InputError :message="form.errors.current_password" />
                     </div>
 
+                    <!-- New Password -->
                     <div class="grid gap-2">
                         <Label for="password">New password</Label>
                         <Input
@@ -81,6 +105,7 @@ const submit = () => {
                         <InputError :message="form.errors.password" />
                     </div>
 
+                    <!-- Confirm New Password -->
                     <div class="grid gap-2">
                         <Label for="password_confirmation">Confirm password</Label>
                         <Input
@@ -95,18 +120,25 @@ const submit = () => {
                         <InputError :message="form.errors.password_confirmation" />
                     </div>
 
+                    <!-- Submit + feedback -->
                     <div class="flex items-center gap-4">
-                        <Button :disabled="form.processing" type="submit">Save password</Button>
+                        <Button :disabled="form.processing" type="submit">
+                            <span v-if="form.processing">Saving…</span>
+                            <span v-else>Save password</span>
+                        </Button>
 
                         <Transition
-                            enter-active-class="transition ease-in-out"
+                            enter-active-class="transition ease-in-out duration-300"
                             enter-from-class="opacity-0"
-                            leave-active-class="transition ease-in-out"
+                            leave-active-class="transition ease-in-out duration-300"
                             leave-to-class="opacity-0"
                         >
-                            <p v-show="recentlySuccessful" class="text-sm text-neutral-600">Saved.</p>
+                            <p v-show="recentlySuccessful" class="text-sm font-medium text-green-600">
+                                ✓ Password updated successfully.
+                            </p>
                         </Transition>
                     </div>
+
                 </form>
             </div>
         </SettingsLayout>
