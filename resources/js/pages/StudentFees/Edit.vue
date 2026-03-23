@@ -7,6 +7,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Save, Plus, Trash2, UserCog } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,8 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const { formatCurrency } = useDataFormatting();
 
 // ─── Breadcrumbs ──────────────────────────────────────────────────────────────
 
@@ -238,8 +241,7 @@ function submit() {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const fmt = (n: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n);
+
 
 const statusColor = (s: string) => ({
     active:    'bg-green-100 text-green-800',
@@ -525,11 +527,11 @@ const err = (field: string): string =>
                         <div class="mt-4 space-y-1 border-t pt-4 text-sm">
                             <div class="flex justify-between text-gray-600">
                                 <span>Tuition</span>
-                                <span>{{ fmt(tuitionTotal) }}</span>
+                                <span>{{ formatCurrency(tuitionTotal) }}</span>
                             </div>
                             <div class="flex justify-between text-gray-600">
                                 <span>Other Fees</span>
-                                <span>{{ fmt(otherTotal) }}</span>
+                                <span>{{ formatCurrency(otherTotal) }}</span>
                             </div>
                         </div>
                     </div>
@@ -542,11 +544,11 @@ const err = (field: string): string =>
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs font-medium tracking-widest text-blue-200 uppercase">Total Assessment</p>
-                            <p class="text-4xl font-bold">{{ fmt(grandTotal) }}</p>
+                            <p class="text-4xl font-bold">{{ formatCurrency(grandTotal) }}</p>
                         </div>
                         <div class="text-right text-sm text-blue-200">
-                            <p>Tuition: {{ fmt(tuitionTotal) }}</p>
-                            <p>Other: {{ fmt(otherTotal) }}</p>
+                            <p>Tuition: {{ formatCurrency(tuitionTotal) }}</p>
+                            <p>Other: {{ formatCurrency(otherTotal) }}</p>
                         </div>
                     </div>
                 </div>
@@ -555,12 +557,12 @@ const err = (field: string): string =>
                 <div v-if="totalChanged" class="rounded-lg border-2 border-amber-200 bg-amber-50 px-5 py-4">
                     <p class="mb-1 font-semibold text-amber-800">⚠ Assessment Total Changed</p>
                     <div class="space-y-0.5 text-sm text-amber-700">
-                        <p>Previous: {{ fmt(Number(assessment.total_assessment)) }}</p>
-                        <p>New: {{ fmt(grandTotal) }}</p>
+                        <p>Previous: {{ formatCurrency(Number(assessment.total_assessment)) }}</p>
+                        <p>New: {{ formatCurrency(grandTotal) }}</p>
                         <p class="font-semibold">
                             Difference:
                             <span :class="grandTotal > assessment.total_assessment ? 'text-red-600' : 'text-green-700'">
-                                {{ grandTotal > assessment.total_assessment ? '+' : '' }}{{ fmt(grandTotal - assessment.total_assessment) }}
+                                {{ grandTotal > assessment.total_assessment ? '+' : '' }}{{ formatCurrency(grandTotal - assessment.total_assessment) }}
                             </span>
                         </p>
                     </div>

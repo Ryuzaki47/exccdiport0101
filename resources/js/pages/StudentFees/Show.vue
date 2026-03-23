@@ -13,6 +13,7 @@ import {
     TrendingDown, TrendingUp,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,8 @@ interface Props {
 const props = defineProps<Props>();
 
 // ─── Assessment selector — declared first so all computed below can safely use
+const { formatCurrency } = useDataFormatting();
+
 // selectedAssessment.value without a forward-reference issue. ──────────────────
 
 const selectedAssessmentId = ref<number | null>(props.assessment?.id ?? null);
@@ -460,7 +463,7 @@ const submitPayment = () => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const formatCurrency   = (n: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n);
+
 const formatDate       = (d: string) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 const formatDateShort  = (d: string) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -1072,16 +1075,16 @@ const getStudentStatusColor = (status: string) => {
                         <div class="flex items-center gap-8 text-right md:gap-12">
                             <div>
                                 <p class="text-xs text-gray-400">Total Assessed</p>
-                                <p class="text-sm font-bold text-red-600">₱{{ new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(group.totalCharges) }}</p>
+                                <p class="text-sm font-bold text-red-600">{{ formatCurrency(group.totalCharges) }}</p>
                             </div>
                             <div>
                                 <p class="text-xs text-gray-400">Total Paid</p>
-                                <p class="text-sm font-bold text-green-600">₱{{ new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(group.totalPaid) }}</p>
+                                <p class="text-sm font-bold text-green-600">{{ formatCurrency(group.totalPaid) }}</p>
                             </div>
                             <div>
                                 <p class="text-xs text-gray-400">Balance</p>
                                 <p class="text-sm font-bold" :class="group.balance > 0 ? 'text-red-600' : 'text-green-600'">
-                                    ₱{{ new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(Math.abs(group.balance)) }}
+                                    {{ formatCurrency(Math.abs(group.balance)) }}
                                 </p>
                             </div>
                             <ChevronDown class="h-5 w-5 text-gray-400 transition-transform" :class="{ 'rotate-180': expandedTerms[group.key] }" />
@@ -1117,7 +1120,7 @@ const getStudentStatusColor = (status: string) => {
                                             <span v-else class="text-gray-400">—</span>
                                         </td>
                                         <td class="px-4 py-3 text-sm font-semibold text-green-600">
-                                            +₱{{ new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(t.amount) }}
+                                            +{{ formatCurrency(t.amount) }}
                                         </td>
                                         <td class="px-4 py-3">
                                             <span class="rounded-full px-2 py-0.5 text-xs font-semibold"

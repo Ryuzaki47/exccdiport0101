@@ -1003,20 +1003,91 @@ class StudentFeeController extends Controller
             $otherTotal   = round($feeItems->whereNotIn('category', ['Tuition', 'Laboratory'])->sum('amount'), 2);
             $grandTotal   = round($tuitionTotal + $otherTotal, 2);
 
+            // ── Preserve subject metadata from the existing fee_breakdown ─────────
+            // Edit.vue sends fee_items as { category, name, amount } only.
+            // The original fee_breakdown (written by store()) also contains:
+            //   subject_id, code, units — needed by the Enrolled Subjects accordion.
+            // We match existing rows by (category + name) to re-attach the metadata.
+            // Rows without a match (e.g. manually added misc lines) are saved as-is.
+            $existingBreakdown = collect($assessment->fee_breakdown ?? []);
+            $existingLookup = $existingBreakdown->keyBy(
+                fn ($row) => ($row['category'] ?? '') . '||' . ($row['name'] ?? '')
+            );
+
+            $oldSchoolYear = $assessment->school_year;
+            $oldSemester   = $assessment->semester;
+
+            $rebuiltBreakdown = $feeItems->map(fn ($item) => {
+                $lookupKey = ($item['category'] ?? '') . '||' . ($item['name'] ?? '');
+                $existing  = $existingLookup->get($lookupKey);
+                return [
+                    'category'   => $item['category'],
+                    'name'       => $item['name'],
+                    'amount'     => (float) $item['amount'],
+                    // Preserve subject metadata from original row, or null for misc lines
+                    'subject_id' => $existing['subject_id'] ?? null,
+                    'code'       => $existing['code']       ?? null,
+                    'units'      => $existing['units']      ?? 0,
+                ];
+            })->values()->toArray();
+
             $assessment->update([
                 'course'           => $validated['course'],
                 'year_level'       => $validated['year_level'],
                 'semester'         => $validated['semester'],
                 'school_year'      => $validated['school_year'],
-                'fee_breakdown'    => $feeItems->map(fn ($item) => [
-                    'category' => $item['category'],
-                    'name'     => $item['name'],
-                    'amount'   => (float) $item['amount'],
-                ])->values()->toArray(),
+                'fee_breakdown'    => $rebuiltBreakdown,
                 'tuition_fee'      => $tuitionTotal,
                 'other_fees'       => $otherTotal,
                 'total_assessment' => $grandTotal,
             ]);
+
+            // ── Sync StudentEnrollment rows when term identifier changes ──────
+            // store() writes enrollment rows keyed by (school_year, semester).
+            // If update() changes either value, show()'s assessmentTermIndex
+            // lookup would fail to match those rows to this assessment, causing
+            // the Enrolled Subjects accordion to show all subjects as grey ○.
+            //
+            // Fix: update the enrollment rows for this student's subjects to
+            // reflect the new school_year and semester.
+            $termChanged = $oldSchoolYear !== $validated['school_year']
+                || $oldSemester !== $validated['semester'];
+
+            if ($termChanged) {
+                // Extract subject IDs that are in this assessment's fee_breakdown.
+                // Only Tuition/Laboratory rows carry subject_id — misc rows do not.
+                $subjectIds = collect($rebuiltBreakdown)
+                    ->filter(fn ($row) => ! empty($row['subject_id']))
+                    ->pluck('subject_id')
+                    ->unique()
+                    ->values()
+                    ->toArray();
+
+                if (! empty($subjectIds)) {
+                    // Update the matching enrollment rows to the new term.
+                    // We target rows where both old school_year AND old semester match
+                    // so we don't accidentally update enrollments from other terms.
+                    \App\Models\StudentEnrollment::where('user_id', $userId)
+                        ->where('school_year', $oldSchoolYear)
+                        ->where('semester', $oldSemester)
+                        ->whereIn('subject_id', $subjectIds)
+                        ->where('status', 'enrolled')
+                        ->update([
+                            'school_year' => $validated['school_year'],
+                            'semester'    => $validated['semester'],
+                        ]);
+
+                    Log::info('Synced StudentEnrollment rows after assessment term change', [
+                        'user_id'          => $userId,
+                        'assessment_id'    => $assessment->id,
+                        'old_school_year'  => $oldSchoolYear,
+                        'old_semester'     => $oldSemester,
+                        'new_school_year'  => $validated['school_year'],
+                        'new_semester'     => $validated['semester'],
+                        'subject_count'    => count($subjectIds),
+                    ]);
+                }
+            }
 
             $terms = $assessment->paymentTerms()->orderBy('term_order')->get();
             $oldTotal = 0;

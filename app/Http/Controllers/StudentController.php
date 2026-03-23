@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRoleEnum;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\Payment;
@@ -128,7 +129,7 @@ class StudentController extends Controller
 
         // Update both the student's enrollment status and the user's status
         $student->update(['enrollment_status' => 'active']);
-        
+
         if ($student->user) {
             $student->user->update(['status' => User::STATUS_ACTIVE]);
         }
@@ -175,7 +176,7 @@ class StudentController extends Controller
         ]);
 
         if (empty($validated['user_id'])) {
-            $user = \App\Models\User::create([
+            $user = User::create([
                 'email'          => $validated['email'],
                 'last_name'      => $validated['last_name'],
                 'first_name'     => $validated['first_name'],
@@ -185,7 +186,7 @@ class StudentController extends Controller
                 'birthday'       => $validated['birthday'],
                 'phone'          => $validated['phone'],
                 'address'        => $validated['address'],
-                'role'           => \App\Enums\UserRoleEnum::STUDENT,
+                'role'           => UserRoleEnum::STUDENT,
                 'password'       => bcrypt('temporary' . time()),
             ]);
             $validated['user_id'] = $user->id;
@@ -272,7 +273,11 @@ class StudentController extends Controller
 
         $user = $request->user();
 
-        if ($user->role === 'student') {
+        // FIX: Use Enum comparison — $user->role is a UserRoleEnum object, NOT a string.
+        // The previous `$user->role === 'student'` was ALWAYS false (Enum !== string),
+        // meaning the ownership guard never ran and any user could record a payment
+        // against any student. This is the correct pattern per Claude.md.
+        if ($user->role === UserRoleEnum::STUDENT) {
             if (! $user->student || $user->student->id !== $student->id) {
                 abort(403, 'Unauthorized payment submission.');
             }
@@ -368,7 +373,11 @@ class StudentController extends Controller
     {
         $user = $request->user();
 
-        if ($user->role === 'student') {
+        // FIX: Use Enum comparison — $user->role is a UserRoleEnum object, NOT a string.
+        // The previous `$user->role === 'student'` was ALWAYS false, causing every caller
+        // (including students themselves) to hit the else branch and receive the first
+        // student record in the database instead of their own profile. Critical data leak.
+        if ($user->role === UserRoleEnum::STUDENT) {
             $student = Student::where('user_id', $user->id)->firstOrFail();
         } else {
             $student = Student::with('payments')->first();
@@ -429,13 +438,11 @@ class StudentController extends Controller
                 // Extract course from the workflowable entity if available
                 $course = null;
                 if ($instance->workflowable_type === 'App\\Models\\Transaction' && $instance->workflowable) {
-                    // Get the transaction's assessment data from metadata
                     $transactionMeta = $instance->workflowable->meta ?? [];
-                    $course = $transactionMeta['course'] ?? null;
+                    $course          = $transactionMeta['course'] ?? null;
                 } elseif ($instance->workflowable_type === 'App\\Models\\Student' && $instance->workflowable) {
-                    // For student workflows, try to get course from the latest assessment
                     $latestAssessment = $instance->workflowable->user?->latestAssessment;
-                    $course = $latestAssessment?->course;
+                    $course           = $latestAssessment?->course;
                 }
 
                 return [
@@ -457,9 +464,9 @@ class StudentController extends Controller
             });
 
         // Assessment history — each assessment is a billing event.
-        // Charge transactions were removed from the fee detail view and are
-        // surfaced here instead so staff can see exactly what was assessed,
-        // when, and for how much, without cluttering the payment table.
+        // Charge transactions (kind='charge') were intentionally removed from
+        // StudentFees/Show.vue's Payment History table and surfaced here instead,
+        // so staff can see exactly what was assessed without cluttering payment records.
         $assessments = StudentAssessment::where('user_id', $student->user_id)
             ->orderBy('created_at', 'desc')
             ->get()

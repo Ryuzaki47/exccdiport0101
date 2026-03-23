@@ -2571,5 +2571,135 @@ Changes: button shows "Saving…" while processing; success text is green, bold,
 
 ---
 
-**End of Change Log**
-*For questions or additional information, refer to individual documentation files in docs/ folder*
+# ChangeLog Corrections — Audit March 23, 2026
+
+Three documentation errors were identified in `ChangeLog.md` during the full audit.
+These are documentation-only corrections — no code changes are required.
+
+---
+
+## Correction 1 — Session 1, Section 4: "Files Created" Count Is Wrong
+
+**Location:** ChangeLog.md — Section 4 "FILES CREATED" header
+
+**Current:**
+```
+Created Files (4):
+├── app/Console/Commands/TestWorkflowDirectly.php
+├── docs/PAYMENT_APPROVAL_WORKFLOW_FIX_COMPLETE.md
+├── docs/WORKFLOW_FIX_FINAL_STATUS.md
+├── docs/PAYMENT_FORM_ACCESSIBILITY_FIX.md
+└── docs/PAYMENT_METHOD_VALIDATION_FIX.md
+```
+
+**Problem:** The header says 4, but 5 items are listed.
+
+**Fix:**
+```
+Created Files (5):
+```
+
+---
+
+## Correction 2 — Session 1, Section 4: TestPaymentApprovalWorkflow.php Listed as "Created"
+
+**Location:** ChangeLog.md — Section 4, `TestPaymentApprovalWorkflow.php` entry
+
+**Current:**
+```
+### File: `app/Console/Commands/TestPaymentApprovalWorkflow.php`
+
+**Purpose:** Test payment submission with approval workflow
+**Status:** ✅ Created
+**Notes:** Updated from initial version with field name fixes
+```
+
+**Problem:** Status says "Created" but Notes says "Updated from initial version" — contradictory.
+The file pre-existed. It was modified, not created from scratch.
+
+**Fix:**
+```
+**Status:** ✅ Modified (pre-existing file updated with field name fixes)
+```
+
+---
+
+## Correction 3 — Session 1, Section 13: "Modified Files (6)" Is Wrong
+
+**Location:** ChangeLog.md — Section 13 "FILES MODIFIED SUMMARY"
+
+**Current:**
+```
+Modified Files (6):
+├── app/Services/WorkflowService.php
+├── app/Http/Controllers/TransactionController.php
+├── database/migrations/2026_02_18_000000_add_admin_fields_to_users_table.php
+├── resources/js/pages/Student/AccountOverview.vue
+└── [Frontend Build Output]
+    └── Updated JavaScript bundles
+```
+
+**Problem:** That is 4 source files + 1 build artifact = listed as 6.
+`[Frontend Build Output]` is not a source file — it is a side effect of `npm run build`.
+Counting build output as a "modified file" inflates the number.
+
+**Fix:**
+```
+Modified Source Files (4):
+├── app/Services/WorkflowService.php
+│   └── Auto-advance logic for workflow steps
+├── app/Http/Controllers/TransactionController.php
+│   └── Robust enum comparison and validation rules
+├── database/migrations/2026_02_18_000000_add_admin_fields_to_users_table.php
+│   └── Fixed FK constraint handling in rollback
+└── resources/js/pages/Student/AccountOverview.vue
+    ├── Added id/name to form fields (4 fields)
+    └── Fixed form reset payment method
+
+Note: npm run build was run after these changes — build output is not counted
+as a source file modification.
+```
+
+---
+
+## Correction 4 — Session 1, Change 1.2: Code Snippet Does Not Match Actual Implementation
+
+**Location:** ChangeLog.md — Section 1, Change 1.2 "Recursive Auto-Advance for Final Steps"
+
+**Current (documents this as the fix applied):**
+```php
+} else {
+    Log::info('Step does not require approval, auto-advancing...', [...]);
+    $this->advanceWorkflow($instance->fresh(), $userId);
+}
+```
+
+**Actual code in WorkflowService.php (what was actually committed):**
+```php
+// (outside the DB transaction, after notifications)
+$instance->refresh();
+if (!$instance->isCompleted()) {
+    $this->advanceWorkflow($instance, $userId);
+}
+```
+
+**Problem:** The ChangeLog shows `$instance->fresh()` (creates a new model instance from DB)
+passed as argument. The actual implementation uses `$instance->refresh()` (mutates the existing
+instance in place) and then passes the same `$instance`. The behavior is functionally equivalent
+but the documented code differs from the committed code.
+
+**Fix:** Update the "After" snippet in Change 1.2 to reflect the actual committed code:
+```php
+} else {
+    // If this step doesn't require approval, continue advancing until we
+    // hit an approval-required step or the workflow completes.
+    $instance->refresh();
+    if (!$instance->isCompleted()) {
+        $this->advanceWorkflow($instance, $userId);
+    }
+}
+```
+
+---
+
+*End of ChangeLog corrections. No code changes required — documentation only.*

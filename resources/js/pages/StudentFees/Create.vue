@@ -7,6 +7,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, BookOpen, ChevronDown, ChevronRight, PenLine, Search, Trash2, User } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -405,10 +406,11 @@ function submit() {
     });
 }
 
+const { formatCurrency } = useDataFormatting();
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fmt = (n: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n);
+
 
 function statusColor(status: string) {
     return status === 'active' ? 'bg-green-100 text-green-800'
@@ -588,9 +590,9 @@ function statusColor(status: string) {
 
                 <!-- Rate info banner -->
                 <div class="rounded-lg border border-blue-100 bg-blue-50 px-5 py-3 text-xs text-blue-800 flex flex-wrap gap-6">
-                    <span>Tuition rate: <strong>₱{{ (tuitionPerUnit ?? 364).toLocaleString('en-PH') }}/unit</strong></span>
-                    <span>Lab fee: <strong>₱{{ (labFeePerSubject ?? 1656).toLocaleString('en-PH') }}/lab subject</strong></span>
-                    <span>Fixed misc: <strong>₱{{ (miscTotal ?? 6956).toLocaleString('en-PH', {minimumFractionDigits:2}) }}/semester</strong></span>
+                    <span>Tuition rate: <strong>{{ formatCurrency(tuitionPerUnit ?? 364) }}/unit</strong></span>
+                    <span>Lab fee: <strong>{{ formatCurrency(labFeePerSubject ?? 1656) }}/lab subject</strong></span>
+                    <span>Fixed misc: <strong>{{ formatCurrency(miscTotal ?? 6956) }}/semester</strong></span>
                     <span class="text-blue-500">Rate of Conduct of Consultation, April 2025 (AY 2025-2026)</span>
                 </div>
 
@@ -751,15 +753,15 @@ function statusColor(status: string) {
                                                     </span>
                                                 </p>
                                                 <p class="text-xs text-gray-400">
-                                                    {{ s.units }} units × {{ fmt(s.price_per_unit) }}
-                                                    = {{ fmt(s.units * s.price_per_unit) }}
-                                                    <span v-if="s.has_lab" class="ml-1 text-purple-600">+ Lab {{ fmt(s.lab_fee) }}</span>
+                                                    {{ s.units }} units × {{ formatCurrency(s.price_per_unit) }}
+                                                    = {{ formatCurrency(s.units * s.price_per_unit) }}
+                                                    <span v-if="s.has_lab" class="ml-1 text-purple-600">+ Lab {{ formatCurrency(s.lab_fee) }}</span>
                                                 </p>
                                             </div>
                                         </div>
                                         <span class="ml-4 flex-shrink-0 text-sm font-semibold"
                                               :class="isAlreadyEnrolled(s.id) ? 'text-gray-400' : 'text-blue-700'">
-                                            {{ fmt(s.total_cost) }}
+                                            {{ formatCurrency(s.total_cost) }}
                                         </span>
                                     </div>
                                 </div>
@@ -858,14 +860,14 @@ function statusColor(status: string) {
                                                 </span>
                                             </span>
                                             <p class="text-xs text-gray-400">
-                                                {{ s.units }} units × {{ fmt(s.price_per_unit) }}
-                                                <span v-if="s.has_lab" class="text-purple-600"> + Lab {{ fmt(s.lab_fee) }}</span>
+                                                {{ s.units }} units × {{ formatCurrency(s.price_per_unit) }}
+                                                <span v-if="s.has_lab" class="text-purple-600"> + Lab {{ formatCurrency(s.lab_fee) }}</span>
                                             </p>
                                         </div>
                                     </div>
                                     <span class="text-sm font-semibold"
                                           :class="isAlreadyEnrolled(s.id) ? 'text-gray-400' : 'text-amber-700'">
-                                        {{ fmt(s.total_cost) }}
+                                        {{ formatCurrency(s.total_cost) }}
                                     </span>
                                 </div>
                             </div>
@@ -904,12 +906,12 @@ function statusColor(status: string) {
                                 <p class="text-sm font-medium text-gray-900">{{ s.code }} — {{ s.name }}</p>
                                 <p class="text-xs text-gray-400">
                                     {{ s.course }} · {{ s.year_level }} · {{ s.semester }} ·
-                                    {{ s.units }} units × {{ fmt(s.price_per_unit) }}
-                                    <span v-if="s.has_lab" class="text-purple-600"> + Lab {{ fmt(s.lab_fee) }}</span>
+                                    {{ s.units }} units × {{ formatCurrency(s.price_per_unit) }}
+                                    <span v-if="s.has_lab" class="text-purple-600"> + Lab {{ formatCurrency(s.lab_fee) }}</span>
                                 </p>
                             </div>
                             <div class="flex items-center gap-4">
-                                <span class="font-semibold text-gray-900">{{ fmt(s.total_cost) }}</span>
+                                <span class="font-semibold text-gray-900">{{ formatCurrency(s.total_cost) }}</span>
                                 <button type="button" class="text-gray-300 hover:text-red-500 transition-colors"
                                         @click="removeSubject(s.id)">
                                     <Trash2 class="h-4 w-4" />
@@ -930,20 +932,20 @@ function statusColor(status: string) {
                     </div>
                     <div class="px-5 py-4 space-y-2 text-sm">
                         <div class="flex justify-between">
-                            <span class="text-gray-600">Tuition ({{ totalUnits }} units × ₱{{ (tuitionPerUnit ?? 364).toLocaleString('en-PH') }})</span>
-                            <span class="font-medium">{{ fmt(tuitionTotal) }}</span>
+                            <span class="text-gray-600">Tuition ({{ totalUnits }} units × {{ formatCurrency(tuitionPerUnit ?? 364) }})</span>
+                            <span class="font-medium">{{ formatCurrency(tuitionTotal) }}</span>
                         </div>
                         <div v-if="labSubjectCount > 0" class="flex justify-between">
-                            <span class="text-gray-600">Laboratory ({{ labSubjectCount }} lab subject{{ labSubjectCount !== 1 ? 's' : '' }} × ₱{{ (labFeePerSubject ?? 1656).toLocaleString('en-PH') }})</span>
-                            <span class="font-medium text-purple-700">{{ fmt(labTotal) }}</span>
+                            <span class="text-gray-600">Laboratory ({{ labSubjectCount }} lab subject{{ labSubjectCount !== 1 ? 's' : '' }} × {{ formatCurrency(labFeePerSubject ?? 1656) }})</span>
+                            <span class="font-medium text-purple-700">{{ formatCurrency(labTotal) }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-600">Miscellaneous fees (fixed)</span>
-                            <span class="font-medium">{{ fmt(miscTotal) }}</span>
+                            <span class="font-medium">{{ formatCurrency(miscTotal) }}</span>
                         </div>
                         <div class="border-t pt-2 flex justify-between font-bold text-base">
                             <span>Total Assessment</span>
-                            <span>{{ fmt(grandTotal) }}</span>
+                            <span>{{ formatCurrency(grandTotal) }}</span>
                         </div>
                         <!-- Misc breakdown -->
                         <details class="text-xs text-gray-400 mt-1">
@@ -951,7 +953,7 @@ function statusColor(status: string) {
                             <div class="mt-2 space-y-1 pl-3">
                                 <div v-for="item in miscItems" :key="item.name" class="flex justify-between">
                                     <span>{{ item.name }}</span>
-                                    <span>{{ fmt(item.amount) }}</span>
+                                    <span>{{ formatCurrency(item.amount) }}</span>
                                 </div>
                             </div>
                         </details>
@@ -966,7 +968,7 @@ function statusColor(status: string) {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="mb-1 text-xs font-medium uppercase tracking-widest opacity-80">Total Assessment Amount</p>
-                            <p class="text-4xl font-bold tabular-nums">{{ fmt(grandTotal) }}</p>
+                            <p class="text-4xl font-bold tabular-nums">{{ formatCurrency(grandTotal) }}</p>
                         </div>
                         <div class="space-y-0.5 text-right text-xs opacity-75">
                             <p>{{ assessmentType === 'irregular' ? 'Irregular' : 'Regular' }} Assessment</p>

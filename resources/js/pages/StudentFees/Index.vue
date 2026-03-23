@@ -7,6 +7,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { Edit, Eye, Plus, Search, TrendingDown, TrendingUp, UserPlus, UserX } from 'lucide-vue-next';
 import { useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 
 interface PaymentTerm {
     id: number;
@@ -61,6 +62,8 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const { formatCurrency } = useDataFormatting();
+
 const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 'Student Fee Management' }];
 
 const search = ref(props.filters.search || '');
@@ -102,9 +105,7 @@ const getStatusColor = (status: string) => {
     }
 };
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
-};
+
 
 /**
  * Accurate remaining balance — resolved in priority order:
