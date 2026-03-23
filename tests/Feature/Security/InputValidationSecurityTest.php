@@ -34,6 +34,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => "admin' OR '1'='1", // SQL injection attempt
             'password' => 'SecurePassword123!',
             'password_confirmation' => 'SecurePassword123!',
+            'department' => 'Administrator',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -58,6 +59,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'attack@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -108,6 +110,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'test@example.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -128,6 +131,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'long@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -147,8 +151,7 @@ class InputValidationSecurityTest extends TestCase
             'last_name' => 'Special',
             'email' => 'special@test.com',
             'password' => 'Password123!',
-            'password_confirmation' => 'Password123!',
-        ];
+            'password_confirmation' => 'Password123!',            'department' => 'Administrator',        ];
 
         $response = $this->actingAs($this->superAdmin)
             ->post(route('users.store'), $data);
@@ -171,6 +174,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'null@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
         ];
         
         $response = $this->actingAs($this->superAdmin)
@@ -211,6 +215,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'csrf@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
         ];
         
         // Note: When using actingAs(), Laravel automatically includes CSRF token
@@ -304,6 +309,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'json@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
             'permissions' => '{"role":"super"}', // Trying to set JSON
         ];
 
@@ -331,6 +337,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'unicode@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
         ];
 
         $response = $this->actingAs($this->superAdmin)
@@ -361,6 +368,7 @@ class InputValidationSecurityTest extends TestCase
             'email' => 'binary@test.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
+            'department' => 'Administrator',
         ];
         
         $response = $this->actingAs($this->superAdmin)

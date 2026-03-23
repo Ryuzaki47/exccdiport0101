@@ -1,4 +1,4 @@
-﻿?php
+﻿<?php
 
 namespace Tests\Feature\Services;
 
@@ -32,8 +32,8 @@ class AdminServiceTest extends TestCase
             'first_name' => 'John',
             'last_name' => 'Doe',
             'email' => 'johndoe@example.com',
-            'password' => 'SecurePassword123!',
-            'department' => 'Finance',
+            'password' => 'SecurePassword1234567',
+            'department' => 'Administrator',
         ];
 
         $admin = $this->adminService->createAdmin($data, $this->admin->id);
