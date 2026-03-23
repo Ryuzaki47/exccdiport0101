@@ -7,6 +7,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { AlertCircle, Check, Edit2, Layers } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -148,8 +150,7 @@ const submitBulkDueDate = () => {
 
 // ─── Formatting Helpers ──────────────────────────────────────────────────────
 
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
+
 
 const formatDate = (date: string | null) => {
     if (!date) return '—';

@@ -2,6 +2,8 @@
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 interface Workflow {
     id: number;
@@ -66,8 +68,7 @@ const formatDateShort = (date: string | null): string => {
     });
 };
 
-const formatCurrency = (amount: number): string =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
+
 
 const isFinished = (status: string): boolean =>
     status === 'completed' || status === 'rejected';

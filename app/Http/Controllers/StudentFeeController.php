@@ -1017,7 +1017,7 @@ class StudentFeeController extends Controller
             $oldSchoolYear = $assessment->school_year;
             $oldSemester   = $assessment->semester;
 
-            $rebuiltBreakdown = $feeItems->map(fn ($item) => {
+            $rebuiltBreakdown = $feeItems->map(function ($item) use ($existingLookup) {
                 $lookupKey = ($item['category'] ?? '') . '||' . ($item['name'] ?? '');
                 $existing  = $existingLookup->get($lookupKey);
                 return [

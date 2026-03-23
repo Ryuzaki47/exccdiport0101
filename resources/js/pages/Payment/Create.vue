@@ -4,6 +4,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertCircle, CheckCircle, Clock } from 'lucide-vue-next';
 import { computed } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PaymentTerm {
@@ -144,8 +146,7 @@ const disabledReason = computed(() => {
 const projectedBalance = computed(() => Math.max(0, effectiveBalance.value - (Number(form.amount) || 0)));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
+
 
 const formatDate = (date: string) =>
     new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });

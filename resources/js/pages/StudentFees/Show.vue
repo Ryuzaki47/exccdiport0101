@@ -373,6 +373,9 @@ const paymentForm = useForm({
 const paymentAmountError = computed(() => {
     const amount = parseFloat(paymentForm.amount) || 0;
     if (amount <= 0 && paymentForm.amount) return 'Amount must be greater than zero';
+    if (amount > remainingBalance.value) {
+        return `Amount cannot exceed the outstanding balance of ${formatCurrency(remainingBalance.value)}`;
+    }
     return '';
 });
 
@@ -636,13 +639,10 @@ const getStudentStatusColor = (status: string) => {
                                     <div class="flex items-center justify-between border-t border-indigo-200 bg-indigo-100 px-4 py-2">
                                         <div>
                                             <p class="text-xs font-semibold text-indigo-800">Total Applied</p>
-                                            <p v-if="parseFloat(paymentForm.amount) > remainingBalance" class="text-xs text-amber-700 mt-0.5">
-                                                ₱{{ formatCurrency(parseFloat(paymentForm.amount) - remainingBalance) }} exceeds balance — excess will not be applied
-                                            </p>
                                         </div>
                                         <div class="text-right">
                                             <p class="font-bold text-indigo-800">
-                                                {{ formatCurrency(Math.min(parseFloat(paymentForm.amount) || 0, remainingBalance)) }}
+                                                {{ formatCurrency(parseFloat(paymentForm.amount) || 0) }}
                                             </p>
                                             <p class="text-xs text-indigo-600">
                                                 Balance after: {{ formatCurrency(projectedRemainingBalance) }}

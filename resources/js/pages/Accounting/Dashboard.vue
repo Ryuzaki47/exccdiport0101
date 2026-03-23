@@ -17,6 +17,8 @@ import {
     Users,
 } from 'lucide-vue-next';
 import { ref } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 type Stats = {
     total_students: number;
@@ -92,12 +94,7 @@ const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 
 
 const activeTab = ref<'overview' | 'payments' | 'students'>('overview');
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP',
-    }).format(amount);
-};
+
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {

@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -122,8 +124,7 @@ const displayBalance = computed(() => Math.abs(accountBalance.value));
 const canMakePayment = computed(() => accountBalance.value > 0);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+
 
 const formatDate = (date: string) =>
     new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });

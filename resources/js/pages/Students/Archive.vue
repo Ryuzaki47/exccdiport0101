@@ -3,6 +3,8 @@ import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 interface Student {
     id: number;
@@ -53,8 +55,7 @@ const breadcrumbs = [
 const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
+
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
     graduated: { label: 'Graduated', classes: 'bg-blue-100 text-blue-800' },

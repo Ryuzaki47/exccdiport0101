@@ -3,6 +3,8 @@ import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 const props = defineProps<{
     students: any;
@@ -28,12 +30,7 @@ const formatDate = (date: string | null) => {
     return date ? new Date(date).toLocaleDateString() : '-';
 };
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP',
-    }).format(amount);
-};
+
 </script>
 
 <template>

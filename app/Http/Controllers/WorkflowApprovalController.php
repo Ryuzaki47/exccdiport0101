@@ -89,21 +89,27 @@ class WorkflowApprovalController extends Controller
         $this->authorize('approve', $approval);
 
         if ($approval->status !== 'pending') {
-            return back()->withErrors(['error' => 'This approval has already been processed']);
+            return back()->with('flash.error', 'This approval has already been processed.');
         }
 
         $validated = $request->validate([
             'comments' => 'nullable|string|max:1000',
         ]);
 
-        $this->workflowService->approveStep(
-            $approval,
-            auth()->id(),
-            $validated['comments'] ?? null
-        );
+        try {
+            $this->workflowService->approveStep(
+                $approval,
+                auth()->id(),
+                $validated['comments'] ?? null
+            );
+        } catch (\Exception $e) {
+            // approveStep rolls back the DB transaction on failure, so the
+            // approval record stays 'pending' — accounting can retry safely.
+            return back()->with('flash.error', $e->getMessage());
+        }
 
         return redirect()->route('approvals.index')
-            ->with('success', 'Payment approved successfully.');
+            ->with('flash.success', 'Payment approved successfully.');
     }
 
     public function reject(Request $request, WorkflowApproval $approval)
@@ -111,20 +117,24 @@ class WorkflowApprovalController extends Controller
         $this->authorize('approve', $approval);
 
         if ($approval->status !== 'pending') {
-            return back()->withErrors(['error' => 'This approval has already been processed']);
+            return back()->with('flash.error', 'This approval has already been processed.');
         }
 
         $validated = $request->validate([
             'comments' => 'required|string|max:1000',
         ]);
 
-        $this->workflowService->rejectStep(
-            $approval,
-            auth()->id(),
-            $validated['comments']
-        );
+        try {
+            $this->workflowService->rejectStep(
+                $approval,
+                auth()->id(),
+                $validated['comments']
+            );
+        } catch (\Exception $e) {
+            return back()->with('flash.error', $e->getMessage());
+        }
 
         return redirect()->route('approvals.index')
-            ->with('success', 'Payment declined.');
+            ->with('flash.success', 'Payment declined.');
     }
 }

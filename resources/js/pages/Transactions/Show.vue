@@ -2,6 +2,8 @@
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 interface Props {
     transaction: {
@@ -37,8 +39,7 @@ const breadcrumbs = [
     { title: `#${props.transaction.reference || props.transaction.id}` },
 ];
 
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
+
 
 const formatDate = (date: string) =>
     new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import { CheckCircle2, RotateCcw, Search, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -48,22 +49,23 @@ const breadcrumbs = [
     { title: 'Payment Approvals', href: route('approvals.index') },
 ];
 
-// Initialise all three keys with explicit defaults so none are ever `undefined`.
-// Previously only `status` was passed back from the controller, causing `year`
-// and `semester` to be lost on reload and the status filter to desync from the URL.
+const { formatCurrency } = useDataFormatting();
+
+// Initialise all three filter keys with explicit defaults so none are ever `undefined`.
 const filters = ref({
     status:   props.filters.status   ?? '',
     year:     props.filters.year     ?? '',
     semester: props.filters.semester ?? '',
 });
 
-const searchQuery       = ref('');
-const showRejectDialog  = ref(false);
+const searchQuery        = ref('');
+const showRejectDialog   = ref(false);
 const selectedApprovalId = ref<number | null>(null);
+const approveProcessing  = ref<number | null>(null); // tracks which approval is being approved
 
 const rejectForm = useForm({ comments: '' });
 
-// Extract unique years from the current page of approvals for the dropdown.
+// Extract unique years from the current page of approvals for the year dropdown.
 const uniqueYears = computed(() => {
     const years = new Set<string | number>();
     props.approvals.data.forEach((approval) => {
@@ -77,11 +79,9 @@ const uniqueYears = computed(() => {
     });
 });
 
-// Count of pending approvals on current page — used to surface the badge.
 const pendingCount = computed(() => props.approvals.data.filter((a) => a.status === 'pending').length);
 
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
+const termOptions = ['Upon Registration', 'Prelim', 'Midterm', 'Semi-Final', 'Final'];
 
 const formatDate = (date: string) =>
     new Date(date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
@@ -101,10 +101,7 @@ const getStudentName = (approval: Approval) => {
     return 'Unknown Student';
 };
 
-// Predefined term options
-const termOptions = ['Upon Registration', 'Prelim', 'Midterm', 'Final'];
-
-// Client-side filter (search + year + semester) on top of server-side status filter.
+// Client-side filter on top of server-side status filter.
 const filteredApprovals = computed(() => {
     let result = props.approvals.data;
 
@@ -140,21 +137,23 @@ const filteredApprovals = computed(() => {
 const applyFilter = () => {
     const params: Record<string, string> = {};
     if (filters.value.status)   params.status   = filters.value.status;
-    if (filters.value.year)     params.year      = filters.value.year;
+    if (filters.value.year)     params.year      = String(filters.value.year);
     if (filters.value.semester) params.semester  = filters.value.semester;
-
     router.get(route('approvals.index'), params, { preserveState: true, replace: true });
 };
 
+// Approve — uses useForm so Inertia error handling works correctly.
+// Errors from the controller (flash.error) are caught by FlashBanner in AppLayout.
+const approveForm = useForm({});
+
 const approve = (approvalId: number) => {
-    router.post(
-        route('approvals.approve', approvalId),
-        {},
-        {
-            preserveScroll: true,
-            onSuccess: () => router.reload(),
+    approveProcessing.value = approvalId;
+    approveForm.post(route('approvals.approve', approvalId), {
+        preserveScroll: true,
+        onFinish: () => {
+            approveProcessing.value = null;
         },
-    );
+    });
 };
 
 const openRejectDialog = (approvalId: number) => {
@@ -168,7 +167,6 @@ const submitRejection = () => {
     rejectForm.post(route('approvals.reject', selectedApprovalId.value), {
         onSuccess: () => {
             showRejectDialog.value = false;
-            router.reload();
         },
     });
 };
@@ -209,7 +207,6 @@ const refreshApprovals = () => {
 
                 <!-- Filters Row -->
                 <div class="flex flex-col gap-4 md:flex-row">
-                    <!-- Search Field -->
                     <div class="relative flex-1">
                         <Search class="absolute top-3 left-3 text-gray-400" :size="18" />
                         <input
@@ -244,7 +241,7 @@ const refreshApprovals = () => {
                         </option>
                     </select>
 
-                    <!-- Status Filter Dropdown -->
+                    <!-- Status Filter -->
                     <select
                         v-model="filters.status"
                         @change="applyFilter"
@@ -317,14 +314,16 @@ const refreshApprovals = () => {
                     <div v-if="approval.status === 'pending'" class="mt-4 flex flex-wrap gap-3">
                         <button
                             @click="approve(approval.id)"
-                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-green-600 hover:to-green-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-300"
+                            :disabled="approveProcessing === approval.id || approveForm.processing"
+                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-green-600 hover:to-green-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-300 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <CheckCircle2 :size="18" class="transition-transform group-hover:scale-110" />
-                            <span>Approve</span>
+                            <span>{{ approveProcessing === approval.id ? 'Approving…' : 'Approve' }}</span>
                         </button>
                         <button
                             @click="openRejectDialog(approval.id)"
-                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-red-600 hover:to-red-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-300"
+                            :disabled="approveProcessing === approval.id || approveForm.processing"
+                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-red-600 hover:to-red-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-300 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <XCircle :size="18" class="transition-transform group-hover:scale-110" />
                             <span>Decline</span>
@@ -344,7 +343,7 @@ const refreshApprovals = () => {
                 <div class="mt-2 space-y-4">
                     <textarea
                         v-model="rejectForm.comments"
-                        class="min-h-[100px] w-full rounded-lg border p-3 text-sm"
+                        class="min-h-[100px] w-full rounded-lg border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                         placeholder="Enter rejection reason (required)..."
                     />
                     <p v-if="rejectForm.errors.comments" class="text-sm text-red-500">
@@ -354,9 +353,12 @@ const refreshApprovals = () => {
                         <Button variant="outline" @click="showRejectDialog = false">Cancel</Button>
                         <Button
                             variant="destructive"
-                            :disabled="rejectForm.processing || !rejectForm.comments"
+                            :disabled="rejectForm.processing || !rejectForm.comments.trim()"
                             @click="submitRejection"
-                        >Confirm Decline</Button>
+                        >
+                            <span v-if="rejectForm.processing">Declining…</span>
+                            <span v-else>Confirm Decline</span>
+                        </Button>
                     </div>
                 </div>
             </DialogContent>

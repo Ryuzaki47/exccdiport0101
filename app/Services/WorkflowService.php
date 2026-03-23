@@ -346,10 +346,19 @@ class WorkflowService
             }
         } catch (\Exception $e) {
             Log::error('Error in onWorkflowCompleted', [
+                'workflow_instance_id' => $instance->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            throw $e;
+            // Re-throw with a user-readable prefix so WorkflowApprovalController
+            // can surface a meaningful error instead of a generic 500 page.
+            // The outer DB::transaction in approveStep() will roll back the
+            // approval record, keeping the system in a consistent state.
+            throw new \Exception(
+                'Payment approved but finalization failed: ' . $e->getMessage(),
+                0,
+                $e
+            );
         }
     }
 

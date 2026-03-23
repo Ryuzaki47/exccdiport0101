@@ -102,6 +102,8 @@ import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
+const { formatCurrency } = useDataFormatting();
 
 interface Workflow {
     id: number;
@@ -146,12 +148,7 @@ const filteredWorkflows = computed(() => {
     return filtered;
 });
 
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PH', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(amount);
-};
+
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
