@@ -2,21 +2,22 @@
 
 namespace App\Services;
 
-use App\Models\Workflow;
-use App\Models\WorkflowInstance;
-use App\Models\WorkflowApproval;
+use App\Enums\UserRoleEnum;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Workflow;
+use App\Models\WorkflowApproval;
+use App\Models\WorkflowInstance;
+use App\Events\WorkflowStepAdvanced;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Events\WorkflowStepAdvanced;
 
 class WorkflowService
 {
     /**
      * Start a workflow instance for the given entity.
-     * 
+     *
      * ✅ FIX: Notifications are sent AFTER the transaction commits, so if the mail
      * server is down, the workflow is already safely stored in the database.
      */
@@ -25,7 +26,7 @@ class WorkflowService
         $instance = DB::transaction(function () use ($workflow, $entity, $userId) {
             $firstStep = $workflow->steps[0] ?? null;
 
-            if (!$firstStep) {
+            if (! $firstStep) {
                 throw new \Exception('Workflow has no steps defined');
             }
 
@@ -45,14 +46,14 @@ class WorkflowService
             }
 
             $instance = WorkflowInstance::create([
-                'workflow_id'        => $workflow->id,
-                'workflowable_type'  => get_class($entity),
-                'workflowable_id'    => $entity->id,
-                'current_step'       => $firstStep['name'],
-                'status'             => 'in_progress',
-                'step_history'       => [],
-                'metadata'           => $metadata,   // ← FIX: was always empty
-                'initiated_by'       => $userId,
+                'workflow_id'       => $workflow->id,
+                'workflowable_type' => get_class($entity),
+                'workflowable_id'   => $entity->id,
+                'current_step'      => $firstStep['name'],
+                'status'            => 'in_progress',
+                'step_history'      => [],
+                'metadata'          => $metadata,
+                'initiated_by'      => $userId,
             ]);
 
             $instance->addStepToHistory($firstStep['name'], [
@@ -60,7 +61,7 @@ class WorkflowService
                 'user_id' => $userId,
             ]);
 
-            if (!($firstStep['requires_approval'] ?? false)) {
+            if (! ($firstStep['requires_approval'] ?? false)) {
                 $this->advanceWorkflow($instance, $userId);
             } else {
                 $this->createApprovalRequest($instance, $firstStep);
@@ -85,43 +86,43 @@ class WorkflowService
     public function advanceWorkflow(WorkflowInstance $instance, int $userId): void
     {
         $nextStepData = DB::transaction(function () use ($instance, $userId) {
-            $workflow = $instance->workflow;
+            $workflow         = $instance->workflow;
             $currentStepIndex = $this->getStepIndex($workflow, $instance->current_step);
-            $previousStep = $instance->current_step; // Store previous step
-            
+            $previousStep     = $instance->current_step;
+
             if ($currentStepIndex === null) {
                 throw new \Exception('Current step not found in workflow');
             }
 
             $nextStepIndex = $currentStepIndex + 1;
-            
+
             if ($nextStepIndex >= count($workflow->steps)) {
                 $instance->update([
-                    'status' => 'completed',
+                    'status'       => 'completed',
                     'completed_at' => now(),
                 ]);
-                
+
                 $instance->addStepToHistory('completed', [
-                    'action' => 'completed',
+                    'action'  => 'completed',
                     'user_id' => $userId,
                 ]);
-                
+
                 Log::info('Workflow advanced to completed', [
                     'workflow_instance_id' => $instance->id,
-                    'final_step' => $previousStep,
+                    'final_step'           => $previousStep,
                 ]);
-                
+
                 return null;
             }
 
             $nextStep = $workflow->steps[$nextStepIndex];
-            
+
             $instance->update([
                 'current_step' => $nextStep['name'],
             ]);
 
             $instance->addStepToHistory($nextStep['name'], [
-                'action' => 'advanced',
+                'action'  => 'advanced',
                 'user_id' => $userId,
             ]);
 
@@ -144,15 +145,15 @@ class WorkflowService
             } catch (\Exception $e) {
                 Log::warning('Failed to send approval notifications after step advance', [
                     'workflow_instance_id' => $instance->id,
-                    'error' => $e->getMessage(),
+                    'error'                => $e->getMessage(),
                 ]);
                 // Don't re-throw; approvals are already in the database
             }
         } else {
             // If the step we just advanced to doesn't require approval,
-            // continue advancing until we hit an approval-required step or complete
+            // continue advancing until we hit an approval-required step or complete.
             $instance->refresh();
-            if (!$instance->isCompleted()) {
+            if (! $instance->isCompleted()) {
                 $this->advanceWorkflow($instance, $userId);
             }
         }
@@ -162,7 +163,7 @@ class WorkflowService
     {
         DB::transaction(function () use ($approval, $userId, $comments) {
             $approval->approve($comments);
-            
+
             // Check if all approvals for this step are approved
             $pendingApprovals = WorkflowApproval::where('workflow_instance_id', $approval->workflow_instance_id)
                 ->where('step_name', $approval->step_name)
@@ -186,15 +187,15 @@ class WorkflowService
     {
         DB::transaction(function () use ($approval, $userId, $comments) {
             $approval->reject($comments);
-            
+
             $instance = $approval->workflowInstance;
             $instance->update([
                 'status' => 'rejected',
             ]);
 
             $instance->addStepToHistory($approval->step_name, [
-                'action' => 'rejected',
-                'user_id' => $userId,
+                'action'   => 'rejected',
+                'user_id'  => $userId,
                 'comments' => $comments,
             ]);
 
@@ -207,39 +208,44 @@ class WorkflowService
     {
         $approverIds = $step['approvers'] ?? [];
 
-        // Support dynamic role-based approvers
+        // Support dynamic role-based approvers via explicit step config
         if (isset($step['approver_role'])) {
             $roleApprovers = User::where('role', $step['approver_role'])
                 ->pluck('id')
                 ->toArray();
-            $approverIds = array_merge($approverIds, $roleApprovers);
-            $approverIds = array_unique($approverIds);
+            $approverIds = array_unique(array_merge($approverIds, $roleApprovers));
         }
 
-        // Fallback 1: assign to all accounting users
+        // Fallback 1: assign to all active accounting users
         if (empty($approverIds)) {
-            $approverIds = User::where('role', 'accounting')->pluck('id')->toArray();
+            $approverIds = User::accounting()
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
         }
 
-        // Fallback 2: assign to admin users if no accounting users exist
+        // Fallback 2: assign to active admin users if no accounting users exist
         if (empty($approverIds)) {
-            $approverIds = User::where('role', 'admin')->pluck('id')->toArray();
+            $approverIds = User::admins()
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
         }
 
         // Last resort: fail hard if no approvers can be found at all
         if (empty($approverIds)) {
             throw new \Exception(
                 'No approvers found for workflow step "' . $step['name'] . '". ' .
-                'Ensure at least one accounting or admin user exists in the system.'
+                'Ensure at least one active accounting or admin user exists in the system.'
             );
         }
 
         foreach ($approverIds as $approverId) {
             WorkflowApproval::create([
                 'workflow_instance_id' => $instance->id,
-                'step_name' => $step['name'],
-                'approver_id' => $approverId,
-                'status' => 'pending',
+                'step_name'            => $step['name'],
+                'approver_id'          => $approverId,
+                'status'               => 'pending',
             ]);
             // NOTE: Approval notifications are sent AFTER the transaction commits
             // by the notifyApproversForStep() method. This ensures that even if
@@ -253,7 +259,6 @@ class WorkflowService
      */
     protected function notifyApproversForStep(WorkflowInstance $instance, array $step): void
     {
-        // Find all pending approvals for this step
         $pendingApprovals = WorkflowApproval::where('workflow_instance_id', $instance->id)
             ->where('step_name', $step['name'])
             ->where('status', 'pending')
@@ -261,14 +266,14 @@ class WorkflowService
 
         foreach ($pendingApprovals as $approval) {
             $approver = User::find($approval->approver_id);
-            if ($approver && !app()->environment('testing')) {
+            if ($approver && ! app()->environment('testing')) {
                 try {
                     $approver->notify(new \App\Notifications\ApprovalRequired($approval));
                 } catch (\Exception $e) {
                     Log::warning('Failed to send approval notification', [
                         'approval_id' => $approval->id,
                         'approver_id' => $approver->id,
-                        'error' => $e->getMessage(),
+                        'error'       => $e->getMessage(),
                     ]);
                     // Continue sending to other approvers even if one fails
                 }
@@ -283,6 +288,7 @@ class WorkflowService
                 return $index;
             }
         }
+
         return null;
     }
 
@@ -294,7 +300,7 @@ class WorkflowService
     {
         Log::info('WorkflowService::onWorkflowCompleted called', [
             'workflow_instance_id' => $instance->id,
-            'workflow_type' => $instance->workflow->type,
+            'workflow_type'        => $instance->workflow->type,
         ]);
 
         if ($instance->workflow->type !== 'payment_approval') {
@@ -305,31 +311,30 @@ class WorkflowService
         try {
             $transaction = $instance->workflowable;
             Log::info('Workflowable retrieved', [
-                'transaction_id' => $transaction?->id,
+                'transaction_id'    => $transaction?->id,
                 'transaction_class' => get_class($transaction),
             ]);
 
             if ($transaction instanceof Transaction) {
                 Log::info('Finalizing approved payment', [
                     'transaction_id' => $transaction->id,
-                    'amount' => $transaction->amount,
+                    'amount'         => $transaction->amount,
                     'current_status' => $transaction->status,
                 ]);
 
                 app(StudentPaymentService::class)->finalizeApprovedPayment($transaction);
 
-                // Refresh to see updated data
                 $transaction->refresh();
                 Log::info('Payment finalized', [
                     'transaction_id' => $transaction->id,
-                    'new_status' => $transaction->status,
+                    'new_status'     => $transaction->status,
                 ]);
 
                 // Notify the student that payment was approved
                 $student = $transaction->user;
                 \App\Models\Notification::create([
                     'title'       => 'Payment Approved',
-                    'message'     => "Your payment of ₱" . number_format($transaction->amount, 2) . 
+                    'message'     => 'Your payment of ₱' . number_format($transaction->amount, 2) .
                                      " (Ref: {$transaction->reference}) has been verified by accounting.",
                     'target_role' => 'student',
                     'user_id'     => $student->id,
@@ -347,8 +352,8 @@ class WorkflowService
         } catch (\Exception $e) {
             Log::error('Error in onWorkflowCompleted', [
                 'workflow_instance_id' => $instance->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'error'                => $e->getMessage(),
+                'trace'                => $e->getTraceAsString(),
             ]);
             // Re-throw with a user-readable prefix so WorkflowApprovalController
             // can surface a meaningful error instead of a generic 500 page.
@@ -370,8 +375,8 @@ class WorkflowService
     {
         Log::info('WorkflowService::onWorkflowRejected called', [
             'workflow_instance_id' => $instance->id,
-            'workflow_type' => $instance->workflow->type,
-            'reason' => $reason,
+            'workflow_type'        => $instance->workflow->type,
+            'reason'               => $reason,
         ]);
 
         if ($instance->workflow->type !== 'payment_approval') {
@@ -382,30 +387,29 @@ class WorkflowService
         try {
             $transaction = $instance->workflowable;
             Log::info('Workflowable retrieved for rejection', [
-                'transaction_id' => $transaction?->id,
+                'transaction_id'    => $transaction?->id,
                 'transaction_class' => get_class($transaction),
             ]);
 
             if ($transaction instanceof Transaction) {
                 Log::info('Cancelling rejected payment', [
                     'transaction_id' => $transaction->id,
-                    'amount' => $transaction->amount,
+                    'amount'         => $transaction->amount,
                 ]);
 
                 app(StudentPaymentService::class)->cancelRejectedPayment($transaction);
 
-                // Refresh to see updated data
                 $transaction->refresh();
                 Log::info('Payment cancelled', [
                     'transaction_id' => $transaction->id,
-                    'new_status' => $transaction->status,
+                    'new_status'     => $transaction->status,
                 ]);
 
                 // Notify the student that payment was rejected
                 $student = $transaction->user;
                 \App\Models\Notification::create([
                     'title'       => 'Payment Rejected',
-                    'message'     => "Your payment of ₱" . number_format($transaction->amount, 2) . 
+                    'message'     => 'Your payment of ₱' . number_format($transaction->amount, 2) .
                                      " (Ref: {$transaction->reference}) was not verified. Reason: {$reason}",
                     'target_role' => 'student',
                     'user_id'     => $student->id,

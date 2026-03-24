@@ -2,19 +2,21 @@
 
 namespace App\Services;
 
-use App\Models\User;
+use App\Enums\UserRoleEnum;
 use App\Models\Fee;
 use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Support\Str;
 
 class FeeAssignmentService
 {
     /**
-     * Assign fees to a student based on their year level and semester
+     * Assign fees to a student based on their year level and semester.
      */
     public static function assignFeesToStudent(User $user, string $semester, string $schoolYear)
     {
-        if ($user->role->value !== 'student') {
+        // Use the enum value for comparison — role column is cast to UserRoleEnum.
+        if ($user->role !== UserRoleEnum::STUDENT) {
             return;
         }
 
@@ -33,22 +35,22 @@ class FeeAssignmentService
                 ->where('semester', $semester)
                 ->exists();
 
-            if (!$exists) {
+            if (! $exists) {
                 Transaction::create([
-                    'user_id' => $user->id,
-                    'fee_id' => $fee->id,
+                    'user_id'  => $user->id,
+                    'fee_id'   => $fee->id,
                     'reference' => 'FEE-' . strtoupper(Str::random(8)),
-                    'kind' => 'charge',
-                    'type' => $fee->category,
-                    'year' => explode('-', $schoolYear)[0],
+                    'kind'     => 'charge',
+                    'type'     => $fee->category,
+                    'year'     => explode('-', $schoolYear)[0],
                     'semester' => $semester,
-                    'amount' => $fee->amount,
-                    'status' => 'pending',
-                    'meta' => [
-                        'fee_code' => $fee->code,
-                        'fee_name' => $fee->name,
+                    'amount'   => $fee->amount,
+                    'status'   => 'pending',
+                    'meta'     => [
+                        'fee_code'      => $fee->code,
+                        'fee_name'      => $fee->name,
                         'auto_assigned' => true,
-                        'assigned_at' => now()->toDateTimeString(),
+                        'assigned_at'   => now()->toDateTimeString(),
                     ],
                 ]);
 
@@ -65,12 +67,13 @@ class FeeAssignmentService
     }
 
     /**
-     * Bulk assign fees to multiple students
+     * Bulk assign fees to multiple students.
      */
     public static function bulkAssignFees(array $userIds, array $feeIds)
     {
-        $users = User::whereIn('id', $userIds)->where('role', 'student')->get();
-        $fees = Fee::whereIn('id', $feeIds)->get();
+        // Use the named scope — avoids raw string role comparison.
+        $users = User::students()->whereIn('id', $userIds)->get();
+        $fees  = Fee::whereIn('id', $feeIds)->get();
 
         $assigned = 0;
 
@@ -83,22 +86,22 @@ class FeeAssignmentService
                     ->where('semester', $fee->semester)
                     ->exists();
 
-                if (!$exists) {
+                if (! $exists) {
                     Transaction::create([
-                        'user_id' => $user->id,
-                        'fee_id' => $fee->id,
+                        'user_id'  => $user->id,
+                        'fee_id'   => $fee->id,
                         'reference' => 'FEE-' . strtoupper(Str::random(8)),
-                        'kind' => 'charge',
-                        'type' => $fee->category,
-                        'year' => explode('-', $fee->school_year)[0],
+                        'kind'     => 'charge',
+                        'type'     => $fee->category,
+                        'year'     => explode('-', $fee->school_year)[0],
                         'semester' => $fee->semester,
-                        'amount' => $fee->amount,
-                        'status' => 'pending',
-                        'meta' => [
-                            'fee_code' => $fee->code,
-                            'fee_name' => $fee->name,
+                        'amount'   => $fee->amount,
+                        'status'   => 'pending',
+                        'meta'     => [
+                            'fee_code'      => $fee->code,
+                            'fee_name'      => $fee->name,
                             'bulk_assigned' => true,
-                            'assigned_at' => now()->toDateTimeString(),
+                            'assigned_at'   => now()->toDateTimeString(),
                         ],
                     ]);
 
@@ -114,7 +117,7 @@ class FeeAssignmentService
     }
 
     /**
-     * Remove a fee assignment from a student
+     * Remove a fee assignment from a student.
      */
     public static function removeFeeFromStudent(User $user, Fee $fee)
     {

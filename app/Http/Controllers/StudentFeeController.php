@@ -3,17 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PaymentStatus;
+use App\Enums\UserRoleEnum;
 use App\Models\Payment;
 use App\Models\Student;
 use App\Models\StudentAssessment;
 use App\Models\StudentEnrollment;
 use App\Models\StudentPaymentTerm;
+use App\Models\StudentStatusLog;
 use App\Models\Subject;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Models\StudentStatusLog;
-use App\Services\StudentPaymentService;
 use App\Services\AccountService;
+use App\Services\StudentPaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +48,7 @@ class StudentFeeController extends Controller
     {
         return collect(array_unique(array_merge(
             Subject::distinct()->pluck('course')->toArray(),
-            User::where('role', 'student')
+            User::students()
                 ->whereNotNull('course')
                 ->distinct()
                 ->pluck('course')
@@ -100,7 +101,7 @@ class StudentFeeController extends Controller
     public function index(Request $request)
     {
         $query = User::with(['student', 'account', 'latestAssessment.paymentTerms'])
-            ->where('role', 'student');
+            ->students();
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -162,7 +163,7 @@ class StudentFeeController extends Controller
             '4th Year|1st Sem' => ['year_level' => '4th Year', 'semester' => '2nd Sem'],
         ];
 
-        $students = User::where('role', 'student')
+        $students = User::students()
             ->where('status', User::STATUS_ACTIVE)
             ->with(['latestAssessment'])
             ->orderBy('last_name')
@@ -288,14 +289,14 @@ class StudentFeeController extends Controller
     public function store(Request $request)
     {
         $base = $request->validate([
-            'user_id'          => 'required|exists:users,id',
-            'course'           => 'required|string|max:255',
-            'year_level'       => 'required|string',
-            'semester'         => 'required|in:1st Sem,2nd Sem,Summer',
-            'school_year'      => ['required', 'string', 'max:20', 'regex:/^\d{4}-\d{4}$/'],
-            'assessment_type'  => 'required|in:regular,irregular',
-            'selected_subjects' => 'required|array|min:1',
-            'selected_subjects.*' => 'required|integer|exists:subjects,id',
+            'user_id'              => 'required|exists:users,id',
+            'course'               => 'required|string|max:255',
+            'year_level'           => 'required|string',
+            'semester'             => 'required|in:1st Sem,2nd Sem,Summer',
+            'school_year'          => ['required', 'string', 'max:20', 'regex:/^\d{4}-\d{4}$/'],
+            'assessment_type'      => 'required|in:regular,irregular',
+            'selected_subjects'    => 'required|array|min:1',
+            'selected_subjects.*'  => 'required|integer|exists:subjects,id',
         ]);
 
         $isIrregular = $base['assessment_type'] === 'irregular';
@@ -434,19 +435,19 @@ class StudentFeeController extends Controller
                 'amount'    => $grandTotal,
                 'status'    => PaymentStatus::PENDING->value,
                 'meta'      => [
-                    'assessment_id'    => $assessment->id,
-                    'assessment_type'  => $base['assessment_type'],
-                    'course'           => $base['course'],
-                    'subjects_count'   => $subjects->count(),
-                    'total_units'      => $subjects->sum('units'),
-                    'lab_subjects'     => $subjects->filter(fn ($s) => $s->has_lab)->count(),
-                    'tuition_total'    => $tuitionTotal,
-                    'lab_total'        => $labTotal,
-                    'misc_total'       => $miscTotal,
-                    'description'      => $isIrregular
+                    'assessment_id'   => $assessment->id,
+                    'assessment_type' => $base['assessment_type'],
+                    'course'          => $base['course'],
+                    'subjects_count'  => $subjects->count(),
+                    'total_units'     => $subjects->sum('units'),
+                    'lab_subjects'    => $subjects->filter(fn ($s) => $s->has_lab)->count(),
+                    'tuition_total'   => $tuitionTotal,
+                    'lab_total'       => $labTotal,
+                    'misc_total'      => $miscTotal,
+                    'description'     => $isIrregular
                         ? "Irregular — {$subjects->count()} subjects, {$subjects->sum('units')} units"
                         : "{$base['year_level']} {$base['semester']} — {$subjects->count()} subjects",
-                    'items'            => $feeBreakdown,
+                    'items'           => $feeBreakdown,
                 ],
             ]);
 
@@ -497,11 +498,12 @@ class StudentFeeController extends Controller
 
             $user->update($userUpdates);
 
-            \App\Services\AccountService::recalculate($user);
+            AccountService::recalculate($user);
 
             DB::commit();
 
             $typeLabel = $isIrregular ? 'Irregular' : 'Regular';
+
             return redirect()
                 ->route('student-fees.show', $base['user_id'])
                 ->with('success', "{$typeLabel} assessment created — {$subjects->count()} subjects, {$subjects->sum('units')} units, total ₱" . number_format($grandTotal, 2) . ". 5 payment terms generated.");
@@ -525,7 +527,7 @@ class StudentFeeController extends Controller
     public function show(Request $request, $userId)
     {
         $student = User::with(['student', 'account'])
-            ->where('role', 'student')
+            ->students()
             ->findOrFail($userId);
 
         $allAssessments = StudentAssessment::where('user_id', $userId)
@@ -607,7 +609,7 @@ class StudentFeeController extends Controller
                 'reference_number' => $p->reference_number,
                 'status'           => $p->status,
                 'paid_at'          => $p->paid_at,
-                'assessment_id'    => $p->student_assessment_id, // FK column is student_assessment_id, not assessment_id
+                'assessment_id'    => $p->student_assessment_id,
                 'semester'         => $p->assessment?->semester ?? null,
                 'school_year'      => $p->assessment?->school_year ?? null,
                 'year_level'       => $p->assessment?->year_level ?? null,
@@ -710,10 +712,6 @@ class StudentFeeController extends Controller
     // =========================================================================
     // STORE PAYMENT (accounting/admin side)
     // =========================================================================
-
-    // =========================================================================
-    // STORE PAYMENT (accounting/admin side)
-    // =========================================================================
     //
     // Auto-allocates the entered amount sequentially across all unpaid terms
     // for the student's currently selected assessment (oldest term first by
@@ -742,7 +740,7 @@ class StudentFeeController extends Controller
         ]);
 
         $student = User::with('student', 'account')
-            ->where('role', 'student')
+            ->students()
             ->findOrFail($userId);
 
         if (! $student->student) {
@@ -914,7 +912,7 @@ class StudentFeeController extends Controller
     public function edit($userId)
     {
         $student = User::with(['student', 'account'])
-            ->where('role', 'student')
+            ->students()
             ->findOrFail($userId);
 
         $assessment = StudentAssessment::where('user_id', $userId)
@@ -929,7 +927,7 @@ class StudentFeeController extends Controller
         }
 
         return Inertia::render('StudentFees/Edit', [
-            'student'       => [
+            'student'          => [
                 'id'             => $student->id,
                 'account_id'     => $student->account_id,
                 'name'           => $student->name,
@@ -946,14 +944,14 @@ class StudentFeeController extends Controller
                 'year_level'     => $student->year_level,
                 'status'         => $student->status,
             ],
-            'assessment'    => $assessment,
-            'courses'       => $this->allCourses(),
-            'feeCategories' => config('fees.categories', []),
+            'assessment'       => $assessment,
+            'courses'          => $this->allCourses(),
+            'feeCategories'    => config('fees.categories', []),
             // For edit, still support manual fee items in case subjects change
-            'subjectMap'    => $this->buildSubjectMap(),
-            'tuitionPerUnit'  => (float) config('fees.tuition_per_unit',    364.00),
+            'subjectMap'       => $this->buildSubjectMap(),
+            'tuitionPerUnit'   => (float) config('fees.tuition_per_unit',    364.00),
             'labFeePerSubject' => (float) config('fees.lab_fee_per_subject', 1656.00),
-            'miscItems'       => config('fees.miscellaneous', []),
+            'miscItems'        => config('fees.miscellaneous', []),
         ]);
     }
 
@@ -979,7 +977,7 @@ class StudentFeeController extends Controller
 
         DB::beginTransaction();
         try {
-            $user = User::where('role', 'student')->findOrFail($userId);
+            $user = User::students()->findOrFail($userId);
 
             $user->update([
                 'last_name'      => $validated['last_name'],
@@ -1010,7 +1008,7 @@ class StudentFeeController extends Controller
             // We match existing rows by (category + name) to re-attach the metadata.
             // Rows without a match (e.g. manually added misc lines) are saved as-is.
             $existingBreakdown = collect($assessment->fee_breakdown ?? []);
-            $existingLookup = $existingBreakdown->keyBy(
+            $existingLookup    = $existingBreakdown->keyBy(
                 fn ($row) => ($row['category'] ?? '') . '||' . ($row['name'] ?? '')
             );
 
@@ -1054,8 +1052,6 @@ class StudentFeeController extends Controller
                 || $oldSemester !== $validated['semester'];
 
             if ($termChanged) {
-                // Extract subject IDs that are in this assessment's fee_breakdown.
-                // Only Tuition/Laboratory rows carry subject_id — misc rows do not.
                 $subjectIds = collect($rebuiltBreakdown)
                     ->filter(fn ($row) => ! empty($row['subject_id']))
                     ->pluck('subject_id')
@@ -1064,10 +1060,7 @@ class StudentFeeController extends Controller
                     ->toArray();
 
                 if (! empty($subjectIds)) {
-                    // Update the matching enrollment rows to the new term.
-                    // We target rows where both old school_year AND old semester match
-                    // so we don't accidentally update enrollments from other terms.
-                    \App\Models\StudentEnrollment::where('user_id', $userId)
+                    StudentEnrollment::where('user_id', $userId)
                         ->where('school_year', $oldSchoolYear)
                         ->where('semester', $oldSemester)
                         ->whereIn('subject_id', $subjectIds)
@@ -1078,13 +1071,13 @@ class StudentFeeController extends Controller
                         ]);
 
                     Log::info('Synced StudentEnrollment rows after assessment term change', [
-                        'user_id'          => $userId,
-                        'assessment_id'    => $assessment->id,
-                        'old_school_year'  => $oldSchoolYear,
-                        'old_semester'     => $oldSemester,
-                        'new_school_year'  => $validated['school_year'],
-                        'new_semester'     => $validated['semester'],
-                        'subject_count'    => count($subjectIds),
+                        'user_id'         => $userId,
+                        'assessment_id'   => $assessment->id,
+                        'old_school_year' => $oldSchoolYear,
+                        'old_semester'    => $oldSemester,
+                        'new_school_year' => $validated['school_year'],
+                        'new_semester'    => $validated['semester'],
+                        'subject_count'   => count($subjectIds),
                     ]);
                 }
             }
@@ -1129,7 +1122,7 @@ class StudentFeeController extends Controller
                 });
 
             if ($chargeTransaction) {
-                $meta = $chargeTransaction->meta ?? [];
+                $meta                  = $chargeTransaction->meta ?? [];
                 $meta['course']        = $validated['course'];
                 $meta['assessment_id'] = $assessment->id;
                 $chargeTransaction->update([
@@ -1158,7 +1151,7 @@ class StudentFeeController extends Controller
                 ->where('school_year', $validated['school_year'])
                 ->update(['status' => 'archived']);
 
-            \App\Services\AccountService::recalculate($user);
+            AccountService::recalculate($user);
 
             DB::commit();
 
@@ -1183,7 +1176,7 @@ class StudentFeeController extends Controller
     public function exportPdf($userId)
     {
         $student = User::with(['student', 'account'])
-            ->where('role', 'student')
+            ->students()
             ->findOrFail($userId);
 
         $assessmentId   = request('assessment_id');
@@ -1340,7 +1333,7 @@ class StudentFeeController extends Controller
                 'year_level'        => $validated['year_level'],
                 'course'            => $validated['course'],
                 'account_id'        => $accountId,
-                'role'              => 'student',
+                'role'              => UserRoleEnum::STUDENT->value,
                 'is_active'         => true,
                 'status'            => User::STATUS_ACTIVE,
                 'email_verified_at' => now(),
