@@ -75,6 +75,7 @@ return [
         'Other',
     ],
 
+    
     // =========================================================================
     // PAYMENT TERM DEFINITIONS
     // Percentages must sum to exactly 100.
