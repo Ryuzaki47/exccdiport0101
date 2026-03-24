@@ -396,14 +396,20 @@ const firstUnpaidTermId = computed(() => {
 });
 
 // ── Enrolled Subjects Accordion ───────────────────────────────────────────────
-// Mirrors the enrolledSubjectTerms logic from StudentFees/Show.vue.
-// Builds one panel per assessment, grouping Tuition + Laboratory fee_breakdown
-// rows into per-subject entries. "Other" and "Miscellaneous" fixed fees are
-// intentionally excluded — they are not per-subject line items.
+// FIX #2: Scoped to the CURRENT (latest) assessment only.
+// Previously this built panels for ALL historical assessments, exposing
+// enrolled subjects from past semesters in the current-term view.
+// Now only the assessment that matches latestAssessment is shown.
 const enrolledSubjectPanels = computed(() => {
-    if (!props.allAssessments || props.allAssessments.length === 0) return [];
+    // Only operate on the current assessment — not all historical assessments
+    if (!props.latestAssessment || !props.allAssessments || props.allAssessments.length === 0) return [];
 
-    return props.allAssessments
+    // Find the full assessment record (with fee_breakdown) matching latestAssessment.id
+    const currentAssessmentFull = props.allAssessments.find((a) => a.id === props.latestAssessment!.id);
+    if (!currentAssessmentFull || !currentAssessmentFull.fee_breakdown?.length) return [];
+
+    // Wrap in array so we reuse the same .map() pattern below
+    return [currentAssessmentFull]
         .filter((a) => a.fee_breakdown && a.fee_breakdown.length > 0)
         .map((a) => {
             const subjectRows = a.fee_breakdown.filter(
