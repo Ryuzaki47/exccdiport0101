@@ -43,8 +43,9 @@ class DatabaseSeeder extends Seeder
         // Step 3: FeeSeeder — DISABLED (Fee Management removed)
         // $this->call(FeeSeeder::class);
 
-        $this->command->info('⚙️  Step 2: Seeding Demo Workflow System...');
+        $this->command->info('⚙️  Step 2: Seeding Workflow Templates...');
         $this->call(DemoWorkflowSeeder::class);
+        $this->call(PaymentApprovalWorkflowSeeder::class);
         $this->command->newLine();
 
         $this->command->info('📋 Step 3: Creating Student Assessments & Transactions...');

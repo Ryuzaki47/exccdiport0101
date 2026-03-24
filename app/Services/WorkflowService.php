@@ -210,9 +210,12 @@ class WorkflowService
 
         // Support dynamic role-based approvers via explicit step config
         if (isset($step['approver_role'])) {
-            $roleApprovers = User::where('role', $step['approver_role'])
-                ->pluck('id')
-                ->toArray();
+            // Use the appropriate scope based on the role name to properly handle Enum casting
+            $roleApprovers = match ($step['approver_role']) {
+                'accounting' => User::accounting()->where('is_active', true)->pluck('id')->toArray(),
+                'admin' => User::admins()->where('is_active', true)->pluck('id')->toArray(),
+                default => [],
+            };
             $approverIds = array_unique(array_merge($approverIds, $roleApprovers));
         }
 

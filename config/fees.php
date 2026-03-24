@@ -80,12 +80,20 @@ return [
     // Percentages must sum to exactly 100.
     // Last term absorbs cent-level rounding in StudentFeeController.
     // =========================================================================
+    // =========================================================================
+    // PAYMENT TERM DEFINITIONS — Updated per CCDI directive
+    // Distribution: Registration 30%, Prelim 21%, Midterm 21%, Semi-Final 18%,
+    // Final 10%. Sum = 100%. Last term absorbs cent-level rounding differences.
+    // IMPORTANT: Changing these values only affects NEW assessments created
+    // after running `php artisan config:clear`. Existing student_payment_terms
+    // rows in the database are NOT retroactively updated.
+    // =========================================================================
     'terms' => [
-        1 => ['name' => 'Upon Registration', 'percentage' => 42.15],
-        2 => ['name' => 'Prelim',            'percentage' => 17.86],
-        3 => ['name' => 'Midterm',           'percentage' => 17.86],
-        4 => ['name' => 'Semi-Final',        'percentage' => 14.88],
-        5 => ['name' => 'Final',             'percentage' =>  7.25],
+        1 => ['name' => 'Upon Registration', 'percentage' => 30.00],
+        2 => ['name' => 'Prelim',            'percentage' => 21.00],
+        3 => ['name' => 'Midterm',           'percentage' => 21.00],
+        4 => ['name' => 'Semi-Final',        'percentage' => 18.00],
+        5 => ['name' => 'Final',             'percentage' => 10.00],
     ],
 
 ];

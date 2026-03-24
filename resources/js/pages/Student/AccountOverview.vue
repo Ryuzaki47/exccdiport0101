@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { AlertCircle, CalendarClock, CheckCircle, Clock, CreditCard, XCircle } from 'lucide-vue-next';
+import { AlertCircle, CalendarClock, CheckCircle, ChevronDown, Clock, CreditCard, XCircle } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const { formatCurrency, formatDate, getPaymentTermStatusConfig, getTransactionStatusConfig, getAssessmentStatusConfig } = useDataFormatting();
@@ -112,6 +112,28 @@ const props = withDefaults(
             term_name: string;
             created_at: string;
         }>;
+        allAssessments?: Array<{
+            id: number;
+            assessment_number: string;
+            year_level: string;
+            semester: string;
+            school_year: string;
+            course: string | null;
+            total_assessment: number;
+            tuition_fee: number;
+            other_fees: number;
+            fee_breakdown: Array<{
+                category: string;
+                name: string;
+                code?: string;
+                units?: number;
+                amount: number;
+                subject_id?: number;
+            }>;
+            status: string;
+            created_at: string;
+        }>;
+        enrolledSubjectsByAssessment?: Record<number, number[]>;
     }>(),
     {
         currentTerm: () => ({
@@ -122,6 +144,8 @@ const props = withDefaults(
         paymentTerms: () => [],
         notifications: () => [],
         pendingApprovalPayments: () => [],
+        allAssessments: () => [],
+        enrolledSubjectsByAssessment: () => ({}),
     },
 );
 
@@ -370,6 +394,94 @@ const firstUnpaidTermId = computed(() => {
     const unpaid = props.paymentTerms?.filter((t) => t.balance > 0).sort((a, b) => a.term_order - b.term_order);
     return unpaid?.[0]?.id ?? null;
 });
+
+// ── Enrolled Subjects Accordion ───────────────────────────────────────────────
+// Mirrors the enrolledSubjectTerms logic from StudentFees/Show.vue.
+// Builds one panel per assessment, grouping Tuition + Laboratory fee_breakdown
+// rows into per-subject entries. "Other" and "Miscellaneous" fixed fees are
+// intentionally excluded — they are not per-subject line items.
+const enrolledSubjectPanels = computed(() => {
+    if (!props.allAssessments || props.allAssessments.length === 0) return [];
+
+    return props.allAssessments
+        .filter((a) => a.fee_breakdown && a.fee_breakdown.length > 0)
+        .map((a) => {
+            const subjectRows = a.fee_breakdown.filter(
+                (item) => item.category === 'Tuition' || item.category === 'Laboratory',
+            );
+
+            const subjectMap: Record<
+                number,
+                {
+                    subject_id: number;
+                    code: string;
+                    name: string;
+                    units: number;
+                    tuitionAmount: number;
+                    labAmount: number;
+                    hasLab: boolean;
+                    isEnrolled: boolean;
+                }
+            > = {};
+
+            const enrolledIds = new Set(
+                (props.enrolledSubjectsByAssessment ?? {})[a.id] ?? [],
+            );
+
+            for (const row of subjectRows) {
+                const sid = row.subject_id;
+                if (sid === undefined) continue;
+
+                if (!subjectMap[sid]) {
+                    subjectMap[sid] = {
+                        subject_id:    sid,
+                        code:          row.code ?? '—',
+                        name:          row.name,
+                        units:         row.units ?? 0,
+                        tuitionAmount: 0,
+                        labAmount:     0,
+                        hasLab:        false,
+                        isEnrolled:    enrolledIds.has(sid),
+                    };
+                }
+
+                if (row.category === 'Tuition') {
+                    subjectMap[sid].tuitionAmount = parseFloat(String(row.amount));
+                    subjectMap[sid].units         = row.units ?? subjectMap[sid].units;
+                    if (!subjectMap[sid].name || subjectMap[sid].name.startsWith('Laboratory')) {
+                        subjectMap[sid].name = row.name;
+                    }
+                } else if (row.category === 'Laboratory') {
+                    subjectMap[sid].labAmount = parseFloat(String(row.amount));
+                    subjectMap[sid].hasLab    = true;
+                }
+            }
+
+            const subjects   = Object.values(subjectMap);
+            const totalUnits = subjects.reduce((s, sub) => s + sub.units, 0);
+
+            return {
+                assessmentId: a.id,
+                label:        `${a.year_level} — ${a.semester}`,
+                schoolYear:   a.school_year,
+                course:       a.course ?? '—',
+                totalUnits,
+                subjectCount: subjects.length,
+                subjects,
+            };
+        })
+        .filter((panel) => panel.subjects.length > 0);
+});
+
+const expandedSubjectPanels = ref<Set<number>>(new Set());
+
+function toggleSubjectPanel(assessmentId: number) {
+    if (expandedSubjectPanels.value.has(assessmentId)) {
+        expandedSubjectPanels.value.delete(assessmentId);
+    } else {
+        expandedSubjectPanels.value.add(assessmentId);
+    }
+}
 
 // ── Current-term helpers ──────────────────────────────────────────────────────
 // Derive the start-year string from the school_year field (e.g. "2025-2026" → "2025")
@@ -967,6 +1079,116 @@ const accountBalance = computed(() => {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+
+                        <!-- ── Enrolled Subjects Accordion ──────────────────────────────── -->
+                        <div v-if="enrolledSubjectPanels.length > 0" class="mt-8 border-t pt-6">
+                            <h3 class="text-md mb-4 flex items-center gap-2 font-semibold text-gray-800">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                                </svg>
+                                ENROLLED SUBJECTS
+                            </h3>
+
+                            <div
+                                v-for="panel in enrolledSubjectPanels"
+                                :key="panel.assessmentId"
+                                class="mb-3 overflow-hidden rounded-lg border border-gray-200 bg-white"
+                            >
+                                <!-- Panel header — click to expand/collapse -->
+                                <button
+                                    type="button"
+                                    class="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                                    @click="toggleSubjectPanel(panel.assessmentId)"
+                                >
+                                    <div>
+                                        <span class="font-medium text-gray-800">{{ panel.label }}</span>
+                                        <span class="ml-2 text-xs text-gray-500">{{ panel.schoolYear }}</span>
+                                        <span v-if="panel.course !== '—'" class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                            {{ panel.course }}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-xs text-gray-500">
+                                            {{ panel.subjectCount }} subject{{ panel.subjectCount !== 1 ? 's' : '' }} · {{ panel.totalUnits }} units
+                                        </span>
+                                        <ChevronDown
+                                            class="h-4 w-4 text-gray-400 transition-transform duration-200"
+                                            :class="{ 'rotate-180': expandedSubjectPanels.has(panel.assessmentId) }"
+                                        />
+                                    </div>
+                                </button>
+
+                                <!-- Subjects table — shown when panel is expanded -->
+                                <div v-show="expandedSubjectPanels.has(panel.assessmentId)">
+                                    <table class="w-full border-collapse text-sm">
+                                        <thead class="border-t border-gray-200 bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Code</th>
+                                                <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Subject</th>
+                                                <th class="px-4 py-2.5 text-center font-semibold text-gray-600">Units</th>
+                                                <th class="px-4 py-2.5 text-right font-semibold text-gray-600">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-100">
+                                            <tr
+                                                v-for="subject in panel.subjects"
+                                                :key="subject.subject_id"
+                                                class="transition-colors hover:bg-gray-50"
+                                            >
+                                                <td class="px-4 py-2.5 font-mono text-xs text-gray-500">
+                                                    {{ subject.code }}
+                                                </td>
+                                                <td class="px-4 py-2.5 text-gray-800">
+                                                    {{ subject.name }}
+                                                    <span
+                                                        v-if="subject.hasLab"
+                                                        class="ml-1.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700"
+                                                    >
+                                                        Lab
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-2.5 text-center text-gray-600">
+                                                    {{ subject.units }}
+                                                </td>
+                                                <td class="px-4 py-2.5 text-right">
+                                                    <span
+                                                        v-if="subject.isEnrolled"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
+                                                    >
+                                                        ✓ Enrolled
+                                                    </span>
+                                                    <span
+                                                        v-else
+                                                        class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500"
+                                                    >
+                                                        ○ Not Confirmed
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot class="border-t-2 border-gray-200 bg-gray-50">
+                                            <tr>
+                                                <td colspan="2" class="px-4 py-2 text-xs font-semibold text-gray-600">
+                                                    Total
+                                                </td>
+                                                <td class="px-4 py-2 text-center text-xs font-bold text-gray-800">
+                                                    {{ panel.totalUnits }}
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Empty state — assessment exists but has no subject breakdown yet -->
+                        <div
+                            v-else-if="props.allAssessments && props.allAssessments.length > 0"
+                            class="mt-8 rounded-lg border border-dashed border-gray-200 py-8 text-center"
+                        >
+                            <p class="text-sm text-gray-400">No subject breakdown available for your current assessment.</p>
                         </div>
                     </div>
 

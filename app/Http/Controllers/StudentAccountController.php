@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Models\StudentAssessment;
 use App\Models\Notification;
 
@@ -14,24 +15,63 @@ class StudentAccountController extends Controller
     {
         $user = Auth::user();
 
+        // ── Ensure account row exists ─────────────────────────────────────────
         if (! $user->account) {
             $user->account()->create(['balance' => 0]);
         }
 
         $user->load(['transactions' => fn ($q) => $q->orderByDesc('created_at')]);
 
+        // ── Latest assessment — source of truth for payment terms tab ─────────
         $latestAssessment = StudentAssessment::where('user_id', $user->id)
             ->with('paymentTerms')
             ->latest('created_at')
             ->first();
 
-        // FIX (Bug #7): Build the fees list from the student's actual assessment
-        // fee_breakdown JSON. The previous code had a hardcoded array with
-        // fictitiously low amounts (₱5,000 tuition) that were shown to the student
-        // even when a real assessment existed, causing financial confusion.
-        //
-        // If no assessment exists yet, return an empty collection so the frontend
-        // can render a "No assessment yet" state instead of fake placeholder data.
+        // ── ALL assessments — needed for enrolled subjects accordion ──────────
+        // Ordered newest-first so the most recent semester appears at the top.
+        $allAssessments = StudentAssessment::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->get();
+
+        // ── Build enrolledSubjectsByAssessment map ────────────────────────────
+        // Maps assessmentId → [subject_id, ...] for subjects with status='enrolled'.
+        // Mirrors the identical logic in StudentFeeController@show.
+        // Drives the "✓ Enrolled / ○ Not Confirmed" badges in the subjects table.
+        $enrolledSubjectsByAssessment = [];
+
+        if ($allAssessments->isNotEmpty()) {
+            // Build a lookup: "school_year||semester" → assessment model
+            $termIndex = $allAssessments->keyBy(
+                fn ($a) => $a->school_year . '||' . $a->semester
+            );
+
+            // One DB query for all enrolled subjects belonging to this student
+            $enrollments = DB::table('student_enrollments')
+                ->where('user_id', $user->id)
+                ->where('status', 'enrolled')
+                ->select(['subject_id', 'school_year', 'semester'])
+                ->get();
+
+            foreach ($enrollments as $row) {
+                $termKey = $row->school_year . '||' . $row->semester;
+
+                if (! isset($termIndex[$termKey])) {
+                    // Enrollment belongs to a term with no active assessment — skip
+                    continue;
+                }
+
+                $assessmentId = $termIndex[$termKey]->id;
+
+                if (! isset($enrolledSubjectsByAssessment[$assessmentId])) {
+                    $enrolledSubjectsByAssessment[$assessmentId] = [];
+                }
+
+                $enrolledSubjectsByAssessment[$assessmentId][] = $row->subject_id;
+            }
+        }
+
+        // ── Fees list — from latest assessment fee_breakdown JSON ─────────────
         if ($latestAssessment && ! empty($latestAssessment->fee_breakdown)) {
             $fees = collect($latestAssessment->fee_breakdown)->map(fn ($item) => [
                 'name'     => $item['name']     ?? 'Fee',
@@ -42,6 +82,7 @@ class StudentAccountController extends Controller
             $fees = collect();
         }
 
+        // ── Payment terms — ordered for the payment terms table ───────────────
         $paymentTerms = [];
         if ($latestAssessment) {
             $paymentTerms = $latestAssessment->paymentTerms()
@@ -62,6 +103,7 @@ class StudentAccountController extends Controller
                 ->toArray();
         }
 
+        // ── Notifications ─────────────────────────────────────────────────────
         $notifications = Notification::active()
             ->forUser($user->id)
             ->withinDateRange()
@@ -85,6 +127,24 @@ class StudentAccountController extends Controller
                 'created_at'      => $n->created_at,
             ]);
 
+        // ── Serialise allAssessments for the enrolled-subjects panel ──────────
+        // We send the full fee_breakdown so Vue can derive subject rows without
+        // a second HTTP request.
+        $allAssessmentsSerialized = $allAssessments->map(fn ($a) => [
+            'id'                => $a->id,
+            'assessment_number' => $a->assessment_number,
+            'year_level'        => $a->year_level,
+            'semester'          => $a->semester,
+            'school_year'       => $a->school_year,
+            'course'            => $a->course,
+            'total_assessment'  => (float) $a->total_assessment,
+            'tuition_fee'       => (float) $a->tuition_fee,
+            'other_fees'        => (float) $a->other_fees,
+            'fee_breakdown'     => $a->fee_breakdown ?? [],
+            'status'            => $a->status,
+            'created_at'        => $a->created_at,
+        ])->values()->toArray();
+
         return Inertia::render('Student/AccountOverview', [
             'account'          => $user->account,
             'transactions'     => $user->transactions ?? [],
@@ -92,6 +152,10 @@ class StudentAccountController extends Controller
             'latestAssessment' => $latestAssessment,
             'paymentTerms'     => $paymentTerms,
             'notifications'    => $notifications,
+
+            // Drives the enrolled subjects accordion in AccountOverview
+            'allAssessments'               => $allAssessmentsSerialized,
+            'enrolledSubjectsByAssessment' => $enrolledSubjectsByAssessment,
 
             'pendingApprovalPayments' => $user->transactions
                 ->filter(fn ($t) => $t->kind === 'payment' && $t->status === 'awaiting_approval')

@@ -26,7 +26,7 @@ class PaymentApprovalWorkflowSeeder extends Seeder
 
         // Fallback to admin if no accounting users exist yet
         if (empty($accountingUserIds)) {
-            $accountingUserIds = User::where('role', 'admin')
+            $accountingUserIds = User::where('role', UserRoleEnum::ADMIN->value)
                 ->pluck('id')
                 ->toArray();
         }

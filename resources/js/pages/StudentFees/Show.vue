@@ -183,6 +183,7 @@ const feeLineItems = computed(() => {
         const grouped: Record<string, any[]> = {};
         for (const item of storedBreakdown) {
             if (item.category === 'Tuition') continue;
+            if (item.category === 'Other') continue;       // Medical, Insurance, etc. — hidden per design
             if (!grouped[item.category]) grouped[item.category] = [];
             grouped[item.category].push(item);
         }
@@ -336,6 +337,14 @@ const enrolledSubjectTerms = computed(() => {
             };
         })
         .filter((panel) => panel.subjects.length > 0);
+});
+
+// Total units for the currently selected assessment — used in the Fee Breakdown header
+const totalUnitsForSelected = computed(() => {
+    const panel = enrolledSubjectTerms.value.find(
+        (p) => p.assessmentId === selectedAssessmentId.value
+    );
+    return panel?.totalUnits ?? 0;
 });
 
 // ─── Payment form ──────────────────────────────────────────────────────────────
@@ -696,7 +705,12 @@ const getStudentStatusColor = (status: string) => {
                     <div class="flex items-start justify-between">
                         <div>
                             <CardTitle>Fee Breakdown</CardTitle>
-                            <CardDescription>Assessment for {{ selectedAssessment?.year_level }} — {{ selectedAssessment?.semester }} {{ selectedAssessment?.school_year }}</CardDescription>
+                            <CardDescription>
+                                Assessment for {{ selectedAssessment?.year_level }} —
+                                {{ selectedAssessment?.semester }}
+                                {{ selectedAssessment?.school_year }}
+                                <span v-if="totalUnitsForSelected > 0"> · {{ totalUnitsForSelected }} Units</span>
+                            </CardDescription>
                         </div>
                         <div v-if="assessment?.course" class="text-right">
                             <span class="text-xs font-semibold text-gray-600">Course:</span>
