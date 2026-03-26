@@ -161,6 +161,21 @@ class StudentPaymentService
      * @return void
      * @throws \Exception on processing failure
      */
+    /**
+     * Finalize an approved payment by updating the transaction and payment term.
+     * Implements sequential allocation across terms if the payment exceeds the selected term's balance.
+     * Called when a payment approval workflow is completed.
+     *
+     * ── Allocation Logic ──
+     * If payment amount > selected term's balance:
+     *   1. Apply up to the selected term's balance to that term
+     *   2. Allocate remaining balance sequentially to other unpaid terms
+     *   3. Document allocation in transaction meta
+     *   4. Note any unallocated excess (overpayment beyond total outstanding)
+     *
+     * @param  Transaction $transaction The approved payment transaction
+     * @return void
+     */
     public function finalizeApprovedPayment(Transaction $transaction): void
     {
         if ($transaction->kind !== 'payment') {
@@ -214,9 +229,18 @@ class StudentPaymentService
                 );
             }
 
-            // ── Update the payment term ──
-            $newBalance = max(0, (float) $term->balance - $amount);
-            $newStatus  = $newBalance <= 0
+            // ── Sequential Allocation across terms ──────────────────────────────
+            // If payment exceeds selected term's balance, allocate remainder to other terms.
+            // This matches StudentFeeController::storePayment() allocation pattern.
+            
+            $allocation = [];
+            $remaining  = $amount;
+
+            // START: Apply to selected term first
+            $selectedTermBalance = round((float) $term->balance, 2);
+            $appliedToSelected   = round(min($remaining, $selectedTermBalance), 2);
+            $newBalance          = round($selectedTermBalance - $appliedToSelected, 2);
+            $newStatus           = $newBalance <= 0
                 ? PaymentStatus::PAID->value
                 : PaymentStatus::PARTIAL->value;
 
@@ -228,30 +252,102 @@ class StudentPaymentService
                     : $term->paid_date,
             ]);
 
-            // ── Normalise description ──
-            $description = $transaction->meta['description'] ?? null;
-            if (empty($description)) {
-                $description = 'Payment — ' . $term->term_name;
+            $allocation[] = [
+                'term_id'        => $term->id,
+                'term_name'      => $term->term_name,
+                'term_order'     => $term->term_order,
+                'applied'        => $appliedToSelected,
+                'balance_before' => $selectedTermBalance,
+                'balance_after'  => $newBalance,
+                'status_after'   => $newStatus,
+            ];
+
+            $remaining = round($remaining - $appliedToSelected, 2);
+
+            // IF OVERPAYMENT: allocate remainder to other unpaid terms (in order)
+            if ($remaining > 0) {
+                $otherTerms = StudentPaymentTerm::where('student_assessment_id', $term->student_assessment_id)
+                    ->whereIn('status', PaymentStatus::unpaidValues())
+                    ->where('id', '!=', $term->id)
+                    ->orderBy('term_order', 'asc')
+                    ->get();
+
+                foreach ($otherTerms as $otherTerm) {
+                    if ($remaining <= 0) {
+                        break;
+                    }
+
+                    $otherTermBalance = round((float) $otherTerm->balance, 2);
+                    $appliedToOther   = round(min($remaining, $otherTermBalance), 2);
+                    $otherNewBalance  = round($otherTermBalance - $appliedToOther, 2);
+                    $otherNewStatus   = $otherNewBalance <= 0
+                        ? PaymentStatus::PAID->value
+                        : PaymentStatus::PARTIAL->value;
+
+                    $otherTerm->update([
+                        'balance'   => $otherNewBalance,
+                        'status'    => $otherNewStatus,
+                        'paid_date' => $otherNewStatus === PaymentStatus::PAID->value
+                            ? now()
+                            : $otherTerm->paid_date,
+                    ]);
+
+                    $allocation[] = [
+                        'term_id'        => $otherTerm->id,
+                        'term_name'      => $otherTerm->term_name,
+                        'term_order'     => $otherTerm->term_order,
+                        'applied'        => $appliedToOther,
+                        'balance_before' => $otherTermBalance,
+                        'balance_after'  => $otherNewBalance,
+                        'status_after'   => $otherNewStatus,
+                    ];
+
+                    $remaining = round($remaining - $appliedToOther, 2);
+                }
             }
 
-            // FIX (Bug #4): Added student_assessment_id so PDF export can filter
-            // payments by assessment. Without it, assessment-scoped payment history
-            // was always empty for workflow-approved payments.
-            if ($user->student) {
-                Payment::create([
-                    'student_id'           => $user->student->id,
-                    'student_assessment_id' => $term->student_assessment_id,
-                    'amount'               => $amount,
-                    'payment_method'       => $transaction->payment_channel,
-                    'reference_number'     => $transaction->reference,
-                    'description'          => $description,
-                    'status'               => PaymentStatus::COMPLETED->value,
-                    'paid_at'              => $transaction->paid_at ?? now(),
-                ]);
+            // ── Create Payment records per term ──────────────────────────────────
+            // One Payment row per term to give per-term payment history
+            $totalApplied = round($amount - $remaining, 2);
+
+            foreach ($allocation as $alloc) {
+                if ($user->student) {
+                    Payment::create([
+                        'student_id'            => $user->student->id,
+                        'student_assessment_id' => $term->student_assessment_id,
+                        'amount'                => $alloc['applied'],
+                        'payment_method'        => $transaction->payment_channel,
+                        'reference_number'      => $transaction->reference,
+                        'description'           => 'Payment — ' . $alloc['term_name']
+                            . ' (from ₱' . number_format($totalApplied, 2) . ' total)',
+                        'status'                => PaymentStatus::COMPLETED->value,
+                        'paid_at'               => $transaction->paid_at ?? now(),
+                    ]);
+                }
             }
 
-            // ── Mark transaction as paid ──
-            $transaction->update(['status' => PaymentStatus::PAID->value]);
+            // ── Build description reflecting allocation ────────────────────────
+            if (count($allocation) > 1) {
+                $termsLabel  = collect($allocation)->pluck('term_name')->implode(', ');
+                $description = '₱' . number_format($totalApplied, 2) . ' allocated across: ' . $termsLabel;
+                if ($remaining > 0) {
+                    $description .= '. Excess: ₱' . number_format($remaining, 2);
+                }
+            } else {
+                $description = 'Payment — ' . ($allocation[0]['term_name'] ?? 'Term');
+            }
+
+            // ── Mark transaction as paid and update meta with allocation details ──
+            $transaction->update([
+                'status' => PaymentStatus::PAID->value,
+                'meta'   => array_merge($transaction->meta ?? [], [
+                    'allocation'        => $allocation,
+                    'terms_covered'     => count($allocation),
+                    'total_applied'     => $totalApplied,
+                    'unallocated'       => $remaining,
+                    'description'       => $description,
+                ]),
+            ]);
 
             // ── Recalculate account balance ──
             AccountService::recalculate($user);
@@ -260,12 +356,13 @@ class StudentPaymentService
             // If yes, notify admin to create the next semester's assessment.
             $this->checkAndNotifyProgressionReady($user, $term->student_assessment_id);
 
-            Log::info('Payment finalized successfully', [
+            Log::info('Payment finalized with allocation', [
                 'transaction_id' => $transaction->id,
-                'term_id'        => $term->id,
-                'term_name'      => $term->term_name,
-                'amount'         => $amount,
-                'new_balance'    => $newBalance,
+                'selected_term_id' => $term->id,
+                'amount'        => $amount,
+                'terms_allocated' => count($allocation),
+                'total_applied' => $totalApplied,
+                'unallocated'   => $remaining,
             ]);
         });
     }

@@ -7,6 +7,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\StudentPaymentTerm;
+use App\Models\StudentAssessment;
+use App\Models\StudentEnrollment;
 use App\Models\Workflow;
 use App\Enums\UserRoleEnum;
 use Illuminate\Http\Request;
@@ -39,6 +41,8 @@ class TransactionController extends Controller
                 ->groupBy(fn ($txn) => $this->getTransactionGroupKey($txn));
 
             $currentTerm = $this->getCurrentTerm();
+            $allAssessments = [];
+            $enrolledSubjectsByAssessment = [];
         } else {
             $transactions = $user->transactions()
                 ->with('user')
@@ -61,6 +65,45 @@ class TransactionController extends Controller
             } else {
                 $currentTerm = $this->getCurrentTerm();
             }
+
+            // ── Load all assessments for the student (powers the Enrolled Subjects accordion) ──
+            $allAssessments = \App\Models\StudentAssessment::where('user_id', $user->id)
+                ->where('status', '!=', 'cancelled')
+                ->orderByDesc('created_at')
+                ->get(['id', 'school_year', 'semester', 'year_level', 'course', 'fee_breakdown'])
+                ->map(fn ($a) => [
+                    'id'            => $a->id,
+                    'school_year'   => $a->school_year,
+                    'semester'      => $a->semester,
+                    'year_level'    => $a->year_level,
+                    'course'        => $a->course,
+                    'fee_breakdown' => $a->fee_breakdown ?? [],
+                ])
+                ->toArray();
+
+            // ── Build enrolledSubjectsByAssessment lookup ──
+            // Maps each assessment ID to an array of subject IDs confirmed in student_enrollments
+            $assessmentTermIndex = collect($allAssessments)->keyBy(
+                fn ($a) => $a['school_year'] . '||' . $a['semester']
+            );
+
+            $enrollmentRows = \App\Models\StudentEnrollment::where('user_id', $user->id)
+                ->where('status', 'enrolled')
+                ->get(['subject_id', 'school_year', 'semester']);
+
+            $enrolledSubjectsByAssessment = [];
+
+            foreach ($enrollmentRows as $row) {
+                $termKey = $row->school_year . '||' . $row->semester;
+                if (!isset($assessmentTermIndex[$termKey])) {
+                    continue;
+                }
+                $assessmentId = $assessmentTermIndex[$termKey]['id'];
+                if (!isset($enrolledSubjectsByAssessment[$assessmentId])) {
+                    $enrolledSubjectsByAssessment[$assessmentId] = [];
+                }
+                $enrolledSubjectsByAssessment[$assessmentId][] = (int) $row->subject_id;
+            }
         }
 
         return Inertia::render('Transactions/Index', [
@@ -68,6 +111,8 @@ class TransactionController extends Controller
             'transactionsByTerm' => $transactions,
             'account'            => $user->account,
             'currentTerm'        => $currentTerm,
+            'allAssessments'     => $allAssessments,
+            'enrolledSubjectsByAssessment' => $enrolledSubjectsByAssessment,
         ]);
     }
 
@@ -293,15 +338,12 @@ class TransactionController extends Controller
                 throw ValidationException::withMessages(['payment' => 'This payment term has already been fully paid.']);
             }
 
-            if ($paidAmount > $termBalance) {
-                throw ValidationException::withMessages([
-                    'amount' => sprintf(
-                        'Payment amount (₱%s) exceeds the outstanding balance for this term (₱%s).',
-                        number_format($paidAmount, 2),
-                        number_format($termBalance, 2)
-                    ),
-                ]);
-            }
+            // No upper-limit on payment amount — payments that exceed the selected term's balance
+            // are allocated sequentially across all unpaid terms with any excess documented.
+            // This aligns with StudentFeeController pattern for admin/accounting side.
+            //
+            // if ($paidAmount > $termBalance) { ... } ← REMOVED
+            // Overpayment is allowed and handled by StudentPaymentService::processPayment()
 
             // Prevent duplicate awaiting_approval submissions for the same term
             if ($isStudent) {

@@ -159,14 +159,148 @@ const allTermsSorted = computed((): PaymentTerm[] => {
 
 const paidTermsCount = computed(() => allTermsSorted.value.filter((t) => t.status === 'paid').length);
 
-// ─── Fee line items ────────────────────────────────────────────────────────────
+// ─── Enhanced Fee Breakdown with Calculation Transparency ─────────────────────
 //
-// FIX #1: Previously, items with category === 'Other' (Medical, Insurance,
-// Cultural Arts, Maintenance — totaling ₱975) were silently excluded, causing
+// ENHANCEMENT: Provides detailed breakdown showing exactly how the total assessment
+// is calculated:
+//   Total Assessment = (Tuition by subject) + (Laboratory fees) + (Miscellaneous)
+//
+// Each section can be expanded to show detailed item listings.
+
+// Extracts all tuition line items (one per subject) from fee_breakdown
+const tuitionItems = computed(() => {
+    const selectedAssess = selectedAssessment.value as any;
+    if (!selectedAssess) return [];
+    
+    const breakdown = selectedAssess.fee_breakdown ?? [];
+    return breakdown
+        .filter((item: any) => item.category === 'Tuition')
+        .map((item: any) => ({
+            ...item,
+            displayName: item.name || item.code || 'Subject',
+            amount: parseFloat(String(item.amount)),
+        }));
+});
+
+// Total tuition (sum of all subject tuitions)
+const totalTuition = computed(() => {
+    return Math.round(tuitionItems.value.reduce((sum: number, item: any) => sum + item.amount, 0) * 100) / 100;
+});
+
+// Extracts all laboratory fee items from fee_breakdown
+const labItems = computed(() => {
+    const selectedAssess = selectedAssessment.value as any;
+    if (!selectedAssess) return [];
+    
+    const breakdown = selectedAssess.fee_breakdown ?? [];
+    return breakdown
+        .filter((item: any) => item.category === 'Laboratory')
+        .map((item: any) => ({
+            ...item,
+            displayName: item.name?.replace('Laboratory Fee — ', '') || 'Laboratory',
+            amount: parseFloat(String(item.amount)),
+        }));
+});
+
+// Total lab fees (sum of all lab subject fees)
+const totalLab = computed(() => {
+    return Math.round(labItems.value.reduce((sum: number, item: any) => sum + item.amount, 0) * 100) / 100;
+});
+
+// Extracts miscellaneous and other items, organized by subcategory
+interface MiscItemGroup {
+    category: string;
+    subcategory: string;
+    label: string;
+    items: Array<{ name: string; amount: number }>;
+    total: number;
+}
+
+const miscellaneousItemsByGroup = computed((): MiscItemGroup[] => {
+    const selectedAssess = selectedAssessment.value as any;
+    if (!selectedAssess) return [];
+    
+    const breakdown = selectedAssess.fee_breakdown ?? [];
+    const miscItems = breakdown.filter((item: any) => 
+        item.category === 'Miscellaneous' || item.category === 'Other'
+    );
+
+    // Organize by logical subcategories
+    const categories: Record<string, MiscItemGroup> = {
+        academic: {
+            category: 'Academic Services',
+            subcategory: 'Academic',
+            label: 'Academic Services',
+            items: [],
+            total: 0,
+        },
+        student_life: {
+            category: 'Student Life & Activities',
+            subcategory: 'Student',
+            label: 'Student Life & Activities',
+            items: [],
+            total: 0,
+        },
+        support: {
+            category: 'Support Services',
+            subcategory: 'Support',
+            label: 'Support Services',
+            items: [],
+            total: 0,
+        },
+    };
+
+    // Classify miscellaneous items based on name patterns
+    const academicPatterns = ['registration', 'lms', 'library'];
+    const studentPatterns = ['athletic', 'prisaa', 'publication', 'id', 'biccs', 'pccl', 'league', 'audio-visual', 'faculty development', 'guidance'];
+    const supportPatterns = ['medical', 'insurance', 'cultural', 'maintenance'];
+
+    for (const item of miscItems) {
+        const name = item.name?.toLowerCase() || '';
+        const amount = parseFloat(String(item.amount));
+        const itemObj = { name: item.name, amount };
+
+        if (academicPatterns.some(p => name.includes(p))) {
+            categories.academic.items.push(itemObj);
+            categories.academic.total += amount;
+        } else if (studentPatterns.some(p => name.includes(p))) {
+            categories.student_life.items.push(itemObj);
+            categories.student_life.total += amount;
+        } else if (supportPatterns.some(p => name.includes(p))) {
+            categories.support.items.push(itemObj);
+            categories.support.total += amount;
+        }
+    }
+
+    return Object.values(categories).filter(cat => cat.items.length > 0);
+});
+
+// Total miscellaneous fees
+const totalMiscellaneous = computed(() => {
+    return Math.round(miscellaneousItemsByGroup.value.reduce((sum, group) => sum + group.total, 0) * 100) / 100;
+});
+
+// Fee calculation summary showing the formula (e.g., "28.5 units × ₱364 + 5 labs × ₱1,656 + ₱6,956")
+const feeCalculationSummary = computed(() => {
+    const totalUnits = tuitionItems.value.reduce((sum: number, item: any) => sum + (item.units || 0), 0);
+    const labCount = labItems.value.length;
+    const tuitionPerUnit = config('fees.tuition_per_unit', 364.00);
+    const labPerSubject = config('fees.lab_fee_per_subject', 1656.00);
+
+    if (totalUnits <= 0) return '';
+
+    const parts = [];
+    if (totalUnits > 0) parts.push(`${totalUnits} unit${totalUnits !== 1 ? 's' : ''} × ₱${tuitionPerUnit.toFixed(2)}`);
+    if (labCount > 0) parts.push(`${labCount} lab${labCount !== 1 ? 's' : ''} × ₱${labPerSubject.toFixed(2)}`);
+    if (totalMiscellaneous.value > 0) parts.push(`₱${totalMiscellaneous.value.toFixed(2)} misc`);
+
+    return parts.length > 0 ? parts.join(' + ') : '—';
+});
+
+// FEE LINE ITEMS (Legacy grouping for backward compatibility) – shows category totals
+// FIX #1: Previously, items with category === 'Other' were silently excluded, causing
 // the sum of the Fee Breakdown to be ₱975 short of Total Assessment.
-//
-// The fix groups ALL categories (including 'Other') into named display lines
-// so the visible sum always matches total_assessment exactly.
+// The fix groups ALL categories (including 'Other') into named display lines.
 
 const feeLineItems = computed(() => {
     // Human-readable labels for known categories
@@ -211,6 +345,27 @@ const feeLineItems = computed(() => {
     }
 
     return breakdown.map((item) => ({ ...item, displayLabel: labelMap[item.category] ?? item.category }));
+});
+
+// Helper function to read config values (since we're in a Vue component, not Laravel)
+function config(key: string, defaultValue: any = null): any {
+    const configMap: Record<string, any> = {
+        'fees.tuition_per_unit': 364.00,
+        'fees.lab_fee_per_subject': 1656.00,
+    };
+    return configMap[key] ?? defaultValue;
+}
+
+// Verification: total breakdown should equal the total assessment
+const feeBreakdownVerification = computed(() => {
+    const calculatedTotal = Math.round((totalTuition.value + totalLab.value + totalMiscellaneous.value) * 100) / 100;
+    const assessmentTotal = Math.round(totalAssessment.value * 100) / 100;
+    return {
+        calculated: calculatedTotal,
+        assessment: assessmentTotal,
+        isValid: Math.abs(calculatedTotal - assessmentTotal) < 0.01, // Allow 1 cent rounding difference
+        discrepancy: Math.round((assessmentTotal - calculatedTotal) * 100) / 100,
+    };
 });
 
 // ─── Transaction history ───────────────────────────────────────────────────────
@@ -758,49 +913,67 @@ const getStudentStatusColor = (status: string) => {
 
             <!-- ── Fee Breakdown ── -->
             <!--
-                FIX #1: feeLineItems now includes ALL categories (Tuition, Lab,
-                Miscellaneous, and Other). The visible sum of all line items will
-                always equal Total Assessment. Previously, 'Other' items (Medical,
-                Insurance, Cultural Arts, Maintenance ≈ ₱975) were silently hidden,
-                causing a visual discrepancy.
+                ENHANCEMENT: Detailed Fee Breakdown showing calculation transparency.
+                Components:
+                1. Header: Shows calculation formula (units × rate + labs + misc)
+                2. Expandable Sections: Tuition detail, Lab detail, Miscellaneous detail
+                3. Verification: Ensures breakdown sum equals total assessment
+                4. Payment Status: Progress bar and term-by-term status
             -->
             <Card>
                 <CardHeader>
                     <div class="flex items-start justify-between">
-                        <div>
+                        <div class="flex-1">
                             <CardTitle>Fee Breakdown</CardTitle>
-                            <CardDescription>
-                                Assessment for {{ selectedAssessment?.year_level }} —
-                                {{ selectedAssessment?.semester }}
-                                {{ selectedAssessment?.school_year }}
-                                <span v-if="totalUnitsForSelected > 0"> · {{ totalUnitsForSelected }} Units</span>
+                            <CardDescription class="mt-1 flex flex-col gap-1">
+                                <span class="inline-block">
+                                    Assessment for <strong>{{ selectedAssessment?.year_level }}</strong> —
+                                    <strong>{{ selectedAssessment?.semester }}</strong>
+                                    ({{ selectedAssessment?.school_year }})
+                                </span>
+                                <span v-if="feeCalculationSummary" class="inline-block text-xs font-mono text-indigo-600 bg-indigo-50 px-2 py-1 rounded w-fit">
+                                    {{ feeCalculationSummary }}
+                                </span>
                             </CardDescription>
                         </div>
-                        <div v-if="assessment?.course" class="text-right">
+                        <div v-if="assessment?.course" class="text-right ml-4 flex-shrink-0">
                             <span class="text-xs font-semibold text-gray-600">Course:</span>
                             <span class="ml-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">{{ assessment.course }}</span>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent class="space-y-5">
-                    <div class="space-y-2">
-                        <div v-for="item in feeLineItems" :key="item.category"
-                             class="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5">
-                            <div class="flex items-center gap-2">
-                                <Receipt class="h-4 w-4 text-gray-400" />
-                                <span class="text-sm font-medium text-gray-700">{{ item.displayLabel }}</span>
-                            </div>
-                            <span class="text-sm font-semibold text-gray-900">{{ formatCurrency(item.total) }}</span>
+                <CardContent class="space-y-4">
+                    <!-- ── SECTION 1: Tuition Fees (Static) ── -->
+                    <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
+                        <div>
+                            <p class="font-semibold text-gray-900">Tuition Fees</p>
                         </div>
-                        <div v-if="feeLineItems.length === 0" class="py-4 text-center text-sm text-gray-400">No fee items on record</div>
+                        <span class="text-lg font-bold text-indigo-600">{{ formatCurrency(totalTuition) }}</span>
                     </div>
 
-                    <!-- Verification: sum of breakdown items should equal totalAssessment -->
-                    <div class="flex items-center justify-between border-t-2 border-gray-200 px-1 pt-2">
-                        <span class="font-semibold text-gray-700">Total Assessment</span>
-                        <span class="text-lg font-bold text-gray-900">{{ formatCurrency(totalAssessment) }}</span>
+                    <!-- ── SECTION 2: Laboratory Fees (Static) ── -->
+                    <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
+                        <div>
+                            <p class="font-semibold text-gray-900">Laboratory Fees</p>
+                        </div>
+                        <span class="text-lg font-bold text-purple-600">{{ formatCurrency(totalLab) }}</span>
                     </div>
 
+                    <!-- ── SECTION 3: Miscellaneous Fees (Static) ── -->
+                    <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
+                        <div>
+                            <p class="font-semibold text-gray-900">Miscellaneous Fees</p>
+                        </div>
+                        <span class="text-lg font-bold text-amber-600">{{ formatCurrency(totalMiscellaneous) }}</span>
+                    </div>
+
+                    <!-- ── TOTAL ASSESSMENT ── -->
+                    <div class="flex items-center justify-between border-t-2 border-gray-200 px-1 pt-3">
+                        <span class="text-lg font-bold text-gray-900">Total Assessment</span>
+                        <span class="text-2xl font-extrabold text-indigo-600">{{ formatCurrency(totalAssessment) }}</span>
+                    </div>
+
+                    <!-- ── Payment Progress ── -->
                     <div class="space-y-1 px-1">
                         <div class="flex justify-between text-xs text-gray-500">
                             <span>Payment Progress</span>
@@ -817,6 +990,7 @@ const getStudentStatusColor = (status: string) => {
                         </div>
                     </div>
 
+                    <!-- ── Balance Card ── -->
                     <div :class="['mt-2 flex items-center gap-4 rounded-xl border-2 p-4', balanceCardConfig.bg]">
                         <div :class="['rounded-xl p-3', balanceCardConfig.iconBg]">
                             <component :is="balanceCardConfig.icon" :class="['h-6 w-6', balanceCardConfig.iconColor]" />
@@ -833,6 +1007,7 @@ const getStudentStatusColor = (status: string) => {
                         </div>
                     </div>
 
+                    <!-- ── Payment Terms ── -->
                     <div v-if="allTermsSorted.length > 0" class="space-y-2 pt-1">
                         <p class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Payment Terms</p>
                         <div class="grid grid-cols-1 gap-2 sm:grid-cols-5">

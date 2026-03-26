@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
+import { ChevronDown, BookOpen, FlaskConical } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
@@ -30,6 +31,22 @@ interface Transaction {
     meta?: Record<string, any>;
 }
 
+interface Assessment {
+    id: number;
+    school_year: string;
+    semester: string;
+    year_level: string;
+    course: string | null;
+    fee_breakdown: Array<{
+        subject_id?: number;
+        code?: string;
+        name: string;
+        category: string;
+        units?: number;
+        amount: number;
+    }>;
+}
+
 interface TermSummary {
     total_assessment: number;
     total_paid: number;
@@ -49,6 +66,8 @@ interface Props {
         balance: number;
     } | null;
     currentTerm: string;
+    allAssessments: Assessment[];
+    enrolledSubjectsByAssessment: Record<number, number[]>;
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -87,6 +106,120 @@ const calculateTermSummary = (transactions: Transaction[]): TermSummary => {
 
     return { total_assessment: charges, total_paid: payments, current_balance: charges - payments };
 };
+
+// ─── Enrolled Subjects by Term ────────────────────────────────────────────────
+
+/**
+ * Builds a subject panel for displaying enrolled subjects for an assessment.
+ * Matches structure from StudentFees/Show.vue buildSubjectPanel()
+ */
+function buildSubjectPanel(assessment: Assessment) {
+    const subjectRows = (assessment.fee_breakdown ?? []).filter(
+        (item) => item.category === 'Tuition' || item.category === 'Laboratory',
+    );
+
+    const subjectMap: Record<number, {
+        subject_id: number;
+        code: string;
+        name: string;
+        units: number;
+        tuitionAmount: number;
+        labAmount: number;
+        hasLab: boolean;
+        isEnrolled: boolean;
+    }> = {};
+
+    const enrolledIds = new Set(props.enrolledSubjectsByAssessment[assessment.id] ?? []);
+
+    for (const row of subjectRows) {
+        const sid = row.subject_id;
+        if (sid === undefined) continue;
+
+        if (!subjectMap[sid]) {
+            subjectMap[sid] = {
+                subject_id:    sid,
+                code:          row.code ?? '—',
+                name:          row.name,
+                units:         row.units ?? 0,
+                tuitionAmount: 0,
+                labAmount:     0,
+                hasLab:        false,
+                isEnrolled:    enrolledIds.has(sid),
+            };
+        }
+
+        if (row.category === 'Tuition') {
+            subjectMap[sid].tuitionAmount = parseFloat(String(row.amount));
+            subjectMap[sid].units         = row.units ?? subjectMap[sid].units;
+            if (!subjectMap[sid].name || subjectMap[sid].name.startsWith('Laboratory')) {
+                subjectMap[sid].name = row.name;
+            }
+        } else if (row.category === 'Laboratory') {
+            subjectMap[sid].labAmount = parseFloat(String(row.amount));
+            subjectMap[sid].hasLab    = true;
+        }
+    }
+
+    const subjects      = Object.values(subjectMap);
+    const totalUnits    = subjects.reduce((s, sub) => s + sub.units, 0);
+    const totalTuition  = subjects.reduce((s, sub) => s + sub.tuitionAmount, 0);
+    const totalLab      = subjects.reduce((s, sub) => s + sub.labAmount, 0);
+    const enrolledCount = subjects.filter((sub) => sub.isEnrolled).length;
+
+    return {
+        assessmentId: assessment.id,
+        label:        `${assessment.year_level} — ${assessment.semester}`,
+        schoolYear:   assessment.school_year,
+        course:       assessment.course ?? '—',
+        totalUnits,
+        totalTuition,
+        totalLab,
+        subjectCount: subjects.length,
+        enrolledCount,
+        subjects,
+    };
+}
+
+// Subject panels for each transaction term group
+const expandedSubjectTerms = ref<Set<number>>(new Set());
+
+const toggleSubjectTerm = (assessmentId: number) => {
+    if (expandedSubjectTerms.value.has(assessmentId)) {
+        expandedSubjectTerms.value.delete(assessmentId);
+    } else {
+        expandedSubjectTerms.value.add(assessmentId);
+    }
+};
+
+/**
+ * Per-transaction-group subject panels indexed by termKey (e.g., "2026 1st Sem")
+ * Returns null if the term has no matching assessment with subjects
+ */
+const subjectPanelsByTerm = computed(() => {
+    const result: Record<string, ReturnType<typeof buildSubjectPanel> | null> = {};
+
+    for (const [termKey, transactions] of Object.entries(props.transactionsByTerm ?? {})) {
+        // Extract year and semester from termKey (e.g., "2026 1st Sem")
+        const parts = termKey.split(' ');
+        const year = parts[0];
+        const semester = parts.slice(1).join(' ');
+
+        // Find matching assessment
+        const matchingAssessment = props.allAssessments.find(
+            (a) => a.school_year.startsWith(year) && a.semester === semester
+        );
+
+        if (!matchingAssessment || !matchingAssessment.fee_breakdown?.length) {
+            result[termKey] = null;
+            continue;
+        }
+
+        const panel = buildSubjectPanel(matchingAssessment);
+        result[termKey] = panel.subjects.length > 0 ? panel : null;
+    }
+
+    return result;
+});
 
 // ─── Filtering ────────────────────────────────────────────────────────────────
 const filteredTransactionsByTerm = computed(() => {
@@ -407,6 +540,133 @@ const payNow = () => {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- ── Enrolled Subjects for this term ── -->
+                    <div v-if="subjectPanelsByTerm[termKey]" class="border-t border-gray-100">
+                        <button
+                            type="button"
+                            class="flex w-full items-center justify-between bg-indigo-50 px-5 py-3 text-left transition-colors hover:bg-indigo-100 select-none"
+                            @click="toggleSubjectTerm(subjectPanelsByTerm[termKey]!.assessmentId)"
+                        >
+                            <div class="flex items-center gap-2">
+                                <BookOpen class="h-4 w-4 text-indigo-500" />
+                                <span class="text-sm font-semibold text-indigo-800">
+                                    Enrolled Subjects — {{ termKey }}
+                                </span>
+                                <span class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                                    {{ subjectPanelsByTerm[termKey]!.subjectCount }} subjects
+                                </span>
+                            </div>
+                            <ChevronDown
+                                class="h-4 w-4 text-indigo-600 transition-transform duration-200"
+                                :class="{ 'rotate-180': expandedSubjectTerms.has(subjectPanelsByTerm[termKey]!.assessmentId) }"
+                            />
+                        </button>
+
+                        <div v-if="expandedSubjectTerms.has(subjectPanelsByTerm[termKey]!.assessmentId)" class="border-t border-gray-100 bg-gray-50">
+                            <div class="flex flex-wrap items-center gap-4 border-b border-gray-100 bg-white px-6 py-2.5 text-xs text-gray-500">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">✓</span>
+                                    Enrolled (confirmed)
+                                </span>
+                                <span class="flex items-center gap-1.5">
+                                    <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-400">○</span>
+                                    Assessment only
+                                </span>
+                                <span v-if="subjectPanelsByTerm[termKey]!.totalLab > 0" class="flex items-center gap-1.5 text-purple-600">
+                                    <FlaskConical class="h-3 w-3" />
+                                    Has laboratory component
+                                </span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-gray-200 bg-gray-100 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                            <th class="px-5 py-2.5 text-left">Status</th>
+                                            <th class="px-5 py-2.5 text-left">Code</th>
+                                            <th class="px-5 py-2.5 text-left">Subject Name</th>
+                                            <th class="px-5 py-2.5 text-center">Units</th>
+                                            <th class="px-5 py-2.5 text-right">Unit Cost</th>
+                                            <th class="px-5 py-2.5 text-right">Lab Fee</th>
+                                            <th class="px-5 py-2.5 text-right">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        <tr
+                                            v-for="subject in subjectPanelsByTerm[termKey]!.subjects"
+                                            :key="subject.subject_id"
+                                            :class="['transition-colors', subject.isEnrolled ? 'hover:bg-green-50/50' : 'hover:bg-gray-50']"
+                                        >
+                                            <td class="px-5 py-3 text-center">
+                                                <span
+                                                    v-if="subject.isEnrolled"
+                                                    class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700"
+                                                    title="Confirmed enrollment record exists"
+                                                >
+                                                    ✓
+                                                </span>
+                                                <span
+                                                    v-else
+                                                    class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-400"
+                                                    title="Assessment record only — no enrollment record"
+                                                >
+                                                    ○
+                                                </span>
+                                            </td>
+                                            <td class="px-5 py-3">
+                                                <span class="rounded bg-indigo-50 px-2 py-0.5 font-mono text-xs font-semibold text-indigo-700">{{ subject.code }}</span>
+                                            </td>
+                                            <td class="px-5 py-3">
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="font-medium text-gray-900">{{ subject.name }}</span>
+                                                    <FlaskConical v-if="subject.hasLab" class="h-3.5 w-3.5 flex-shrink-0 text-purple-500" title="Has laboratory component" />
+                                                </div>
+                                            </td>
+                                            <td class="px-5 py-3 text-center">
+                                                <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                                    {{ subject.units }} unit{{ subject.units !== 1 ? 's' : '' }}
+                                                </span>
+                                            </td>
+                                            <td class="px-5 py-3 text-right">
+                                                <span class="text-xs text-gray-500">
+                                                    {{ subject.units }} × {{ formatCurrency(subject.units > 0 ? subject.tuitionAmount / subject.units : 0) }}
+                                                </span>
+                                                <p class="font-medium text-gray-900">{{ formatCurrency(subject.tuitionAmount) }}</p>
+                                            </td>
+                                            <td class="px-5 py-3 text-right">
+                                                <span v-if="subject.hasLab" class="font-medium text-purple-700">{{ formatCurrency(subject.labAmount) }}</span>
+                                                <span v-else class="text-xs text-gray-300">—</span>
+                                            </td>
+                                            <td class="px-5 py-3 text-right font-semibold text-gray-900">
+                                                {{ formatCurrency(subject.tuitionAmount + subject.labAmount) }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="border-t-2 border-gray-200 bg-gray-50 text-sm font-semibold">
+                                            <td colspan="3" class="px-5 py-3 text-gray-700">
+                                                Subtotal — {{ subjectPanelsByTerm[termKey]!.subjectCount }} subjects · {{ subjectPanelsByTerm[termKey]!.totalUnits }} total units
+                                            </td>
+                                            <td class="px-5 py-3 text-center text-gray-700">—</td>
+                                            <td class="px-5 py-3 text-right text-gray-900">{{ formatCurrency(subjectPanelsByTerm[termKey]!.totalTuition) }}</td>
+                                            <td class="px-5 py-3 text-right text-purple-700">
+                                                <span v-if="subjectPanelsByTerm[termKey]!.totalLab > 0">
+                                                    {{ formatCurrency(subjectPanelsByTerm[termKey]!.totalLab) }}
+                                                </span>
+                                                <span v-else class="text-xs font-normal text-gray-300">—</span>
+                                            </td>
+                                            <td class="px-5 py-3 text-right text-indigo-700">
+                                                {{ formatCurrency(subjectPanelsByTerm[termKey]!.totalTuition + subjectPanelsByTerm[termKey]!.totalLab) }}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <div class="border-t border-gray-100 bg-white px-5 py-2.5 text-xs text-gray-400">
+                                Miscellaneous fees (registration, library, athletics, etc.) are fixed per semester and are not listed per subject above.
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

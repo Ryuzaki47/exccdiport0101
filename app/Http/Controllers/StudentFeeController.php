@@ -203,6 +203,8 @@ class StudentFeeController extends Controller
                         'semester'    => $latest->semester,
                         'school_year' => $latest->school_year,
                     ] : null,
+                    // Check for active assessment with unpaid balance
+                    'activeAssessmentInfo' => $this->getActiveAssessmentInfo($user->id),
                 ];
             });
 
@@ -300,6 +302,26 @@ class StudentFeeController extends Controller
         ]);
 
         $isIrregular = $base['assessment_type'] === 'irregular';
+
+        // ── Single Active Assessment Guard ───────────────────────────────────
+        // Prevent duplicate active assessments: a student must not have more than
+        // one active assessment at a time. An assessment is considered "active" if:
+        //   1. status = 'active', AND
+        //   2. it has at least one payment term with outstanding balance > 0
+        //
+        // This enforces the completion requirement: a new assessment can only be
+        // created if the previous assessment is fully paid and its status is
+        // marked as completed/closed.
+        $existingActiveWithBalance = StudentAssessment::where('user_id', $base['user_id'])
+            ->where('status', 'active')
+            ->whereHas('paymentTerms', fn ($q) => $q->where('balance', '>', 0))
+            ->exists();
+
+        if ($existingActiveWithBalance) {
+            return back()->withErrors([
+                'assessment' => 'Student already has an active assessment with remaining balance. Please complete the current assessment before creating a new one.',
+            ]);
+        }
 
         DB::beginTransaction();
         try {
@@ -1408,5 +1430,40 @@ class StudentFeeController extends Controller
         } while (User::where('account_id', $accountId)->exists());
 
         return $accountId;
+    }
+
+    /**
+     * Check if a student has an active assessment with outstanding balance.
+     * Used during Create Assessment form rendering to warn staff and block submission.
+     *
+     * Returns:
+     *   null if student has no active assessments with unpaid balance
+     *   array with assessment details if one exists (to display in warning)
+     */
+    private function getActiveAssessmentInfo(int $userId): ?array
+    {
+        $assessment = StudentAssessment::where('user_id', $userId)
+            ->where('status', 'active')
+            ->whereHas('paymentTerms', fn ($q) => $q->where('balance', '>', 0))
+            ->with(['paymentTerms' => fn ($q) => $q->where('balance', '>', 0)])
+            ->latest()
+            ->first();
+
+        if (!$assessment) {
+            return null;
+        }
+
+        $totalBalance = $assessment->paymentTerms->sum('balance');
+
+        return [
+            'id'                 => $assessment->id,
+            'assessment_number'  => $assessment->assessment_number,
+            'year_level'         => $assessment->year_level,
+            'semester'           => $assessment->semester,
+            'school_year'        => $assessment->school_year,
+            'total_assessment'   => (float) $assessment->total_assessment,
+            'remaining_balance'  => round($totalBalance, 2),
+            'unpaid_term_count'  => $assessment->paymentTerms->count(),
+        ];
     }
 }

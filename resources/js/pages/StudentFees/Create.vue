@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, BookOpen, ChevronDown, ChevronRight, PenLine, Search, Trash2, User } from 'lucide-vue-next';
+import { AlertCircle, ArrowLeft, BookOpen, ChevronDown, ChevronRight, PenLine, Search, Trash2, User } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { useDataFormatting } from '@/composables/useDataFormatting';
 
@@ -23,6 +23,16 @@ interface Student {
     suggested_year_level: string | null;
     suggested_semester: string | null;
     latest_assessment: { year_level: string; semester: string; school_year: string } | null;
+    activeAssessmentInfo: {
+        id: number;
+        assessment_number: string;
+        year_level: string;
+        semester: string;
+        school_year: string;
+        total_assessment: number;
+        remaining_balance: number;
+        unpaid_term_count: number;
+    } | null;
 }
 
 interface SubjectItem {
@@ -108,6 +118,18 @@ const activeCourse = computed(() =>
 // ─── Assessment type ──────────────────────────────────────────────────────────
 
 const assessmentType = ref<'regular' | 'irregular'>('regular');
+
+// ─── Active Assessment Guard ─────────────────────────────────────────────────
+// Check if selected student has an existing active assessment with unpaid balance.
+// This prevents duplicate active assessments per the single-active-per-student rule.
+
+const hasActiveAssessmentWithBalance = computed(() => {
+    return selectedStudent.value?.activeAssessmentInfo !== null;
+});
+
+const activeAssessmentInfo = computed(() => {
+    return selectedStudent.value?.activeAssessmentInfo ?? null;
+});
 
 // ─── Already-enrolled subjects — year-scoped ──────────────────────────────────
 //
@@ -361,6 +383,12 @@ const formErrors = ref<Record<string, string>>({});
 
 function submit() {
     formErrors.value = {};
+
+    // Guard: prevent submission if student has active assessment with unpaid balance
+    if (hasActiveAssessmentWithBalance.value) {
+        formErrors.value.assessment = 'Student already has an active assessment with remaining balance. Please complete the current assessment before creating a new one.';
+        return;
+    }
 
     if (!yearLevel.value || !semester.value) {
         formErrors.value.term = 'Please select a year level and semester.';
@@ -981,6 +1009,24 @@ function statusColor(status: string) {
 
                 <p v-if="formErrors.error" class="text-sm font-medium text-red-600">{{ formErrors.error }}</p>
 
+                <!-- Active Assessment Warning -->
+                <div v-if="hasActiveAssessmentWithBalance && activeAssessmentInfo" class="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertCircle class="h-5 w-5 flex-shrink-0 text-red-600 mt-0.5" />
+                    <div class="text-sm">
+                        <p class="font-semibold text-red-900">Cannot Create New Assessment</p>
+                        <p class="mt-1 text-red-800">
+                            This student has an active assessment with an outstanding balance:
+                        </p>
+                        <div class="mt-2 rounded bg-white/50 px-3 py-2 text-xs text-red-700">
+                            <p><strong>Assessment:</strong> {{ activeAssessmentInfo.assessment_number }}</p>
+                            <p><strong>Term:</strong> {{ activeAssessmentInfo.year_level }} — {{ activeAssessmentInfo.semester }} ({{ activeAssessmentInfo.school_year }})</p>
+                            <p><strong>Outstanding Balance:</strong> ₱{{ activeAssessmentInfo.remaining_balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                            <p class="mt-1"><strong>Unpaid Terms:</strong> {{ activeAssessmentInfo.unpaid_term_count }} of 5</p>
+                        </div>
+                        <p class="mt-2 text-red-800">Please complete the current assessment before creating a new one.</p>
+                    </div>
+                </div>
+
                 <!-- Actions -->
                 <div class="flex items-center justify-between pt-2">
                     <Button type="button" variant="outline" @click="backToStudentSelection">
@@ -993,6 +1039,7 @@ function statusColor(status: string) {
                         <Button
                             type="button"
                             :disabled="form.processing
+                                || hasActiveAssessmentWithBalance
                                 || !yearLevel
                                 || !semester
                                 || !effectiveSchoolYear
