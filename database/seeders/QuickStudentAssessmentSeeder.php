@@ -136,7 +136,8 @@ class QuickStudentAssessmentSeeder extends Seeder
 
         // Create payment terms
         $baseDate = now()->startOfMonth();
-        $terms = \App\Models\StudentPaymentTerm::TERMS;
+        // CONCERN FIX #7: Use authoritative config instead of outdated model constant
+        $terms = config('fees.terms');
 
         $totalAmount = 0;
         $totalTerms = count($terms);

@@ -40,8 +40,17 @@ class StudentPaymentTerm extends Model
     const STATUS_PAID    = PaymentStatus::PAID->value;      // 'paid'
     const STATUS_OVERDUE = 'overdue';                       // not in PaymentStatus (display-only flag)
 
-    // Term definitions — duplicated from config/fees.php for in-model convenience.
-    // config('fees.terms') is the authoritative source; this stays in sync manually.
+    /**
+     * ⚠️ DEPRECATED: StudentPaymentTerm::TERMS is OUT OF SYNC with config/fees.php
+     *
+     * The percentages below are stale and are NOT used by the application.
+     * Use config('fees.terms') instead, which is the authoritative source.
+     *
+     * This constant exists only for backward compatibility and should not
+     * be referenced in new code. It will be removed in a future migration.
+     *
+     * @deprecated Use config('fees.terms') instead
+     */
     const TERMS = [
         1 => ['name' => 'Upon Registration', 'percentage' => 42.15],
         2 => ['name' => 'Prelim',            'percentage' => 17.86],

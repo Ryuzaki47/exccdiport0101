@@ -202,7 +202,8 @@ class StudentPaymentService
                 $term = StudentPaymentTerm::find($termId);
             }
 
-            // ── Fallback: match by term name scoped to user (last resort) ──
+            // ── BUG FIX #4: User doesn't have assessments() relationship ──
+            // Fallback: match by term name scoped to user. Query StudentAssessment directly
             if (! $term) {
                 $termName = $transaction->meta['term_name'] ?? $transaction->type;
 
@@ -212,10 +213,10 @@ class StudentPaymentService
                     'user_id'        => $user->id,
                 ]);
 
-                // Query through StudentAssessment instead of direct user_id lookup
-                $term = $user->assessments()
-                    ->first()
-                    ?->paymentTerms()
+                // Query through StudentAssessment directly instead of non-existent User::assessments()
+                $term = StudentPaymentTerm::whereHas('assessment', function ($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                })
                     ->where('term_name', $termName)
                     ->whereIn('status', PaymentStatus::unpaidValues())
                     ->orderBy('due_date', 'desc')
@@ -474,6 +475,11 @@ class StudentPaymentService
             $nextLabel   = $this->resolveNextSemesterLabel($yearLevel, $semester);
 
             // ── 1. Admin notification ─────────────────────────────────────────
+            // NOTIFICATION: CUSTOM ADMIN_NOTIFICATIONS
+            // Progression ready is a system broadcast; admins need time to process.
+            // Uses: Notification::create() → writes to `admin_notifications` table
+            // Why: Role targeting (admin), time window (30 days), not user-specific
+            // See: docs/NOTIFICATION_ARCHITECTURE.md for system overview
             Notification::create([
                 'title'       => "📋 Assessment Required: {$studentName}",
                 'message'     => "{$studentName} (ID: {$user->account_id}) has fully paid their "
@@ -490,6 +496,12 @@ class StudentPaymentService
             ]);
 
             // ── 2. Student notification ───────────────────────────────────────
+            // NOTIFICATION: CUSTOM ADMIN_NOTIFICATIONS
+            // Progression confirmation is user-specific but system-generated.
+            // Uses: Notification::create() → writes to `admin_notifications` table
+            // Why: Could send via $user->notify() in future, but using admin_notifications
+            //      for consistency with matching admin notification and audit trail
+            // See: docs/NOTIFICATION_ARCHITECTURE.md for system overview
             Notification::create([
                 'title'       => "✅ {$yearLevel} {$semester} Fully Paid!",
                 'message'     => "Congratulations! You have fully settled all payment terms for "

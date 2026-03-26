@@ -78,8 +78,10 @@ class WorkflowApprovalController extends Controller
                 ->get();
         }
 
+        // BUG FIX #3: Pass $student to view so Approvals/Show.vue can display student details
         return Inertia::render('Approvals/Show', [
             'approval'    => $approval,
+            'student'     => $student,
             'unpaidTerms' => $unpaidTerms,
         ]);
     }

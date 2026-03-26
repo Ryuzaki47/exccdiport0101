@@ -271,6 +271,10 @@ class WorkflowService
             $approver = User::find($approval->approver_id);
             if ($approver && ! app()->environment('testing')) {
                 try {
+                    // NOTIFICATION: LARAVEL DATABASE CHANNEL
+                    // ApprovalRequired is a transactional notification tied to a specific user.
+                    // Uses: $user->notify() → writes to `notifications` table via database channel
+                    // See: docs/NOTIFICATION_ARCHITECTURE.md for system overview
                     $approver->notify(new \App\Notifications\ApprovalRequired($approval));
                 } catch (\Exception $e) {
                     Log::warning('Failed to send approval notification', [
@@ -333,7 +337,11 @@ class WorkflowService
                     'new_status'     => $transaction->status,
                 ]);
 
-                // Notify the student that payment was approved
+                // NOTIFICATION: CUSTOM ADMIN_NOTIFICATIONS
+                // Payment approval is a system event that needs role-based targeting.
+                // Uses: Notification::create() → writes to `admin_notifications` table
+                // Why: Support user_id + target_role combo; provides audit trail
+                // See: docs/NOTIFICATION_ARCHITECTURE.md for system overview
                 $student = $transaction->user;
                 \App\Models\Notification::create([
                     'title'       => 'Payment Approved',
@@ -408,7 +416,11 @@ class WorkflowService
                     'new_status'     => $transaction->status,
                 ]);
 
-                // Notify the student that payment was rejected
+                // NOTIFICATION: CUSTOM ADMIN_NOTIFICATIONS
+                // Payment rejection is a system event that needs role-based targeting.
+                // Uses: Notification::create() → writes to `admin_notifications` table
+                // Why: Support user_id + target_role combo + reason context
+                // See: docs/NOTIFICATION_ARCHITECTURE.md for system overview
                 $student = $transaction->user;
                 \App\Models\Notification::create([
                     'title'       => 'Payment Rejected',

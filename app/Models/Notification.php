@@ -6,12 +6,41 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Custom Admin Notification Model
+ * 
+ * CONCERN #3 FIX: Dual Notification System Clarification
+ * 
+ * This model represents CUSTOM BROADCAST NOTIFICATIONS for CCDI, stored in the
+ * `admin_notifications` table. This is SEPARATE from Laravel's built-in database
+ * notification channel (which uses the `notifications` table).
+ * 
+ * Two Notification Systems in CCDI Account Portal:
+ * 
+ * 1. LARAVEL DATABASE NOTIFICATIONS (notifications table)
+ *    - For: Transactional, user-specific events
+ *    - Created via: $user->notify(new SomeNotification(...))
+ *    - Examples: ApprovalRequired, PaymentDueNotification, PaymentConfirmed
+ *    - Features: Multi-channel (mail, database, SMS)
+ * 
+ * 2. CUSTOM ADMIN NOTIFICATIONS (admin_notifications table) — THIS CLASS
+ *    - For: System announcements, role-based broadcasts, admin-actionable events
+ *    - Created via: Notification::create([...])
+ *    - Examples: "Assessment Required", "Progression Ready", "Payment Approved"
+ *    - Features: Role targeting, time windows, CCDI-specific context
+ * 
+ * ⚠️ IMPORTANT: Do NOT store Laravel notifications in this model. Use the
+ * Laravel Notification facade and $user->notify() for transactional events.
+ * 
+ * See: docs/NOTIFICATION_ARCHITECTURE.md for complete guidance
+ */
 class Notification extends Model
 {
     use HasFactory;
 
     /**
      * Points to `admin_notifications` — the custom admin announcements table.
+     * Kept separate from Laravel's built-in `notifications` table.
      */
     protected $table = 'admin_notifications';
 

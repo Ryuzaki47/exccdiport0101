@@ -168,45 +168,78 @@ class StudentFeeController extends Controller
             ->with(['latestAssessment'])
             ->orderBy('last_name')
             ->orderBy('first_name')
+            ->get();
+
+        // CONCERN FIX #4: Bulk-load active assessments to prevent N+1 query
+        // Get all active assessments with unpaid balances for all students at once
+        $userIds = $students->pluck('id')->toArray();
+        $activeAssessments = StudentAssessment::where('status', 'active')
+            ->whereIn('user_id', $userIds)
+            ->whereHas('paymentTerms', fn ($q) => $q->where('balance', '>', 0))
+            ->with(['paymentTerms' => fn ($q) => $q->where('balance', '>', 0)])
             ->get()
-            ->map(function ($user) use ($semesterProgression) {
-                $latest = $user->latestAssessment;
-
-                $suggestedYearLevel = $user->year_level;
-                $suggestedSemester  = null;
-
-                if ($latest) {
-                    $completedKey = "{$latest->year_level}|{$latest->semester}";
-                    if (isset($semesterProgression[$completedKey])) {
-                        $next               = $semesterProgression[$completedKey];
-                        $suggestedYearLevel = $next['year_level'];
-                        $suggestedSemester  = $next['semester'];
-                    } else {
-                        $suggestedYearLevel = $latest->year_level;
-                        $suggestedSemester  = null;
-                    }
-                }
-
-                return [
-                    'id'                   => $user->id,
-                    'account_id'           => $user->account_id,
-                    'name'                 => $user->name,
-                    'email'                => $user->email,
-                    'course'               => $user->course,
-                    'year_level'           => $user->year_level,
-                    'status'               => $user->status,
-                    'is_irregular'         => (bool) $user->is_irregular,
-                    'suggested_year_level' => $suggestedYearLevel,
-                    'suggested_semester'   => $suggestedSemester,
-                    'latest_assessment'    => $latest ? [
-                        'year_level'  => $latest->year_level,
-                        'semester'    => $latest->semester,
-                        'school_year' => $latest->school_year,
-                    ] : null,
-                    // Check for active assessment with unpaid balance
-                    'activeAssessmentInfo' => $this->getActiveAssessmentInfo($user->id),
-                ];
+            ->groupBy('user_id')
+            ->map(function ($assessments) {
+                // Get the latest active assessment for this user
+                return $assessments->sortByDesc('created_at')->first();
             });
+
+        // Map student data with pre-loaded assessment info
+        $students = $students->map(function ($user) use ($semesterProgression, $activeAssessments) {
+            $latest = $user->latestAssessment;
+
+            $suggestedYearLevel = $user->year_level;
+            $suggestedSemester  = null;
+
+            if ($latest) {
+                $completedKey = "{$latest->year_level}|{$latest->semester}";
+                if (isset($semesterProgression[$completedKey])) {
+                    $next               = $semesterProgression[$completedKey];
+                    $suggestedYearLevel = $next['year_level'];
+                    $suggestedSemester  = $next['semester'];
+                } else {
+                    $suggestedYearLevel = $latest->year_level;
+                    $suggestedSemester  = null;
+                }
+            }
+
+            // Use pre-loaded active assessment instead of querying per student
+            $activeAssessment = $activeAssessments[$user->id] ?? null;
+            $activeAssessmentInfo = null;
+            if ($activeAssessment) {
+                $totalBalance = $activeAssessment->paymentTerms->sum('balance');
+                $activeAssessmentInfo = [
+                    'id'                 => $activeAssessment->id,
+                    'assessment_number'  => $activeAssessment->assessment_number,
+                    'year_level'         => $activeAssessment->year_level,
+                    'semester'           => $activeAssessment->semester,
+                    'school_year'        => $activeAssessment->school_year,
+                    'assessment_total'   => (float) $activeAssessment->total_assessment,
+                    'paid_amount'        => round((float) $activeAssessment->total_assessment - $totalBalance, 2),
+                    'balance'            => round($totalBalance, 2),
+                    'unpaidTerms'        => $activeAssessment->paymentTerms->count(),
+                ];
+            }
+
+            return [
+                'id'                   => $user->id,
+                'account_id'           => $user->account_id,
+                'name'                 => $user->name,
+                'email'                => $user->email,
+                'course'               => $user->course,
+                'year_level'           => $user->year_level,
+                'status'               => $user->status,
+                'is_irregular'         => (bool) $user->is_irregular,
+                'suggested_year_level' => $suggestedYearLevel,
+                'suggested_semester'   => $suggestedSemester,
+                'latest_assessment'    => $latest ? [
+                    'year_level'  => $latest->year_level,
+                    'semester'    => $latest->semester,
+                    'school_year' => $latest->school_year,
+                ] : null,
+                'activeAssessmentInfo' => $activeAssessmentInfo,
+            ];
+        });
 
         // Build miscellaneous fee lines for display
         $miscItems = config('fees.miscellaneous', []);
@@ -1130,17 +1163,16 @@ class StudentFeeController extends Controller
                 }
             }
 
+            // BUG FIX #6: Fail hard if assessment_id is missing instead of guessing by timestamp
+            // Previous: two-minute time window + amount matching could silently update wrong transaction
+            // if two assessments created within 120 seconds with similar totals.
             $chargeTransaction = Transaction::where('user_id', $userId)
                 ->where('kind', 'charge')
-                ->orderByDesc('created_at')
+                ->with([])
                 ->get()
-                ->first(function ($t) use ($assessment, $oldTotal) {
+                ->first(function ($t) use ($assessment) {
                     $meta = $t->meta ?? [];
-                    if (isset($meta['assessment_id']) && (int) $meta['assessment_id'] === (int) $assessment->id) {
-                        return true;
-                    }
-                    $createdDiff = abs($t->created_at->diffInSeconds($assessment->created_at));
-                    return $createdDiff < 120 && abs((float) $t->amount - $oldTotal) < 0.01;
+                    return isset($meta['assessment_id']) && (int) $meta['assessment_id'] === (int) $assessment->id;
                 });
 
             if ($chargeTransaction) {
@@ -1157,6 +1189,15 @@ class StudentFeeController extends Controller
                     'old_amount'     => $oldTotal,
                     'new_amount'     => $grandTotal,
                     'transaction_id' => $chargeTransaction->id,
+                ]);
+            } elseif ($oldTotal > 0) {
+                // BUG FIX #6 continued: if no matching transaction was found after removing the fallback,
+                // this is an anomaly worth logging. In normal operation, store() always creates the charge
+                // transaction before update() is called, so this branch should rarely be reached.
+                Log::warning('No charge transaction found for assessment update', [
+                    'user_id'        => $userId,
+                    'assessment_id'  => $assessment->id,
+                    'old_total'      => $oldTotal,
                 ]);
             } else {
                 Log::warning('Could not find charge transaction to update', [
@@ -1366,6 +1407,15 @@ class StudentFeeController extends Controller
                 'user_id'           => $user->id,
                 'student_id'        => $studentId,
                 'enrollment_status' => 'pending',
+            ]);
+
+            // ── BUG FIX #1: Create Account record immediately ──
+            // Previously, Account was only created defensively by AccountService::recalculate()
+            // on first assessment. Now create it here so student has account_number immediately.
+            Account::create([
+                'user_id'        => $user->id,
+                'account_number' => Account::generateAccountNumber(),
+                'balance'        => 0,
             ]);
 
             DB::commit();

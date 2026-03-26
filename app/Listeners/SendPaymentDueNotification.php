@@ -49,6 +49,11 @@ class SendPaymentDueNotification implements ShouldQueue
             return;
         }
 
+        // NOTIFICATION: LARAVEL DATABASE CHANNEL
+        // Payment due is a transactional reminder tied to specific user.
+        // Uses: $user->notify() → sends mail + writes to `notifications` table
+        // Why: Event-driven, immediate delivery, user-specific
+        // See: docs/NOTIFICATION_ARCHITECTURE.md for system overview
         $event->user->notify(new PaymentDueNotification(
             $term->term_name,
             (float) $term->balance,

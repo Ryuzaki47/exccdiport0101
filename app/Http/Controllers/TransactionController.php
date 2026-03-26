@@ -33,7 +33,8 @@ class TransactionController extends Controller
     {
         $user = $request->user();
 
-        if (in_array($user->role->value, ['super_admin', 'admin', 'accounting'])) {
+        // BUG FIX #2: Remove non-existent 'super_admin' role
+        if (in_array($user->role->value, ['admin', 'accounting'])) {
             $transactions = Transaction::with('user')
                 ->orderByDesc('year')
                 ->orderByDesc('semester')
@@ -107,7 +108,7 @@ class TransactionController extends Controller
         }
 
         return Inertia::render('Transactions/Index', [
-            'auth'               => ['user' => $user],
+            // BUG FIX #7: Remove redundant 'auth' prop — already in shared data via HandleInertiaRequests
             'transactionsByTerm' => $transactions,
             'account'            => $user->account,
             'currentTerm'        => $currentTerm,
@@ -129,7 +130,8 @@ class TransactionController extends Controller
 
     public function store(Request $request)
     {
-        if (!in_array($request->user()->role->value, ['super_admin', 'admin', 'accounting'])) {
+        // BUG FIX #2: Remove non-existent 'super_admin' role
+        if (!in_array($request->user()->role->value, ['admin', 'accounting'])) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -178,7 +180,8 @@ class TransactionController extends Controller
     public function receipt(Request $request, Transaction $transaction)
     {
         $authUser = $request->user();
-        $isStaff  = in_array($authUser->role->value, ['super_admin', 'admin', 'accounting']);
+        // BUG FIX #2: Remove non-existent 'super_admin' role
+        $isStaff  = in_array($authUser->role->value, ['admin', 'accounting']);
 
         if (!$isStaff && $transaction->user_id !== $authUser->id) {
             abort(403, 'You do not have permission to view this receipt.');
@@ -227,7 +230,8 @@ class TransactionController extends Controller
     public function download(Request $request)
     {
         $authUser = $request->user();
-        $isStaff  = in_array($authUser->role->value, ['super_admin', 'admin', 'accounting']);
+        // BUG FIX #2: Remove non-existent 'super_admin' role
+        $isStaff  = in_array($authUser->role->value, ['admin', 'accounting']);
 
         if ($isStaff && $request->filled('user_id')) {
             $targetUser = User::with('account', 'student')->findOrFail((int) $request->user_id);
