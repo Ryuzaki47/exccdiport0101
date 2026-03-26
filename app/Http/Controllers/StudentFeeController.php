@@ -215,10 +215,9 @@ class StudentFeeController extends Controller
                     'year_level'         => $activeAssessment->year_level,
                     'semester'           => $activeAssessment->semester,
                     'school_year'        => $activeAssessment->school_year,
-                    'assessment_total'   => (float) $activeAssessment->total_assessment,
-                    'paid_amount'        => round((float) $activeAssessment->total_assessment - $totalBalance, 2),
-                    'balance'            => round($totalBalance, 2),
-                    'unpaidTerms'        => $activeAssessment->paymentTerms->count(),
+                    'total_assessment'   => (float) $activeAssessment->total_assessment,
+                    'remaining_balance'  => round($totalBalance, 2),
+                    'unpaid_term_count'  => $activeAssessment->paymentTerms->where('status', '!=', 'paid')->count(),
                 ];
             }
 
