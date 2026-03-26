@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
         DB::table('transactions')->delete();
         DB::table('student_payment_terms')->delete();
         DB::table('student_assessments')->delete();
+        DB::table('student_enrollments')->delete();
         DB::table('students')->delete();
         DB::table('accounts')->delete();
         DB::table('fees')->delete();
@@ -52,19 +53,23 @@ class DatabaseSeeder extends Seeder
         $this->call(ComprehensiveAssessmentSeeder::class);
         $this->command->newLine();
 
-        $this->command->info('🔔 Step 4: Seeding Notifications...');
+        $this->command->info('�‍🎓 Step 4: Seeding Realistic Student Data (Enrollments & Payments)...');
+        $this->call(RealisticStudentDataSeeder::class);
+        $this->command->newLine();
+
+        $this->command->info('🔔 Step 5: Seeding Notifications...');
         $this->call(NotificationSeeder::class);
         $this->command->newLine();
 
-        $this->command->info('🔄 Step 5: Creating Sample Workflow Instances...');
+        $this->command->info('🔄 Step 6: Creating Sample Workflow Instances...');
         $this->call(WorkflowInstanceSeeder::class);
         $this->command->newLine();
 
-        $this->command->info('💳 Step 6: Creating First Payment (Test Scenario)...');
+        $this->command->info('💳 Step 7: Creating First Payment (Test Scenario)...');
         $this->call(StudentFirstPaymentSeeder::class);
         $this->command->newLine();
 
-        $this->command->info('👥 Step 7: Creating Additional Test Students...');
+        $this->command->info('👥 Step 8: Creating Additional Test Students...');
         $this->call(AdditionalStudentSeeder::class);
         $this->command->newLine();
 
