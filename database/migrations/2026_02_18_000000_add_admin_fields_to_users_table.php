@@ -25,13 +25,11 @@ return new class extends Migration
             if (!Schema::hasColumn('users', 'department')) {
                 $table->string('department')->nullable()->after('permissions');
             }
-            if (!Schema::hasColumn('users', 'admin_type')) {
-                $table->enum('admin_type', ['super', 'manager', 'operator'])->nullable()->after('department');
-            }
+            // admin_type is deprecated and will be dropped in a later migration
 
             // Audit fields
             if (!Schema::hasColumn('users', 'created_by')) {
-                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete()->after('admin_type');
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete()->after('department');
             }
             if (!Schema::hasColumn('users', 'updated_by')) {
                 $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete()->after('created_by');
@@ -60,9 +58,6 @@ return new class extends Migration
             }
             if (Schema::hasColumn('users', 'department')) {
                 $table->dropColumn('department');
-            }
-            if (Schema::hasColumn('users', 'admin_type')) {
-                $table->dropColumn('admin_type');
             }
             if (Schema::hasColumn('users', 'created_by')) {
                 $table->dropForeign(['created_by']);

@@ -179,7 +179,6 @@ const profileInitial = computed(() => {
 
             <SettingsLayout>
                 <div class="flex flex-col space-y-6">
-
                     <!-- PROFILE PICTURE SECTION -->
                     <div class="mb-8 flex flex-col space-y-6">
                         <HeadingSmall title="Profile Picture" description="Update your profile picture" />
@@ -191,10 +190,7 @@ const profileInitial = computed(() => {
                                     class="h-20 w-20 rounded-full border object-cover"
                                     alt="Profile preview"
                                 />
-                                <div
-                                    v-else
-                                    class="flex h-20 w-20 items-center justify-center rounded-full border bg-muted"
-                                >
+                                <div v-else class="flex h-20 w-20 items-center justify-center rounded-full border bg-muted">
                                     <span class="text-lg font-medium text-muted-foreground">
                                         {{ profileInitial }}
                                     </span>
@@ -210,12 +206,7 @@ const profileInitial = computed(() => {
                                     @change="updateProfilePicturePreview"
                                     autocomplete="off"
                                 />
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    @click="selectProfilePicture"
-                                    :disabled="profilePictureForm.processing"
-                                >
+                                <Button type="button" variant="outline" @click="selectProfilePicture" :disabled="profilePictureForm.processing">
                                     <span v-if="profilePictureForm.processing">Uploading...</span>
                                     <span v-else>Select New Photo</span>
                                 </Button>
@@ -256,13 +247,7 @@ const profileInitial = computed(() => {
 
                         <div class="grid gap-2">
                             <Label for="middle_initial">Middle Initial</Label>
-                            <Input
-                                id="middle_initial"
-                                v-model="form.middle_initial"
-                                autocomplete="additional-name"
-                                placeholder="P"
-                                maxlength="1"
-                            />
+                            <Input id="middle_initial" v-model="form.middle_initial" autocomplete="additional-name" placeholder="P" maxlength="1" />
                             <InputError class="mt-2" :message="form.errors.middle_initial" />
                         </div>
 
@@ -276,14 +261,7 @@ const profileInitial = computed(() => {
 
                         <div class="grid gap-2">
                             <Label for="email">Email address <span class="text-red-500">*</span></Label>
-                            <Input
-                                id="email"
-                                v-model="form.email"
-                                type="email"
-                                autocomplete="email"
-                                required
-                                placeholder="student@ccdi.edu.ph"
-                            />
+                            <Input id="email" v-model="form.email" type="email" autocomplete="email" required placeholder="student@ccdi.edu.ph" />
                             <InputError class="mt-2" :message="form.errors.email" />
                         </div>
 
@@ -314,12 +292,7 @@ const profileInitial = computed(() => {
                         <!-- Faculty (Accounting/Admin Only) -->
                         <div v-if="isAccountingOrAdmin" class="grid gap-2">
                             <Label for="faculty">Faculty/Department</Label>
-                            <Input
-                                id="faculty"
-                                v-model="form.faculty"
-                                autocomplete="organization"
-                                placeholder="e.g., Accounting Department"
-                            />
+                            <Input id="faculty" v-model="form.faculty" autocomplete="organization" placeholder="e.g., Accounting Department" />
                             <InputError class="mt-2" :message="form.errors.faculty" />
                         </div>
 
@@ -355,8 +328,13 @@ const profileInitial = computed(() => {
                             </select>
                             <div v-else class="w-full rounded border bg-gray-50 px-3 py-2 text-gray-700 capitalize">
                                 {{ form.status }} -
-                                <span :class="['rounded-full px-3 py-1 text-xs font-semibold',
-                                             user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span>
+                                <span
+                                    :class="[
+                                        'rounded-full px-3 py-1 text-xs font-semibold',
+                                        user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700',
+                                    ]"
+                                    >{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span
+                                >
                             </div>
                             <InputError class="mt-2" :message="form.errors.status" />
                         </div>
@@ -364,8 +342,13 @@ const profileInitial = computed(() => {
                         <!-- Student Classification Badge (Admin-only duplicate — kept for admin context) -->
                         <div v-if="isStudent && isAdmin" class="text-sm text-gray-600">
                             <span class="capitalize">Status - {{ user.status || 'active' }} - </span>
-                            <span :class="['rounded-full px-3 py-1 text-xs font-semibold',
-                                         user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span>
+                            <span
+                                :class="[
+                                    'rounded-full px-3 py-1 text-xs font-semibold',
+                                    user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700',
+                                ]"
+                                >{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span
+                            >
                         </div>
 
                         <!-- Email verification notice -->

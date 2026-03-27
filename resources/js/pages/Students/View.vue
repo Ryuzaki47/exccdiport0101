@@ -16,11 +16,7 @@ const remainingBalance = computed<number>(() => {
     return Number(student.user?.account?.balance ?? student.account?.balance ?? 0);
 });
 
-const breadcrumbs = [
-    { title: 'Dashboard', href: route('dashboard') },
-    { title: 'Students', href: route('students.index') },
-    { title: student.name },
-];
+const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 'Students', href: route('students.index') }, { title: student.name }];
 </script>
 
 <template>
@@ -51,9 +47,7 @@ const breadcrumbs = [
                 <div class="mt-6 border-t pt-4">
                     <p class="text-lg font-semibold">
                         Outstanding Balance:
-                        <span :class="remainingBalance > 0 ? 'text-red-600' : 'text-green-600'">
-                            ₱{{ Math.abs(remainingBalance).toFixed(2) }}
-                        </span>
+                        <span :class="remainingBalance > 0 ? 'text-red-600' : 'text-green-600'"> ₱{{ Math.abs(remainingBalance).toFixed(2) }} </span>
                     </p>
                 </div>
             </div>

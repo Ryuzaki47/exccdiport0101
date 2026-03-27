@@ -103,10 +103,10 @@
 
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 interface Workflow {
@@ -136,8 +136,6 @@ const breadcrumbs = [
     { title: 'Workflows', href: route('accounting-workflows.index') },
     { title: 'Details' },
 ];
-
-
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {

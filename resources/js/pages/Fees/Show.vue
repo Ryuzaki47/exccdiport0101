@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 type Fee = {
@@ -29,8 +29,6 @@ const breadcrumbs = [
     { title: 'Fee Management', href: route('fees.index') },
     { title: props.fee.name },
 ];
-
-
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {

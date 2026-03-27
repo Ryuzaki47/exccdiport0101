@@ -480,32 +480,11 @@ class StudentFeeController extends Controller
                 'status'            => 'active',
             ]);
 
-            Transaction::create([
-                'user_id'   => $base['user_id'],
-                'reference' => 'ASMT-' . Str::upper(Str::random(8)),
-                'kind'      => 'charge',
-                'type'      => 'Tuition',
-                'year'      => $yearNum,
-                'semester'  => $base['semester'],
-                'amount'    => $grandTotal,
-                'status'    => PaymentStatus::PENDING->value,
-                'meta'      => [
-                    'assessment_id'   => $assessment->id,
-                    'assessment_type' => $base['assessment_type'],
-                    'course'          => $base['course'],
-                    'subjects_count'  => $subjects->count(),
-                    'total_units'     => $subjects->sum('units'),
-                    'lab_subjects'    => $subjects->filter(fn ($s) => $s->has_lab)->count(),
-                    'tuition_total'   => $tuitionTotal,
-                    'lab_total'       => $labTotal,
-                    'misc_total'      => $miscTotal,
-                    'description'     => $isIrregular
-                        ? "Irregular — {$subjects->count()} subjects, {$subjects->sum('units')} units"
-                        : "{$base['year_level']} {$base['semester']} — {$subjects->count()} subjects",
-                    'items'           => $feeBreakdown,
-                ],
-            ]);
-
+            // NOTE: No charge Transaction is created here.
+            // The assessment's financial data lives in StudentAssessment.total_assessment
+            // and StudentPaymentTerm records. Creating a kind='charge' Transaction row
+            // was redundant and caused it to bleed into student-facing transaction views.
+            // AccountService::recalculate() now derives balance from StudentPaymentTerm sums.
             $this->createPaymentTerms($assessment, $grandTotal);
 
             // ── Write enrollment records ─────────────────────────────────────
@@ -647,7 +626,14 @@ class StudentFeeController extends Controller
             );
         }
 
+        // IMPORTANT: Only pass payment transactions to the Vue page.
+        // Transactions with kind='charge' (reference prefix ASMT-) are assessment
+        // debit entries created automatically when an assessment is saved. They are
+        // NOT cashier payments and must never appear in the Payment History table.
+        // They are visible in Students/WorkflowHistory.vue (Assessment History section).
+        // Filter at the query level — not in Vue — so this rule is self-enforcing.
         $transactions = Transaction::where('user_id', $userId)
+            ->where('kind', 'payment')
             ->with('fee')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -701,7 +687,11 @@ class StudentFeeController extends Controller
                 ]);
             }
         } else {
-            $feeBreakdown = $transactions->where('kind', 'charge')
+            // $transactions is payment-only — fetch charge rows separately for the
+            // fee breakdown summary card (this is NOT shown in Payment History).
+            $feeBreakdown = Transaction::where('user_id', $userId)
+                ->where('kind', 'charge')
+                ->get()
                 ->groupBy('type')
                 ->map(fn ($group) => [
                     'category' => $group->first()->type,
@@ -1163,48 +1153,9 @@ class StudentFeeController extends Controller
                 }
             }
 
-            // BUG FIX #6: Fail hard if assessment_id is missing instead of guessing by timestamp
-            // Previous: two-minute time window + amount matching could silently update wrong transaction
-            // if two assessments created within 120 seconds with similar totals.
-            $chargeTransaction = Transaction::where('user_id', $userId)
-                ->where('kind', 'charge')
-                ->with([])
-                ->get()
-                ->first(function ($t) use ($assessment) {
-                    $meta = $t->meta ?? [];
-                    return isset($meta['assessment_id']) && (int) $meta['assessment_id'] === (int) $assessment->id;
-                });
-
-            if ($chargeTransaction) {
-                $meta                  = $chargeTransaction->meta ?? [];
-                $meta['course']        = $validated['course'];
-                $meta['assessment_id'] = $assessment->id;
-                $chargeTransaction->update([
-                    'amount' => $grandTotal,
-                    'meta'   => $meta,
-                ]);
-                Log::info('Updated charge transaction for assessment update', [
-                    'user_id'        => $userId,
-                    'assessment_id'  => $assessment->id,
-                    'old_amount'     => $oldTotal,
-                    'new_amount'     => $grandTotal,
-                    'transaction_id' => $chargeTransaction->id,
-                ]);
-            } elseif ($oldTotal > 0) {
-                // BUG FIX #6 continued: if no matching transaction was found after removing the fallback,
-                // this is an anomaly worth logging. In normal operation, store() always creates the charge
-                // transaction before update() is called, so this branch should rarely be reached.
-                Log::warning('No charge transaction found for assessment update', [
-                    'user_id'        => $userId,
-                    'assessment_id'  => $assessment->id,
-                    'old_total'      => $oldTotal,
-                ]);
-            } else {
-                Log::warning('Could not find charge transaction to update', [
-                    'user_id'       => $userId,
-                    'assessment_id' => $assessment->id,
-                ]);
-            }
+            // NOTE: No charge Transaction is updated here.
+            // Charge transactions are no longer created on assessment store/update.
+            // Balance is derived from StudentPaymentTerm sums via AccountService.
 
             StudentAssessment::where('user_id', $userId)
                 ->where('status', 'active')

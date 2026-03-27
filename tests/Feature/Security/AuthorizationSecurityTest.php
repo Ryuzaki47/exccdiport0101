@@ -157,7 +157,7 @@ class AuthorizationSecurityTest extends TestCase
 
         $response = $this->actingAs($this->manager)
             ->put(route('users.update', $targetAdmin->id), [
-                'role' => UserRoleEnum::STUDENT,
+                'role' => UserRoleEnum::STUDENT->value,
             ]);
 
         $response->assertStatus(403);

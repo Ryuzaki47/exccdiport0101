@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 const props = defineProps<{
@@ -29,8 +29,6 @@ const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 
 const formatDate = (date: string | null) => {
     return date ? new Date(date).toLocaleDateString() : '-';
 };
-
-
 </script>
 
 <template>
@@ -95,7 +93,9 @@ const formatDate = (date: string | null) => {
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(student.enrollment_date) }}</td>
-                            <td class="px-6 py-4 text-right text-sm text-gray-900">{{ formatCurrency(Math.abs(student.user?.account?.balance ?? 0)) }}</td>
+                            <td class="px-6 py-4 text-right text-sm text-gray-900">
+                                {{ formatCurrency(Math.abs(student.user?.account?.balance ?? 0)) }}
+                            </td>
                             <td class="flex gap-3 px-6 py-4 text-sm">
                                 <!-- View -->
                                 <Link :href="`/students/${student.id}`" class="text-blue-600 hover:text-blue-800"> View </Link>

@@ -66,7 +66,8 @@ const breadcrumbs = [
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <span class="font-medium">Full Name:</span>
-                        {{ student.user?.last_name }}, {{ student.user?.first_name }}{{ student.user?.middle_initial ? ' ' + student.user.middle_initial + '.' : '' }}
+                        {{ student.user?.last_name }}, {{ student.user?.first_name
+                        }}{{ student.user?.middle_initial ? ' ' + student.user.middle_initial + '.' : '' }}
                     </div>
                     <div><span class="font-medium">Account ID:</span> {{ student.student_id }}</div>
                     <div><span class="font-medium">Email:</span> {{ student.user?.email }}</div>
@@ -90,9 +91,7 @@ const breadcrumbs = [
                             ₱{{ Math.abs(Number(remainingBalance)).toFixed(2) }}
                         </span>
                     </p>
-                    <p v-if="remainingBalance <= 0" class="mt-1 text-sm text-green-600">
-                        Your account is fully settled.
-                    </p>
+                    <p v-if="remainingBalance <= 0" class="mt-1 text-sm text-green-600">Your account is fully settled.</p>
                 </div>
             </div>
 
@@ -123,14 +122,23 @@ const breadcrumbs = [
 
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">Amount</label>
-                        <input v-model="payment.amount" type="number" step="0.01" min="0" placeholder="0.00" required
-                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                        <input
+                            v-model="payment.amount"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            required
+                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
                     </div>
 
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">Payment Method</label>
-                        <select v-model="payment.payment_method"
-                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <select
+                            v-model="payment.payment_method"
+                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        >
                             <option value="cash">Cash</option>
                             <option value="gcash">GCash</option>
                             <option value="bank_transfer">Bank Transfer</option>
@@ -141,25 +149,39 @@ const breadcrumbs = [
 
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">Reference Number</label>
-                        <input v-model="payment.reference_number" placeholder="Optional reference number"
-                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                        <input
+                            v-model="payment.reference_number"
+                            placeholder="Optional reference number"
+                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
                     </div>
 
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">Payment Date</label>
-                        <input v-model="payment.paid_at" type="date" required
-                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                        <input
+                            v-model="payment.paid_at"
+                            type="date"
+                            required
+                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
                     </div>
 
                     <div class="md:col-span-2">
                         <label class="mb-1 block text-sm font-medium text-gray-700">Description</label>
-                        <input v-model="payment.description" placeholder="Payment description" required
-                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                        <input
+                            v-model="payment.description"
+                            placeholder="Payment description"
+                            required
+                            class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
                     </div>
 
                     <div class="md:col-span-2">
-                        <button type="submit" :disabled="payment.processing"
-                            class="w-full rounded-lg bg-indigo-600 px-5 py-2 text-white shadow transition-colors hover:bg-indigo-700 disabled:opacity-50">
+                        <button
+                            type="submit"
+                            :disabled="payment.processing"
+                            class="w-full rounded-lg bg-indigo-600 px-5 py-2 text-white shadow transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                        >
                             Record Payment
                         </button>
                     </div>

@@ -19,8 +19,7 @@ const breadcrumbs = [
     { title: `${props.admin.last_name}, ${props.admin.first_name}`, href: route('users.show', props.admin.id) },
 ];
 
-const formatDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
 
 const confirmDeactivate = () => {
     showDeactivateWarning.value = false;
@@ -42,19 +41,18 @@ const reactivate = () => {
                     <Link :href="route('users.edit', admin.id)">
                         <Button>Edit</Button>
                     </Link>
-                    <Button v-if="admin.is_active" variant="destructive" @click="showDeactivateWarning = true">
-                        Deactivate
-                    </Button>
+                    <Button v-if="admin.is_active" variant="destructive" @click="showDeactivateWarning = true"> Deactivate </Button>
                     <Button v-else variant="outline" @click="reactivate">Reactivate</Button>
                 </div>
             </div>
 
             <!-- Deactivate Warning Modal -->
-            <div v-if="showDeactivateWarning" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                <div class="rounded-lg bg-white p-6 shadow-lg max-w-md">
+            <div v-if="showDeactivateWarning" class="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
+                <div class="max-w-md rounded-lg bg-white p-6 shadow-lg">
                     <h2 class="text-lg font-bold text-gray-900">Deactivate Staff Member?</h2>
                     <p class="mt-3 text-gray-600">
-                        This will deactivate the account for <strong>{{ admin.last_name }}, {{ admin.first_name }}</strong>.
+                        This will deactivate the account for <strong>{{ admin.last_name }}, {{ admin.first_name }}</strong
+                        >.
                     </p>
                     <p class="mt-2 text-sm text-gray-500">
                         They will no longer be able to access the admin panel. You can reactivate this account at any time.
@@ -68,17 +66,27 @@ const reactivate = () => {
 
             <div class="max-w-4xl space-y-5">
                 <!-- Header card -->
-                <div class="rounded-lg bg-white p-6 shadow-sm border border-gray-100">
+                <div class="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">
                             {{ admin.last_name }}, {{ admin.first_name }}{{ admin.middle_initial ? ' ' + admin.middle_initial + '.' : '' }}
                         </h1>
                         <p class="mt-1 text-gray-500">{{ admin.email }}</p>
                         <div class="mt-3 flex items-center gap-2">
-                            <span :class="['rounded-full px-2.5 py-1 text-xs font-medium', admin.department === 'Accounting' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800']">
+                            <span
+                                :class="[
+                                    'rounded-full px-2.5 py-1 text-xs font-medium',
+                                    admin.department === 'Accounting' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800',
+                                ]"
+                            >
                                 {{ admin.department ?? 'Administrator' }}
                             </span>
-                            <span :class="['rounded-full px-2.5 py-1 text-xs font-medium', admin.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700']">
+                            <span
+                                :class="[
+                                    'rounded-full px-2.5 py-1 text-xs font-medium',
+                                    admin.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700',
+                                ]"
+                            >
                                 {{ admin.is_active ? 'Active' : 'Inactive' }}
                             </span>
                         </div>
@@ -87,7 +95,7 @@ const reactivate = () => {
 
                 <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                     <!-- Admin info -->
-                    <div class="rounded-lg bg-white p-6 shadow-sm border border-gray-100">
+                    <div class="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
                         <h2 class="mb-4 font-semibold text-gray-800">Staff information</h2>
                         <dl class="space-y-3 text-sm">
                             <div class="flex justify-between">
@@ -97,7 +105,12 @@ const reactivate = () => {
                             <div class="flex justify-between">
                                 <dt class="text-gray-500">Status</dt>
                                 <dd>
-                                    <span :class="['rounded-full px-2.5 py-1 text-xs font-medium', admin.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700']">
+                                    <span
+                                        :class="[
+                                            'rounded-full px-2.5 py-1 text-xs font-medium',
+                                            admin.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700',
+                                        ]"
+                                    >
                                         {{ admin.is_active ? 'Active' : 'Inactive' }}
                                     </span>
                                 </dd>
@@ -105,15 +118,17 @@ const reactivate = () => {
                             <div class="flex justify-between">
                                 <dt class="text-gray-500">Terms accepted</dt>
                                 <dd>
-                                    <span v-if="admin.terms_accepted_at" class="text-green-600 text-xs font-medium">✓ {{ formatDate(admin.terms_accepted_at) }}</span>
-                                    <span v-else class="text-red-500 text-xs">✗ Not accepted</span>
+                                    <span v-if="admin.terms_accepted_at" class="text-xs font-medium text-green-600"
+                                        >✓ {{ formatDate(admin.terms_accepted_at) }}</span
+                                    >
+                                    <span v-else class="text-xs text-red-500">✗ Not accepted</span>
                                 </dd>
                             </div>
                         </dl>
                     </div>
 
                     <!-- Account details -->
-                    <div class="rounded-lg bg-white p-6 shadow-sm border border-gray-100">
+                    <div class="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
                         <h2 class="mb-4 font-semibold text-gray-800">Account details</h2>
                         <dl class="space-y-3 text-sm">
                             <div class="flex justify-between">
@@ -137,7 +152,7 @@ const reactivate = () => {
                 </div>
 
                 <!-- Audit trail -->
-                <div class="rounded-lg bg-white p-6 shadow-sm border border-gray-100">
+                <div class="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
                     <h2 class="mb-4 font-semibold text-gray-800">Audit trail</h2>
                     <dl class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                         <div>

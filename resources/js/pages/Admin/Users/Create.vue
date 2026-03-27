@@ -2,9 +2,8 @@
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import AdminForm from './Form.vue';
 import { ref } from 'vue';
-import { Card } from '@/components/ui/card';
+import AdminForm from './Form.vue';
 
 const breadcrumbs = [
     { title: 'Admin', href: route('admin.dashboard') },
@@ -63,12 +62,7 @@ const selectDepartment = (dept: 'Administrator' | 'Accounting') => {
 
             <div v-else class="max-w-2xl">
                 <div class="mb-4 flex items-center">
-                    <button
-                        @click="selectedDepartment = null"
-                        class="mr-4 text-blue-600 hover:text-blue-800"
-                    >
-                        ← Back to Selection
-                    </button>
+                    <button @click="selectedDepartment = null" class="mr-4 text-blue-600 hover:text-blue-800">← Back to Selection</button>
                 </div>
 
                 <div class="overflow-hidden rounded-lg bg-white p-6 shadow-md">

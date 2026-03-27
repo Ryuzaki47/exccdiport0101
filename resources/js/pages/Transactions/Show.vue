@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 interface Props {
@@ -39,13 +39,10 @@ const breadcrumbs = [
     { title: `#${props.transaction.reference || props.transaction.id}` },
 ];
 
-
-
-const formatDate = (date: string) =>
-    new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+const formatDate = (date: string) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
 const accountBalance = parseFloat(String(props.account?.balance ?? 0));
-const hasCredit      = accountBalance < 0;
+const hasCredit = accountBalance < 0;
 const displayBalance = Math.abs(accountBalance);
 
 /**
@@ -56,17 +53,17 @@ const displayBalance = Math.abs(accountBalance);
  * has no year/semester (e.g. old manual-entry records).
  */
 const buildCurrentTermFallback = (): string => {
-    const now    = new Date();
-    const month  = now.getMonth() + 1; // 1-based
-    const year   = now.getFullYear();
-    const sem    = month >= 6 && month <= 10 ? '1st Sem' : '2nd Sem';
+    const now = new Date();
+    const month = now.getMonth() + 1; // 1-based
+    const year = now.getFullYear();
+    const sem = month >= 6 && month <= 10 ? '1st Sem' : '2nd Sem';
     return `${year} ${sem}`;
 };
 
 const downloadReceipt = () => {
-    const parts   = [props.transaction.year, props.transaction.semester].filter(Boolean);
+    const parts = [props.transaction.year, props.transaction.semester].filter(Boolean);
     const termKey = parts.length === 2 ? parts.join(' ') : buildCurrentTermFallback();
-    const url     = route('transactions.download') + '?term=' + encodeURIComponent(termKey);
+    const url = route('transactions.download') + '?term=' + encodeURIComponent(termKey);
     window.open(url, '_blank');
 };
 </script>
@@ -79,7 +76,6 @@ const downloadReceipt = () => {
             <Breadcrumbs :items="breadcrumbs" />
 
             <div class="space-y-6 rounded-xl bg-white p-6 shadow-md">
-
                 <!-- Header -->
                 <div class="flex items-start justify-between">
                     <div>
@@ -179,7 +175,10 @@ const downloadReceipt = () => {
                 <div class="rounded-lg border-t pt-4">
                     <div :class="['rounded-lg p-4', hasCredit ? 'bg-green-50' : 'bg-blue-50']">
                         <p class="text-xs font-medium text-gray-500 uppercase">Overall Remaining Balance</p>
-                        <p class="mt-1 text-3xl font-bold" :class="hasCredit ? 'text-green-600' : accountBalance > 0 ? 'text-red-600' : 'text-green-600'">
+                        <p
+                            class="mt-1 text-3xl font-bold"
+                            :class="hasCredit ? 'text-green-600' : accountBalance > 0 ? 'text-red-600' : 'text-green-600'"
+                        >
                             {{ hasCredit ? '−' : '' }}{{ formatCurrency(displayBalance) }}
                         </p>
                         <p v-if="hasCredit" class="mt-1 text-sm text-green-600">You have a credit balance.</p>
@@ -188,9 +187,7 @@ const downloadReceipt = () => {
 
                 <!-- Actions -->
                 <div class="flex items-center gap-3 border-t pt-4">
-                    <Link :href="route('transactions.index')" class="text-sm text-blue-600 hover:underline">
-                        ← Back to Transactions
-                    </Link>
+                    <Link :href="route('transactions.index')" class="text-sm text-blue-600 hover:underline"> ← Back to Transactions </Link>
                     <div class="ml-auto">
                         <button
                             @click="downloadReceipt"

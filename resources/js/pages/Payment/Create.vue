@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertCircle, CheckCircle, Clock } from 'lucide-vue-next';
 import { computed } from 'vue';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -78,9 +78,7 @@ const hasPendingPayments = computed(() => props.pendingApprovalPayments.length >
 
 /** Unpaid terms sorted by order, enriched with pending/selectable flags */
 const availableTerms = computed(() => {
-    const unpaid = props.paymentTerms
-        .filter((t) => t.balance > 0)
-        .sort((a, b) => a.term_order - b.term_order);
+    const unpaid = props.paymentTerms.filter((t) => t.balance > 0).sort((a, b) => a.term_order - b.term_order);
 
     return unpaid.map((term, index) => {
         const pendingAmount = getPendingForTerm(term.id);
@@ -101,30 +99,24 @@ const effectiveBalance = computed(() => {
     return Math.max(0, Math.round((totalBalance - totalPending) * 100) / 100);
 });
 
-const selectedTerm = computed(() =>
-    form.selected_term_id
-        ? availableTerms.value.find((t) => t.id === form.selected_term_id) ?? null
-        : null,
-);
+const selectedTerm = computed(() => (form.selected_term_id ? (availableTerms.value.find((t) => t.id === form.selected_term_id) ?? null) : null));
 
-const selectedTermHasPending = computed(() =>
-    form.selected_term_id !== null && getPendingForTerm(form.selected_term_id) > 0,
-);
+const selectedTermHasPending = computed(() => form.selected_term_id !== null && getPendingForTerm(form.selected_term_id) > 0);
 
-const canSubmit = computed(() =>
-    effectiveBalance.value > 0 &&
-    form.amount > 0 &&
-    form.amount <= effectiveBalance.value &&
-    form.selected_term_id !== null &&
-    !selectedTermHasPending.value &&
-    !form.processing,
+const canSubmit = computed(
+    () =>
+        effectiveBalance.value > 0 &&
+        form.amount > 0 &&
+        form.amount <= effectiveBalance.value &&
+        form.selected_term_id !== null &&
+        !selectedTermHasPending.value &&
+        !form.processing,
 );
 
 const amountError = computed(() => {
     const amt = Number(form.amount) || 0;
     if (amt <= 0 && form.amount) return 'Amount must be greater than zero.';
-    if (amt > effectiveBalance.value)
-        return `Amount cannot exceed available balance of ${formatCurrency(effectiveBalance.value)}.`;
+    if (amt > effectiveBalance.value) return `Amount cannot exceed available balance of ${formatCurrency(effectiveBalance.value)}.`;
     if (selectedTerm.value && amt > selectedTerm.value.balance)
         return `Amount cannot exceed selected term balance of ${formatCurrency(selectedTerm.value.balance)}.`;
     return '';
@@ -132,12 +124,10 @@ const amountError = computed(() => {
 
 const disabledReason = computed(() => {
     if (props.outstandingBalance <= 0) return 'No outstanding balance.';
-    if (effectiveBalance.value <= 0 && hasPendingPayments.value)
-        return 'Your full balance is currently awaiting accounting approval.';
+    if (effectiveBalance.value <= 0 && hasPendingPayments.value) return 'Your full balance is currently awaiting accounting approval.';
     if (!form.selected_term_id) return 'Select a payment term.';
     const pending = getPendingForTerm(form.selected_term_id);
-    if (pending > 0)
-        return `₱${formatCurrency(pending)} for this term is awaiting approval. Wait before submitting another payment.`;
+    if (pending > 0) return `₱${formatCurrency(pending)} for this term is awaiting approval. Wait before submitting another payment.`;
     if (form.amount <= 0) return 'Enter a payment amount.';
     if (form.amount > effectiveBalance.value) return 'Amount exceeds available balance.';
     return '';
@@ -147,9 +137,7 @@ const projectedBalance = computed(() => Math.max(0, effectiveBalance.value - (Nu
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-
-const formatDate = (date: string) =>
-    new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+const formatDate = (date: string) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
 const isOverdue = (dueDate: string) => {
     const d = new Date(dueDate);
@@ -253,12 +241,7 @@ const submitPayment = () => {
                 <!-- Student Name (read-only) -->
                 <div>
                     <label class="mb-1 block text-sm font-medium text-gray-700">Student Name</label>
-                    <input
-                        type="text"
-                        :value="studentName"
-                        disabled
-                        class="w-full rounded-lg border bg-gray-50 px-4 py-2 text-gray-600"
-                    />
+                    <input type="text" :value="studentName" disabled class="w-full rounded-lg border bg-gray-50 px-4 py-2 text-gray-600" />
                 </div>
 
                 <!-- Select Term -->
@@ -274,14 +257,11 @@ const submitPayment = () => {
                         class="w-full rounded-lg border px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100"
                     >
                         <option :value="null">-- Choose a payment term --</option>
-                        <option
-                            v-for="term in availableTerms"
-                            :key="term.id"
-                            :value="term.id"
-                            :disabled="!term.isSelectable"
-                        >
+                        <option v-for="term in availableTerms" :key="term.id" :value="term.id" :disabled="!term.isSelectable">
                             {{ term.term_name }}
-                            {{ term.hasPending ? `— ⏳ ₱${formatCurrency(term.pendingAmount)} pending` : `— ₱${formatCurrency(term.balance)} balance` }}
+                            {{
+                                term.hasPending ? `— ⏳ ₱${formatCurrency(term.pendingAmount)} pending` : `— ₱${formatCurrency(term.balance)} balance`
+                            }}
                             {{ !term.isSelectable && !term.hasPending ? ' (pay earlier terms first)' : '' }}
                         </option>
                     </select>
@@ -396,7 +376,10 @@ const submitPayment = () => {
                 </div>
 
                 <!-- Disabled Reason -->
-                <div v-if="disabledReason && effectiveBalance > 0" class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <div
+                    v-if="disabledReason && effectiveBalance > 0"
+                    class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                >
                     <AlertCircle class="mt-0.5 h-4 w-4 flex-shrink-0" />
                     <span>{{ disabledReason }}</span>
                 </div>
@@ -425,8 +408,8 @@ const submitPayment = () => {
 
             <!-- Info note -->
             <div class="rounded border-l-4 border-blue-500 bg-blue-50 p-4 text-sm text-blue-800">
-                <strong>Note:</strong> After submission, your payment will be reviewed by the accounting department.
-                You will receive a confirmation notification once it has been verified.
+                <strong>Note:</strong> After submission, your payment will be reviewed by the accounting department. You will receive a confirmation
+                notification once it has been verified.
             </div>
         </div>
     </AppLayout>

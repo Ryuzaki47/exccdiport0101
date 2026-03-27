@@ -68,17 +68,21 @@ class TransactionController extends Controller
             }
 
             // ── Load all assessments for the student (powers the Enrolled Subjects accordion) ──
+            // total_assessment is included so the Vue term summary header
+            // (Total Assessed / Total Paid / Balance) can derive the assessment
+            // total from the assessment record instead of charge transactions.
             $allAssessments = \App\Models\StudentAssessment::where('user_id', $user->id)
                 ->where('status', '!=', 'cancelled')
                 ->orderByDesc('created_at')
-                ->get(['id', 'school_year', 'semester', 'year_level', 'course', 'fee_breakdown'])
+                ->get(['id', 'school_year', 'semester', 'year_level', 'course', 'fee_breakdown', 'total_assessment'])
                 ->map(fn ($a) => [
-                    'id'            => $a->id,
-                    'school_year'   => $a->school_year,
-                    'semester'      => $a->semester,
-                    'year_level'    => $a->year_level,
-                    'course'        => $a->course,
-                    'fee_breakdown' => $a->fee_breakdown ?? [],
+                    'id'               => $a->id,
+                    'school_year'      => $a->school_year,
+                    'semester'         => $a->semester,
+                    'year_level'       => $a->year_level,
+                    'course'           => $a->course,
+                    'fee_breakdown'    => $a->fee_breakdown ?? [],
+                    'total_assessment' => (float) $a->total_assessment,
                 ])
                 ->toArray();
 
@@ -256,27 +260,34 @@ class TransactionController extends Controller
             }
         }
 
-        $transactions = $query->get();
+        // Only include confirmed paid payments in the PDF.
+        // kind='charge' rows no longer exist — assessment totals come from StudentAssessment.
+        $transactions = $query->get()->filter(
+            fn ($txn) => $txn->kind === 'payment' && $txn->status === PaymentStatus::PAID->value
+        );
 
-        // Exclude awaiting_approval payments from the PDF — only confirmed
-        // (paid) payments and charges appear in the Term Summary document.
-        $transactions = $transactions->filter(function ($txn) {
-            if ($txn->kind === 'charge') return true;
-            return $txn->kind === 'payment' && $txn->status === PaymentStatus::PAID->value;
-        });
-
-        $paidPaymentsExist = $transactions->where('kind', 'payment')
-            ->where('status', PaymentStatus::PAID->value)->isNotEmpty();
-        $chargesExist      = $transactions->where('kind', 'charge')->isNotEmpty();
-
-        if (!$paidPaymentsExist && !$chargesExist) {
-            abort(403, 'No confirmed transactions available for this term. Awaiting-approval payments cannot be downloaded yet.');
+        if ($transactions->isEmpty()) {
+            abort(403, 'No confirmed payments available for this term. Awaiting-approval payments cannot be downloaded yet.');
         }
 
-        $totalCharges = $transactions->where('kind', 'charge')->sum('amount');
-        $totalPaid    = $transactions->where('kind', 'payment')
-            ->where('status', PaymentStatus::PAID->value)->sum('amount');
-        $netBalance   = round((float) $totalCharges - (float) $totalPaid, 2);
+        // Derive total assessed from StudentAssessment for the requested term.
+        $assessmentQuery = StudentAssessment::where('user_id', $targetUser->id)
+            ->where('status', 'active');
+
+        if ($termKey && $termKey !== 'All Terms') {
+            $parts    = explode(' ', $termKey, 2);
+            $termYear = $parts[0] ?? null;
+            $termSem  = $parts[1] ?? null;
+            if ($termYear && $termSem) {
+                $syEnd = (int) $termYear + 1;
+                $assessmentQuery->where('school_year', "{$termYear}-{$syEnd}")
+                                ->where('semester', $termSem);
+            }
+        }
+
+        $totalCharges = (float) $assessmentQuery->sum('total_assessment');
+        $totalPaid    = $transactions->sum('amount');
+        $netBalance   = round($totalCharges - $totalPaid, 2);
 
         $pdf = Pdf::loadView('pdf.transactions', [
             'transactions' => $transactions,

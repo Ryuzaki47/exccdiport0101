@@ -47,10 +47,7 @@ const filteredNotifications = computed(() => {
     if (!searchQuery.value) return props.notifications;
     const q = searchQuery.value.toLowerCase();
     return props.notifications.filter(
-        (n) =>
-            n.title.toLowerCase().includes(q) ||
-            n.message?.toLowerCase().includes(q) ||
-            (n.target_term_name ?? '').toLowerCase().includes(q),
+        (n) => n.title.toLowerCase().includes(q) || n.message?.toLowerCase().includes(q) || (n.target_term_name ?? '').toLowerCase().includes(q),
     );
 });
 
@@ -62,18 +59,18 @@ const deleteNotification = (id: number) => {
 
 const getRoleColor = (role: string) => {
     const colors: Record<string, string> = {
-        student:    'bg-blue-100 text-blue-800',
+        student: 'bg-blue-100 text-blue-800',
         accounting: 'bg-purple-100 text-purple-800',
-        admin:      'bg-indigo-100 text-indigo-800',
-        all:        'bg-gray-100 text-gray-800',
+        admin: 'bg-indigo-100 text-indigo-800',
+        all: 'bg-gray-100 text-gray-800',
     };
     return colors[role] || 'bg-gray-100 text-gray-800';
 };
 
 const getTypeLabel = (type?: string) => {
     const labels: Record<string, string> = {
-        general:          '📢 General',
-        payment_due:      '💳 Payment Due',
+        general: '📢 General',
+        payment_due: '💳 Payment Due',
         payment_approved: '✅ Approved',
         payment_rejected: '❌ Rejected',
     };
@@ -82,8 +79,8 @@ const getTypeLabel = (type?: string) => {
 
 const getTypeColor = (type?: string) => {
     const colors: Record<string, string> = {
-        general:          'bg-blue-100 text-blue-800',
-        payment_due:      'bg-amber-100 text-amber-800',
+        general: 'bg-blue-100 text-blue-800',
+        payment_due: 'bg-amber-100 text-amber-800',
         payment_approved: 'bg-emerald-100 text-emerald-800',
         payment_rejected: 'bg-red-100 text-red-800',
     };
@@ -96,8 +93,8 @@ const getTypeColor = (type?: string) => {
 const getDueDateChipClass = (dueDateStr: string | null | undefined): string => {
     if (!dueDateStr) return 'bg-gray-100 text-gray-700';
     const diffDays = Math.ceil((new Date(dueDateStr).getTime() - Date.now()) / 86_400_000);
-    if (diffDays < 0)   return 'bg-red-100 text-red-700 ring-1 ring-red-200';
-    if (diffDays <= 7)  return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+    if (diffDays < 0) return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+    if (diffDays <= 7) return 'bg-red-100 text-red-700 ring-1 ring-red-200';
     if (diffDays <= 14) return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
     return 'bg-green-100 text-green-700 ring-1 ring-green-200';
 };
@@ -167,29 +164,33 @@ const isActive = (notification: Notification) => {
             <div v-else class="space-y-4">
                 <Card v-for="notification in filteredNotifications" :key="notification.id">
                     <CardContent class="pt-6">
-
                         <!-- Title row + status badge -->
                         <div class="mb-3 flex items-start justify-between">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h3 class="text-lg font-semibold text-gray-900">{{ notification.title }}</h3>
 
                                 <!-- Active / Inactive / Complete -->
-                                <span v-if="notification.is_complete"
-                                    class="inline-flex items-center rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-600">
+                                <span
+                                    v-if="notification.is_complete"
+                                    class="inline-flex items-center rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-600"
+                                >
                                     ✓ Completed
                                 </span>
-                                <span v-else-if="isActive(notification)"
-                                    class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                                <span
+                                    v-else-if="isActive(notification)"
+                                    class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800"
+                                >
                                     ● Active
                                 </span>
-                                <span v-else
-                                    class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                                <span v-else class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
                                     ○ Inactive
                                 </span>
 
                                 <!-- Specific student badge -->
-                                <span v-if="notification.user_id"
-                                    class="inline-flex items-center rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800">
+                                <span
+                                    v-if="notification.user_id"
+                                    class="inline-flex items-center rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800"
+                                >
                                     👤 Personal
                                 </span>
                             </div>
@@ -202,32 +203,44 @@ const isActive = (notification: Notification) => {
 
                         <!-- Metadata chips row -->
                         <div class="flex flex-wrap items-center gap-2 text-xs">
-
                             <!-- Audience / Role -->
-                            <span :class="['inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium', getRoleColor(notification.target_role)]">
+                            <span
+                                :class="[
+                                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium',
+                                    getRoleColor(notification.target_role),
+                                ]"
+                            >
                                 <Users class="h-3 w-3" />
                                 {{ notification.target_role.charAt(0).toUpperCase() + notification.target_role.slice(1) }}
                             </span>
 
                             <!-- Type -->
-                            <span v-if="notification.type"
-                                :class="['rounded-full px-2.5 py-1 font-medium', getTypeColor(notification.type)]">
+                            <span v-if="notification.type" :class="['rounded-full px-2.5 py-1 font-medium', getTypeColor(notification.type)]">
                                 {{ getTypeLabel(notification.type) }}
                             </span>
 
                             <!-- ── Term filter badge (KEY: shows admin WHO sees the notification) ── -->
-                            <span v-if="notification.target_term_name"
-                                class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-800">
+                            <span
+                                v-if="notification.target_term_name"
+                                class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-800"
+                            >
                                 🎓 {{ notification.target_term_name }} only
                             </span>
-                            <span v-else-if="notification.term_ids && notification.term_ids.length > 0"
-                                class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-800">
+                            <span
+                                v-else-if="notification.term_ids && notification.term_ids.length > 0"
+                                class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-800"
+                            >
                                 🎓 {{ notification.term_ids.length }} specific term(s)
                             </span>
 
                             <!-- ── Due date chip (same colour logic as student dashboard) ── -->
-                            <span v-if="notification.due_date"
-                                :class="['inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium', getDueDateChipClass(notification.due_date)]">
+                            <span
+                                v-if="notification.due_date"
+                                :class="[
+                                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium',
+                                    getDueDateChipClass(notification.due_date),
+                                ]"
+                            >
                                 <CalendarClock class="h-3 w-3" />
                                 Due: {{ formatDueDate(notification.due_date) }}
                             </span>
@@ -235,23 +248,32 @@ const isActive = (notification: Notification) => {
                             <!-- Visibility window -->
                             <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-600">
                                 <Calendar class="h-3 w-3" />
-                                {{ new Date(notification.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}
+                                {{
+                                    new Date(notification.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                }}
                                 <span v-if="notification.end_date">
-                                    → {{ new Date(notification.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}
+                                    →
+                                    {{
+                                        new Date(notification.end_date).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })
+                                    }}
                                 </span>
                                 <span v-else>→ ongoing</span>
                             </span>
 
                             <!-- Trigger days note -->
-                            <span v-if="notification.trigger_days_before_due"
-                                class="rounded-full bg-yellow-100 px-2.5 py-1 font-medium text-yellow-800">
+                            <span
+                                v-if="notification.trigger_days_before_due"
+                                class="rounded-full bg-yellow-100 px-2.5 py-1 font-medium text-yellow-800"
+                            >
                                 ⏱ Shows {{ notification.trigger_days_before_due }}d before due
                             </span>
 
                             <!-- Created at -->
-                            <span class="ml-auto text-gray-400">
-                                Created {{ new Date(notification.created_at).toLocaleDateString() }}
-                            </span>
+                            <span class="ml-auto text-gray-400"> Created {{ new Date(notification.created_at).toLocaleDateString() }} </span>
                         </div>
 
                         <!-- Actions -->
@@ -269,11 +291,9 @@ const isActive = (notification: Notification) => {
                                 </Button>
                             </button>
                         </div>
-
                     </CardContent>
                 </Card>
             </div>
-
         </div>
     </AppLayout>
 </template>

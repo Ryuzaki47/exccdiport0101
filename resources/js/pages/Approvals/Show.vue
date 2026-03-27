@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { useDataFormatting } from '@/composables/useDataFormatting';
-import { RotateCcw, CheckCircle2, XCircle } from 'lucide-vue-next';
+import { CheckCircle2, RotateCcw, XCircle } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface Approval {
@@ -50,15 +50,18 @@ const { formatCurrency } = useDataFormatting();
 // is redirected from /accounting/dashboard by RoleMiddleware to their own.
 const breadcrumbs = [
     { title: 'Dashboard', href: route('accounting.dashboard') },
-    { title: 'Approvals',  href: route('approvals.index') },
+    { title: 'Approvals', href: route('approvals.index') },
     { title: 'Details' },
 ];
 
 const formatDate = (date: string | null) => {
     if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
     });
 };
 
@@ -118,23 +121,19 @@ const refreshApproval = () => {
 
             <!-- Approval Details Card -->
             <div class="space-y-6 rounded-xl border bg-white p-6 shadow-sm">
-
                 <!-- Status Badge + Amount -->
                 <div class="flex items-center justify-between">
                     <span
                         class="rounded-full px-4 py-2 text-sm font-semibold"
                         :class="{
                             'bg-yellow-100 text-yellow-800': approval.status === 'pending',
-                            'bg-green-100 text-green-800':  approval.status === 'approved',
-                            'bg-red-100 text-red-800':      approval.status === 'rejected',
+                            'bg-green-100 text-green-800': approval.status === 'approved',
+                            'bg-red-100 text-red-800': approval.status === 'rejected',
                         }"
                     >
                         {{ approval.status }}
                     </span>
-                    <p
-                        v-if="approval.workflow_instance?.workflowable?.amount"
-                        class="text-2xl font-bold text-blue-700"
-                    >
+                    <p v-if="approval.workflow_instance?.workflowable?.amount" class="text-2xl font-bold text-blue-700">
                         {{ formatCurrency(approval.workflow_instance.workflowable.amount) }}
                     </p>
                 </div>
@@ -167,22 +166,23 @@ const refreshApproval = () => {
                     <div>
                         <p class="text-sm text-gray-500">Term</p>
                         <p class="font-semibold">
-                            {{ approval.workflow_instance?.workflowable?.meta?.term_name
-                               ?? approval.workflow_instance?.workflowable?.type
-                               ?? '—' }}
+                            {{ approval.workflow_instance?.workflowable?.meta?.term_name ?? approval.workflow_instance?.workflowable?.type ?? '—' }}
                         </p>
                     </div>
                     <div>
                         <p class="text-sm text-gray-500">Payment Method</p>
                         <p class="font-semibold">
-                            {{ ({
-                                cash: 'Cash', gcash: 'GCash',
-                                bank_transfer: 'Bank Transfer',
-                                credit_card: 'Credit Card',
-                                debit_card: 'Debit Card',
-                            })[approval.workflow_instance?.workflowable?.payment_channel ?? '']
-                            ?? approval.workflow_instance?.workflowable?.payment_channel
-                            ?? '—' }}
+                            {{
+                                {
+                                    cash: 'Cash',
+                                    gcash: 'GCash',
+                                    bank_transfer: 'Bank Transfer',
+                                    credit_card: 'Credit Card',
+                                    debit_card: 'Debit Card',
+                                }[approval.workflow_instance?.workflowable?.payment_channel ?? ''] ??
+                                approval.workflow_instance?.workflowable?.payment_channel ??
+                                '—'
+                            }}
                         </p>
                     </div>
                 </div>
@@ -231,7 +231,7 @@ const refreshApproval = () => {
                                             :class="{
                                                 'bg-yellow-100 text-yellow-800': term.status === 'pending',
                                                 'bg-orange-100 text-orange-800': term.status === 'partial',
-                                                'bg-green-100 text-green-800':   term.status === 'paid',
+                                                'bg-green-100 text-green-800': term.status === 'paid',
                                             }"
                                         >
                                             {{ term.status }}
@@ -250,7 +250,7 @@ const refreshApproval = () => {
                         <button
                             @click="approve"
                             :disabled="approveForm.processing"
-                            class="group relative inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:from-green-600 hover:to-green-700 hover:shadow-xl hover:scale-105 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="group relative inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:scale-105 hover:from-green-600 hover:to-green-700 hover:shadow-xl disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <CheckCircle2 v-if="!approveForm.processing" :size="20" class="transition-transform group-hover:scale-110" />
                             <span>{{ approveForm.processing ? 'Approving…' : 'Approve' }}</span>
@@ -258,7 +258,7 @@ const refreshApproval = () => {
                         <button
                             @click="openRejectDialog"
                             :disabled="approveForm.processing"
-                            class="group relative inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:from-red-600 hover:to-red-700 hover:shadow-xl hover:scale-105 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="group relative inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:scale-105 hover:from-red-600 hover:to-red-700 hover:shadow-xl disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <XCircle v-if="!approveForm.processing" :size="20" class="transition-transform group-hover:scale-110" />
                             <span>Decline</span>
@@ -298,7 +298,7 @@ const refreshApproval = () => {
                     <button
                         @click="reject"
                         :disabled="rejectForm.processing || !rejectForm.comments.trim()"
-                        class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <span v-if="rejectForm.processing">Declining…</span>
                         <span v-else>Confirm Decline</span>

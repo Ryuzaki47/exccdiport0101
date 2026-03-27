@@ -3,11 +3,11 @@ import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { AlertCircle, Check, Edit2, Layers } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -57,11 +57,7 @@ const filteredTerms = computed(() => {
 
     if (filterStudentId.value.trim()) {
         const q = filterStudentId.value.toLowerCase();
-        result = result.filter(
-            (t) =>
-                t.student_id.toLowerCase().includes(q) ||
-                t.student_name.toLowerCase().includes(q),
-        );
+        result = result.filter((t) => t.student_id.toLowerCase().includes(q) || t.student_name.toLowerCase().includes(q));
     }
 
     if (filterStatus.value === 'unset') {
@@ -149,8 +145,6 @@ const submitBulkDueDate = () => {
 };
 
 // ─── Formatting Helpers ──────────────────────────────────────────────────────
-
-
 
 const formatDate = (date: string | null) => {
     if (!date) return '—';
@@ -271,9 +265,7 @@ const dueDateLabel = (term: PaymentTerm) => {
 
             <!-- Payment Terms List -->
             <div class="space-y-3">
-                <div v-if="filteredTerms.length === 0" class="py-12 text-center text-gray-400">
-                    No payment terms found matching your filters.
-                </div>
+                <div v-if="filteredTerms.length === 0" class="py-12 text-center text-gray-400">No payment terms found matching your filters.</div>
 
                 <Card v-for="term in filteredTerms" :key="term.id">
                     <CardContent class="pt-6">
@@ -321,13 +313,18 @@ const dueDateLabel = (term: PaymentTerm) => {
         <!-- ────────────────────────────────────────────────────────────────── -->
         <!-- Single Term Due Date Dialog                                        -->
         <!-- ────────────────────────────────────────────────────────────────── -->
-        <Dialog :open="showEditDialog" @update:open="(v) => { if (!v) closeEditDialog(); }">
+        <Dialog
+            :open="showEditDialog"
+            @update:open="
+                (v) => {
+                    if (!v) closeEditDialog();
+                }
+            "
+        >
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Set Payment Term Due Date</DialogTitle>
-                    <DialogDescription v-if="selectedTerm">
-                        {{ selectedTerm.student_name }} — {{ selectedTerm.term_name }}
-                    </DialogDescription>
+                    <DialogDescription v-if="selectedTerm"> {{ selectedTerm.student_name }} — {{ selectedTerm.term_name }} </DialogDescription>
                 </DialogHeader>
 
                 <div class="mt-4 space-y-4">
@@ -343,19 +340,17 @@ const dueDateLabel = (term: PaymentTerm) => {
                         </p>
                     </div>
 
-                    <div v-if="selectedTerm" class="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900 space-y-1">
+                    <div v-if="selectedTerm" class="space-y-1 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
                         <p><strong>Amount:</strong> {{ formatCurrency(selectedTerm.amount) }}</p>
                         <p><strong>Balance:</strong> {{ formatCurrency(selectedTerm.balance) }}</p>
                         <p class="mt-2 text-xs text-blue-700">
-                            💡 A payment due notification will be sent to this student automatically.
-                            It will appear on their dashboard 7 days before the due date.
+                            💡 A payment due notification will be sent to this student automatically. It will appear on their dashboard 7 days before
+                            the due date.
                         </p>
                     </div>
 
                     <div class="flex justify-end gap-3 pt-2">
-                        <Button variant="outline" @click="closeEditDialog" :disabled="editForm.processing">
-                            Cancel
-                        </Button>
+                        <Button variant="outline" @click="closeEditDialog" :disabled="editForm.processing"> Cancel </Button>
                         <Button
                             @click="submitSingleDueDate"
                             :disabled="editForm.processing || !editForm.due_date"
@@ -372,13 +367,18 @@ const dueDateLabel = (term: PaymentTerm) => {
         <!-- ────────────────────────────────────────────────────────────────── -->
         <!-- Bulk Update Dialog                                                 -->
         <!-- ────────────────────────────────────────────────────────────────── -->
-        <Dialog :open="showBulkDialog" @update:open="(v) => { if (!v) closeBulkDialog(); }">
+        <Dialog
+            :open="showBulkDialog"
+            @update:open="
+                (v) => {
+                    if (!v) closeBulkDialog();
+                }
+            "
+        >
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Bulk Update Due Dates by Term Name</DialogTitle>
-                    <DialogDescription>
-                        Apply a single due date to all students that share the same payment term name.
-                    </DialogDescription>
+                    <DialogDescription> Apply a single due date to all students that share the same payment term name. </DialogDescription>
                 </DialogHeader>
 
                 <div class="mt-4 space-y-4">
@@ -415,22 +415,18 @@ const dueDateLabel = (term: PaymentTerm) => {
                     <!-- Preview count -->
                     <div
                         v-if="bulkForm.term_name"
-                        class="rounded-lg border p-3 text-sm space-y-1"
+                        class="space-y-1 rounded-lg border p-3 text-sm"
                         :class="bulkTargetCount > 0 ? 'border-blue-100 bg-blue-50 text-blue-900' : 'border-amber-100 bg-amber-50 text-amber-900'"
                     >
                         <p>
                             <strong>{{ bulkTargetCount }}</strong>
                             {{ bulkTargetCount === 1 ? 'student' : 'students' }} will be affected.
                         </p>
-                        <p class="text-xs opacity-80">
-                            Each student with a "{{ bulkForm.term_name }}" term will receive a payment due notification.
-                        </p>
+                        <p class="text-xs opacity-80">Each student with a "{{ bulkForm.term_name }}" term will receive a payment due notification.</p>
                     </div>
 
                     <div class="flex justify-end gap-3 pt-2">
-                        <Button variant="outline" @click="closeBulkDialog" :disabled="bulkForm.processing">
-                            Cancel
-                        </Button>
+                        <Button variant="outline" @click="closeBulkDialog" :disabled="bulkForm.processing"> Cancel </Button>
                         <Button
                             @click="submitBulkDueDate"
                             :disabled="bulkForm.processing || !bulkForm.term_name || !bulkForm.due_date"

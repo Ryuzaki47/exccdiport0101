@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Notification;
 use App\Models\PaymentReminder;
 use App\Models\StudentAssessment;
+use App\Models\StudentPaymentTerm;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -41,19 +42,25 @@ class StudentDashboardController extends Controller
             $remainingBalance = $paymentTerms->sum('balance');
         }
 
-        // ── Transaction aggregates ────────────────────────────────────────────
-        $totalCharges  = $user->transactions()->where('kind', 'charge')->sum('amount');
+        // ── Financial aggregates ─────────────────────────────────────────────
+        // kind='charge' transactions are no longer created. Derive totals from
+        // StudentAssessment and StudentPaymentTerm — the real source of truth.
         $totalPayments = $user->transactions()->where('kind', 'payment')->where('status', 'paid')->sum('amount');
 
-        // Fall back to ledger diff when no payment terms exist yet
+        // Fallback: if no payment terms loaded, sum all active term balances directly.
         if ($paymentTerms->isEmpty()) {
-            $remainingBalance = max(0, $totalCharges - $totalPayments);
+            $remainingBalance = (float) StudentPaymentTerm::whereHas(
+                'assessment',
+                fn ($q) => $q->where('user_id', $user->id)->where('status', 'active')
+            )->sum('balance');
         }
 
-        $pendingChargesCount = $user->transactions()
-            ->where('kind', 'charge')
-            ->where('status', 'pending')
-            ->count();
+        // Pending charges = unpaid payment terms (replaces pending charge transactions).
+        $pendingChargesCount = $latestAssessment
+            ? $latestAssessment->paymentTerms->filter(
+                fn ($t) => in_array($t->status, ['unpaid', 'partial'])
+              )->count()
+            : 0;
 
         // ── Notifications ─────────────────────────────────────────────────────
         // Fetches 10 so general announcements aren't crowded out by
@@ -83,7 +90,11 @@ class StudentDashboardController extends Controller
             ]);
 
         // ── Recent transactions ───────────────────────────────────────────────
+        // Only show payment transactions — kind='charge' (ASMT- assessment debit
+        // entries) are internal ledger rows, not cashier receipts. They must not
+        // appear in the student-facing "Recent Transactions" widget.
         $recentTransactions = $user->transactions()
+            ->where('kind', 'payment')
             ->orderByDesc('created_at')
             ->take(5)
             ->get()
@@ -119,7 +130,7 @@ class StudentDashboardController extends Controller
 
         $totalFees = $latestAssessment
             ? (float) $latestAssessment->total_assessment
-            : (float) $totalCharges;
+            : 0;
 
         return Inertia::render('Student/Dashboard', [
             // Only scalar — no transaction relation serialised over the wire

@@ -2,9 +2,9 @@
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 import { CheckCircle2, RotateCcw, Search, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -53,15 +53,15 @@ const { formatCurrency } = useDataFormatting();
 
 // Initialise all three filter keys with explicit defaults so none are ever `undefined`.
 const filters = ref({
-    status:   props.filters.status   ?? '',
-    year:     props.filters.year     ?? '',
+    status: props.filters.status ?? '',
+    year: props.filters.year ?? '',
     semester: props.filters.semester ?? '',
 });
 
-const searchQuery        = ref('');
-const showRejectDialog   = ref(false);
+const searchQuery = ref('');
+const showRejectDialog = ref(false);
 const selectedApprovalId = ref<number | null>(null);
-const approveProcessing  = ref<number | null>(null); // tracks which approval is being approved
+const approveProcessing = ref<number | null>(null); // tracks which approval is being approved
 
 const rejectForm = useForm({ comments: '' });
 
@@ -83,16 +83,15 @@ const pendingCount = computed(() => props.approvals.data.filter((a) => a.status 
 
 const termOptions = ['Upon Registration', 'Prelim', 'Midterm', 'Semi-Final', 'Final'];
 
-const formatDate = (date: string) =>
-    new Date(date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+const formatDate = (date: string) => new Date(date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
 
 const formatMethod = (method: string) =>
     ({
-        cash:          'Cash',
-        gcash:         'GCash',
+        cash: 'Cash',
+        gcash: 'GCash',
         bank_transfer: 'Bank Transfer',
-        credit_card:   'Credit Card',
-        debit_card:    'Debit Card',
+        credit_card: 'Credit Card',
+        debit_card: 'Debit Card',
     })[method] ?? method;
 
 const getStudentName = (approval: Approval) => {
@@ -106,16 +105,12 @@ const filteredApprovals = computed(() => {
     let result = props.approvals.data;
 
     if (filters.value.year) {
-        result = result.filter(
-            (a) => String(a.workflow_instance.metadata?.year) === filters.value.year,
-        );
+        result = result.filter((a) => String(a.workflow_instance.metadata?.year) === filters.value.year);
     }
 
     if (filters.value.semester) {
         result = result.filter((a) => {
-            const termName =
-                a.workflow_instance.workflowable.meta?.term_name ??
-                a.workflow_instance.workflowable.type;
+            const termName = a.workflow_instance.workflowable.meta?.term_name ?? a.workflow_instance.workflowable.type;
             return termName === filters.value.semester;
         });
     }
@@ -124,8 +119,8 @@ const filteredApprovals = computed(() => {
         const query = searchQuery.value.toLowerCase();
         result = result.filter((a) => {
             const studentName = getStudentName(a).toLowerCase();
-            const ref         = a.workflow_instance.workflowable.reference.toLowerCase();
-            const accountId   = a.workflow_instance.workflowable.user?.account_id?.toLowerCase() ?? '';
+            const ref = a.workflow_instance.workflowable.reference.toLowerCase();
+            const accountId = a.workflow_instance.workflowable.user?.account_id?.toLowerCase() ?? '';
             return studentName.includes(query) || ref.includes(query) || accountId.includes(query);
         });
     }
@@ -136,9 +131,9 @@ const filteredApprovals = computed(() => {
 // Push only non-empty filter values to the URL so the query string stays clean.
 const applyFilter = () => {
     const params: Record<string, string> = {};
-    if (filters.value.status)   params.status   = filters.value.status;
-    if (filters.value.year)     params.year      = String(filters.value.year);
-    if (filters.value.semester) params.semester  = filters.value.semester;
+    if (filters.value.status) params.status = filters.value.status;
+    if (filters.value.year) params.year = String(filters.value.year);
+    if (filters.value.semester) params.semester = filters.value.semester;
     router.get(route('approvals.index'), params, { preserveState: true, replace: true });
 };
 
@@ -187,10 +182,7 @@ const refreshApprovals = () => {
                     <div>
                         <div class="flex items-center gap-3">
                             <h1 class="text-3xl font-bold">Payment Approvals</h1>
-                            <span
-                                v-if="pendingCount > 0"
-                                class="rounded-full bg-yellow-100 px-2.5 py-0.5 text-sm font-semibold text-yellow-800"
-                            >
+                            <span v-if="pendingCount > 0" class="rounded-full bg-yellow-100 px-2.5 py-0.5 text-sm font-semibold text-yellow-800">
                                 {{ pendingCount }} pending
                             </span>
                         </div>
@@ -257,18 +249,12 @@ const refreshApprovals = () => {
 
             <!-- Empty state -->
             <div v-if="filteredApprovals.length === 0" class="py-16 text-center text-gray-400">
-                {{ searchQuery || filters.year || filters.semester || filters.status
-                    ? 'No approvals match your filters.'
-                    : 'No approvals found.' }}
+                {{ searchQuery || filters.year || filters.semester || filters.status ? 'No approvals match your filters.' : 'No approvals found.' }}
             </div>
 
             <!-- Approvals list -->
             <div v-else class="space-y-4">
-                <div
-                    v-for="approval in filteredApprovals"
-                    :key="approval.id"
-                    class="rounded-xl border bg-white p-5 shadow-sm"
-                >
+                <div v-for="approval in filteredApprovals" :key="approval.id" class="rounded-xl border bg-white p-5 shadow-sm">
                     <div class="flex items-start justify-between gap-4">
                         <div class="flex-1 space-y-1">
                             <div class="flex items-center gap-2">
@@ -277,16 +263,17 @@ const refreshApprovals = () => {
                                     class="rounded-full px-2 py-1 text-xs font-semibold"
                                     :class="{
                                         'bg-yellow-100 text-yellow-800': approval.status === 'pending',
-                                        'bg-green-100 text-green-800':  approval.status === 'approved',
-                                        'bg-red-100 text-red-800':      approval.status === 'rejected',
+                                        'bg-green-100 text-green-800': approval.status === 'approved',
+                                        'bg-red-100 text-red-800': approval.status === 'rejected',
                                     }"
-                                >{{ approval.status }}</span>
+                                    >{{ approval.status }}</span
+                                >
                             </div>
                             <p class="text-sm text-gray-500">
                                 Ref: <span class="font-mono">{{ approval.workflow_instance.workflowable.reference }}</span>
                             </p>
                         </div>
-                        <p class="whitespace-nowrap text-2xl font-bold text-blue-700">
+                        <p class="text-2xl font-bold whitespace-nowrap text-blue-700">
                             {{ formatCurrency(approval.workflow_instance.metadata?.amount ?? approval.workflow_instance.workflowable.amount) }}
                         </p>
                     </div>
@@ -294,7 +281,9 @@ const refreshApprovals = () => {
                     <div class="mt-3 grid grid-cols-2 gap-3 text-sm text-gray-600 md:grid-cols-4">
                         <div>
                             <p class="text-xs tracking-wide text-gray-400 uppercase">Term</p>
-                            <p>{{ approval.workflow_instance.workflowable.meta?.term_name ?? approval.workflow_instance.workflowable.type ?? '—' }}</p>
+                            <p>
+                                {{ approval.workflow_instance.workflowable.meta?.term_name ?? approval.workflow_instance.workflowable.type ?? '—' }}
+                            </p>
                         </div>
                         <div>
                             <p class="text-xs tracking-wide text-gray-400 uppercase">Method</p>
@@ -315,7 +304,7 @@ const refreshApprovals = () => {
                         <button
                             @click="approve(approval.id)"
                             :disabled="approveProcessing === approval.id || approveForm.processing"
-                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-green-600 hover:to-green-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-300 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-green-600 hover:to-green-700 hover:shadow-lg focus:ring-2 focus:ring-green-300 focus:outline-none disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <CheckCircle2 :size="18" class="transition-transform group-hover:scale-110" />
                             <span>{{ approveProcessing === approval.id ? 'Approving…' : 'Approve' }}</span>
@@ -323,7 +312,7 @@ const refreshApprovals = () => {
                         <button
                             @click="openRejectDialog(approval.id)"
                             :disabled="approveProcessing === approval.id || approveForm.processing"
-                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-red-600 hover:to-red-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-300 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-red-600 hover:to-red-700 hover:shadow-lg focus:ring-2 focus:ring-red-300 focus:outline-none disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <XCircle :size="18" class="transition-transform group-hover:scale-110" />
                             <span>Decline</span>
@@ -343,7 +332,7 @@ const refreshApprovals = () => {
                 <div class="mt-2 space-y-4">
                     <textarea
                         v-model="rejectForm.comments"
-                        class="min-h-[100px] w-full rounded-lg border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                        class="min-h-[100px] w-full rounded-lg border p-3 text-sm focus:ring-2 focus:ring-red-400 focus:outline-none"
                         placeholder="Enter rejection reason (required)..."
                     />
                     <p v-if="rejectForm.errors.comments" class="text-sm text-red-500">
@@ -351,11 +340,7 @@ const refreshApprovals = () => {
                     </p>
                     <div class="flex justify-end gap-3">
                         <Button variant="outline" @click="showRejectDialog = false">Cancel</Button>
-                        <Button
-                            variant="destructive"
-                            :disabled="rejectForm.processing || !rejectForm.comments.trim()"
-                            @click="submitRejection"
-                        >
+                        <Button variant="destructive" :disabled="rejectForm.processing || !rejectForm.comments.trim()" @click="submitRejection">
                             <span v-if="rejectForm.processing">Declining…</span>
                             <span v-else>Confirm Decline</span>
                         </Button>

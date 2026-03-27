@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 interface Workflow {
@@ -51,10 +51,10 @@ const breadcrumbs = [
 const formatDate = (date: string | null): string => {
     if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {
-        year:   'numeric',
-        month:  'short',
-        day:    'numeric',
-        hour:   '2-digit',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
         minute: '2-digit',
     });
 };
@@ -62,51 +62,46 @@ const formatDate = (date: string | null): string => {
 const formatDateShort = (date: string | null): string => {
     if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {
-        year:  'numeric',
+        year: 'numeric',
         month: 'short',
-        day:   'numeric',
+        day: 'numeric',
     });
 };
 
-
-
-const isFinished = (status: string): boolean =>
-    status === 'completed' || status === 'rejected';
+const isFinished = (status: string): boolean => status === 'completed' || status === 'rejected';
 
 const statusLabel = (status: string): string => {
     const labels: Record<string, string> = {
-        pending:     'Pending',
+        pending: 'Pending',
         in_progress: 'In Progress',
-        completed:   'Completed',
-        rejected:    'Rejected',
+        completed: 'Completed',
+        rejected: 'Rejected',
     };
     return labels[status] ?? status;
 };
 
 const dotClass = (status: string): string => {
     const map: Record<string, string> = {
-        completed:   'bg-green-500',
-        rejected:    'bg-red-500',
+        completed: 'bg-green-500',
+        rejected: 'bg-red-500',
         in_progress: 'bg-yellow-500',
-        pending:     'bg-gray-400',
+        pending: 'bg-gray-400',
     };
     return map[status] ?? 'bg-gray-400';
 };
 
 const badgeClass = (status: string): string => {
     const map: Record<string, string> = {
-        completed:   'bg-green-100 text-green-800',
-        rejected:    'bg-red-100 text-red-800',
+        completed: 'bg-green-100 text-green-800',
+        rejected: 'bg-red-100 text-red-800',
         in_progress: 'bg-yellow-100 text-yellow-800',
-        pending:     'bg-gray-100 text-gray-800',
+        pending: 'bg-gray-100 text-gray-800',
     };
     return map[status] ?? 'bg-gray-100 text-gray-800';
 };
 
 const assessmentStatusBadge = (status: string): string => {
-    return status === 'active'
-        ? 'bg-green-100 text-green-800'
-        : 'bg-gray-100 text-gray-600';
+    return status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600';
 };
 </script>
 
@@ -130,12 +125,8 @@ const assessmentStatusBadge = (status: string): string => {
                 <div class="space-y-4">
                     <div v-if="workflows && workflows.length > 0">
                         <div v-for="(workflow, index) in workflows" :key="workflow.id" class="relative">
-
                             <!-- Connector line between items -->
-                            <div
-                                v-if="index < workflows.length - 1"
-                                class="absolute top-12 left-6 h-12 w-0.5 bg-gray-300"
-                            ></div>
+                            <div v-if="index < workflows.length - 1" class="absolute top-12 left-6 h-12 w-0.5 bg-gray-300"></div>
 
                             <div class="flex gap-4">
                                 <!-- Status dot -->
@@ -156,10 +147,7 @@ const assessmentStatusBadge = (status: string): string => {
                                                 Current step: <span class="font-medium">{{ workflow.current_step }}</span>
                                             </p>
                                         </div>
-                                        <span
-                                            class="rounded-full px-3 py-1 text-sm font-semibold capitalize"
-                                            :class="badgeClass(workflow.status)"
-                                        >
+                                        <span class="rounded-full px-3 py-1 text-sm font-semibold capitalize" :class="badgeClass(workflow.status)">
                                             {{ statusLabel(workflow.status) }}
                                         </span>
                                     </div>
@@ -200,9 +188,7 @@ const assessmentStatusBadge = (status: string): string => {
                     <!-- Empty state -->
                     <div v-else class="rounded-lg border bg-gray-50 py-10 text-center">
                         <p class="text-gray-500">No approval workflows on record.</p>
-                        <p class="mt-1 text-sm text-gray-400">
-                            Payment approvals will appear here once the student submits a payment.
-                        </p>
+                        <p class="mt-1 text-sm text-gray-400">Payment approvals will appear here once the student submits a payment.</p>
                     </div>
                 </div>
             </div>
@@ -211,8 +197,7 @@ const assessmentStatusBadge = (status: string): string => {
             <div>
                 <h2 class="mb-4 text-lg font-semibold text-gray-800">Assessment History</h2>
                 <p class="mb-4 text-sm text-gray-500">
-                    Each row is a fee assessment created by the registrar. This is the source of
-                    each charge on the student's account.
+                    Each row is a fee assessment created by the registrar. This is the source of each charge on the student's account.
                 </p>
 
                 <div v-if="assessments && assessments.length > 0" class="overflow-hidden rounded-xl border bg-white shadow-sm">
@@ -231,11 +216,7 @@ const assessmentStatusBadge = (status: string): string => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
-                            <tr
-                                v-for="assessment in assessments"
-                                :key="assessment.id"
-                                class="transition-colors hover:bg-gray-50"
-                            >
+                            <tr v-for="assessment in assessments" :key="assessment.id" class="transition-colors hover:bg-gray-50">
                                 <td class="px-5 py-3 font-medium text-gray-800">{{ assessment.school_year }}</td>
                                 <td class="px-5 py-3 text-gray-700">{{ assessment.semester }}</td>
                                 <td class="px-5 py-3 text-gray-700">{{ assessment.year_level }}</td>
@@ -266,12 +247,9 @@ const assessmentStatusBadge = (status: string): string => {
                 <!-- Empty state -->
                 <div v-else class="rounded-lg border bg-gray-50 py-10 text-center">
                     <p class="text-gray-500">No assessments on record.</p>
-                    <p class="mt-1 text-sm text-gray-400">
-                        Fee assessments will appear here once the registrar creates one for this student.
-                    </p>
+                    <p class="mt-1 text-sm text-gray-400">Fee assessments will appear here once the registrar creates one for this student.</p>
                 </div>
             </div>
-
         </div>
     </AppLayout>
 </template>

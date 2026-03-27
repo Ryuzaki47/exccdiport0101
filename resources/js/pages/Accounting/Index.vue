@@ -99,10 +99,10 @@
 
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 interface Workflow {
@@ -147,8 +147,6 @@ const filteredWorkflows = computed(() => {
 
     return filtered;
 });
-
-
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {

@@ -42,9 +42,5 @@ defineProps<Props>();
 
 <template>
     <Head title="Edit Notification" />
-    <Form
-        :notification="notification"
-        :students="students"
-        :payment-terms="paymentTerms"
-    />
+    <Form :notification="notification" :students="students" :payment-terms="paymentTerms" />
 </template>

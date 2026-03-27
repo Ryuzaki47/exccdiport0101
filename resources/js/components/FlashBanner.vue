@@ -17,10 +17,10 @@ const flash = computed<FlashProps>(() => (page.props.flash as FlashProps) ?? {})
 
 // Active message — picked in priority order: error > warning > success > info
 const activeType = computed<FlashType | null>(() => {
-    if (flash.value.error)   return 'error';
+    if (flash.value.error) return 'error';
     if (flash.value.warning) return 'warning';
     if (flash.value.success) return 'success';
-    if (flash.value.info)    return 'info';
+    if (flash.value.info) return 'info';
     return null;
 });
 
@@ -36,44 +36,44 @@ watch(activeMessage, (msg) => {
     if (msg) dismissed.value = false;
 });
 
-const isVisible = computed(() => !! activeMessage.value && ! dismissed.value);
+const isVisible = computed(() => !!activeMessage.value && !dismissed.value);
 
 // Style map — one entry per flash type
 const styles: Record<FlashType, { container: string; icon: string; text: string; close: string }> = {
     error: {
         container: 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800',
-        icon:      'text-red-500 dark:text-red-400',
-        text:      'text-red-800 dark:text-red-200',
-        close:     'text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200',
+        icon: 'text-red-500 dark:text-red-400',
+        text: 'text-red-800 dark:text-red-200',
+        close: 'text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200',
     },
     warning: {
         container: 'bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800',
-        icon:      'text-amber-500 dark:text-amber-400',
-        text:      'text-amber-800 dark:text-amber-200',
-        close:     'text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-200',
+        icon: 'text-amber-500 dark:text-amber-400',
+        text: 'text-amber-800 dark:text-amber-200',
+        close: 'text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-200',
     },
     success: {
         container: 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800',
-        icon:      'text-green-500 dark:text-green-400',
-        text:      'text-green-800 dark:text-green-200',
-        close:     'text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-200',
+        icon: 'text-green-500 dark:text-green-400',
+        text: 'text-green-800 dark:text-green-200',
+        close: 'text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-200',
     },
     info: {
         container: 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800',
-        icon:      'text-blue-500 dark:text-blue-400',
-        text:      'text-blue-800 dark:text-blue-200',
-        close:     'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200',
+        icon: 'text-blue-500 dark:text-blue-400',
+        text: 'text-blue-800 dark:text-blue-200',
+        close: 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200',
     },
 };
 
-const currentStyle = computed(() => activeType.value ? styles[activeType.value] : null);
+const currentStyle = computed(() => (activeType.value ? styles[activeType.value] : null));
 
 // SVG icon paths — avoids adding lucide-vue-next as a dep just for this
 const iconPaths: Record<FlashType, string> = {
-    error:   'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
+    error: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
     warning: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
     success: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
-    info:    'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    info: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
 };
 </script>
 
@@ -88,7 +88,7 @@ const iconPaths: Record<FlashType, string> = {
     >
         <div
             v-if="isVisible && activeType && currentStyle"
-            :class="['flex items-start gap-3 border rounded-lg px-4 py-3 mx-4 mt-4 text-sm', currentStyle.container]"
+            :class="['mx-4 mt-4 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm', currentStyle.container]"
             role="alert"
         >
             <!-- Icon -->
@@ -111,13 +111,16 @@ const iconPaths: Record<FlashType, string> = {
             </p>
 
             <!-- Dismiss button -->
-            <button
-                type="button"
-                :class="['shrink-0 transition-colors', currentStyle.close]"
-                aria-label="Dismiss"
-                @click="dismissed = true"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <button type="button" :class="['shrink-0 transition-colors', currentStyle.close]" aria-label="Dismiss" @click="dismissed = true">
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                >
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>

@@ -84,8 +84,8 @@ type Notification = {
     is_active: boolean;
     start_date?: string;
     end_date?: string;
-    due_date?: string | null;         // actual payment deadline (structured column)
-    payment_term_id?: number | null;  // links to the originating payment term
+    due_date?: string | null; // actual payment deadline (structured column)
+    payment_term_id?: number | null; // links to the originating payment term
     dismissed_at?: string | null;
     created_at: string;
 };
@@ -220,7 +220,7 @@ const hiddenNotifications = ref<Set<number>>(new Set());
 const getDueDateColor = (dueDateStr: string | null | undefined): 'red' | 'amber' | 'green' => {
     if (!dueDateStr) return 'amber';
     const diffDays = Math.ceil((new Date(dueDateStr).getTime() - Date.now()) / 86_400_000);
-    if (diffDays <= 7)  return 'red';
+    if (diffDays <= 7) return 'red';
     if (diffDays <= 14) return 'amber';
     return 'green';
 };
@@ -228,7 +228,7 @@ const getDueDateColor = (dueDateStr: string | null | undefined): 'red' | 'amber'
 const dueDateLabel = (dueDateStr: string | null | undefined): string => {
     if (!dueDateStr) return '';
     const diffDays = Math.ceil((new Date(dueDateStr).getTime() - Date.now()) / 86_400_000);
-    if (diffDays < 0)   return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
+    if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
     if (diffDays === 0) return 'Due today';
     if (diffDays === 1) return 'Due tomorrow';
     if (diffDays <= 14) return `Due in ${diffDays} days`;
@@ -305,8 +305,6 @@ const totalAssessmentFee = computed(() => {
     }
     return props.fees.reduce((sum, fee) => sum + Number(fee.amount), 0);
 });
-
-
 
 // Calculate remaining balance from PAYMENT TERMS (not transactions)
 // Payment terms are the source of truth for student balances
@@ -412,9 +410,7 @@ const enrolledSubjectPanels = computed(() => {
     return [currentAssessmentFull]
         .filter((a) => a.fee_breakdown && a.fee_breakdown.length > 0)
         .map((a) => {
-            const subjectRows = a.fee_breakdown.filter(
-                (item) => item.category === 'Tuition' || item.category === 'Laboratory',
-            );
+            const subjectRows = a.fee_breakdown.filter((item) => item.category === 'Tuition' || item.category === 'Laboratory');
 
             const subjectMap: Record<
                 number,
@@ -430,9 +426,7 @@ const enrolledSubjectPanels = computed(() => {
                 }
             > = {};
 
-            const enrolledIds = new Set(
-                (props.enrolledSubjectsByAssessment ?? {})[a.id] ?? [],
-            );
+            const enrolledIds = new Set((props.enrolledSubjectsByAssessment ?? {})[a.id] ?? []);
 
             for (const row of subjectRows) {
                 const sid = row.subject_id;
@@ -440,37 +434,37 @@ const enrolledSubjectPanels = computed(() => {
 
                 if (!subjectMap[sid]) {
                     subjectMap[sid] = {
-                        subject_id:    sid,
-                        code:          row.code ?? '—',
-                        name:          row.name,
-                        units:         row.units ?? 0,
+                        subject_id: sid,
+                        code: row.code ?? '—',
+                        name: row.name,
+                        units: row.units ?? 0,
                         tuitionAmount: 0,
-                        labAmount:     0,
-                        hasLab:        false,
-                        isEnrolled:    enrolledIds.has(sid),
+                        labAmount: 0,
+                        hasLab: false,
+                        isEnrolled: enrolledIds.has(sid),
                     };
                 }
 
                 if (row.category === 'Tuition') {
                     subjectMap[sid].tuitionAmount = parseFloat(String(row.amount));
-                    subjectMap[sid].units         = row.units ?? subjectMap[sid].units;
+                    subjectMap[sid].units = row.units ?? subjectMap[sid].units;
                     if (!subjectMap[sid].name || subjectMap[sid].name.startsWith('Laboratory')) {
                         subjectMap[sid].name = row.name;
                     }
                 } else if (row.category === 'Laboratory') {
                     subjectMap[sid].labAmount = parseFloat(String(row.amount));
-                    subjectMap[sid].hasLab    = true;
+                    subjectMap[sid].hasLab = true;
                 }
             }
 
-            const subjects   = Object.values(subjectMap);
+            const subjects = Object.values(subjectMap);
             const totalUnits = subjects.reduce((s, sub) => s + sub.units, 0);
 
             return {
                 assessmentId: a.id,
-                label:        `${a.year_level} — ${a.semester}`,
-                schoolYear:   a.school_year,
-                course:       a.course ?? '—',
+                label: `${a.year_level} — ${a.semester}`,
+                schoolYear: a.school_year,
+                course: a.course ?? '—',
                 totalUnits,
                 subjectCount: subjects.length,
                 subjects,
@@ -512,7 +506,7 @@ const paymentHistory = computed(() => {
     }
 
     const termYear = currentTermYear.value;
-    const termSem  = currentTermSem.value;
+    const termSem = currentTermSem.value;
 
     return allPayments.filter((t) => {
         // Primary: match using the explicit year + semester columns on the transaction.
@@ -532,13 +526,11 @@ const paymentHistory = computed(() => {
 const totalPaid = computed(() => {
     if (!props.latestAssessment || !currentTermYear.value || !currentTermSem.value) {
         // No assessment — sum all confirmed payments
-        return props.transactions
-            .filter((t) => t.kind === 'payment' && t.status === 'paid')
-            .reduce((sum, t) => sum + Number(t.amount), 0);
+        return props.transactions.filter((t) => t.kind === 'payment' && t.status === 'paid').reduce((sum, t) => sum + Number(t.amount), 0);
     }
 
     const termYear = currentTermYear.value;
-    const termSem  = currentTermSem.value;
+    const termSem = currentTermSem.value;
 
     return props.transactions
         .filter((t) => {
@@ -695,15 +687,15 @@ const submitPayment = () => {
 // ─── Transaction Detail Dialog ────────────────────────────────────────────────
 
 const selectedTransaction = ref<Transaction | null>(null);
-const showDetailsDialog   = ref(false);
+const showDetailsDialog = ref(false);
 
 const viewTransaction = (transaction: Transaction) => {
     selectedTransaction.value = transaction;
-    showDetailsDialog.value   = true;
+    showDetailsDialog.value = true;
 };
 
 const closeDetailsDialog = () => {
-    showDetailsDialog.value   = false;
+    showDetailsDialog.value = false;
     selectedTransaction.value = null;
 };
 
@@ -735,39 +727,30 @@ const accountBalance = computed(() => {
                 v-for="notification in activeNotifications"
                 :key="notification.id"
                 class="mb-4 flex items-start gap-3 rounded-lg border p-4"
-                :class="notification.type === 'payment_due'
-                    ? 'border-amber-300 bg-amber-50'
-                    : 'border-blue-200 bg-blue-50'"
+                :class="notification.type === 'payment_due' ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-blue-50'"
             >
                 <!-- Icon -->
-                <div
-                    class="mt-0.5 flex-shrink-0 rounded-full p-1"
-                    :class="notification.type === 'payment_due' ? 'bg-amber-100' : 'bg-blue-100'"
-                >
-                    <AlertCircle
-                        :size="18"
-                        :class="notification.type === 'payment_due' ? 'text-amber-600' : 'text-blue-600'"
-                    />
+                <div class="mt-0.5 flex-shrink-0 rounded-full p-1" :class="notification.type === 'payment_due' ? 'bg-amber-100' : 'bg-blue-100'">
+                    <AlertCircle :size="18" :class="notification.type === 'payment_due' ? 'text-amber-600' : 'text-blue-600'" />
                 </div>
 
                 <!-- Content -->
-                <div class="flex-1 min-w-0">
-                    <h3
-                        class="mb-0.5 text-sm font-semibold"
-                        :class="notification.type === 'payment_due' ? 'text-amber-900' : 'text-blue-900'"
-                    >
+                <div class="min-w-0 flex-1">
+                    <h3 class="mb-0.5 text-sm font-semibold" :class="notification.type === 'payment_due' ? 'text-amber-900' : 'text-blue-900'">
                         {{ notification.title }}
                     </h3>
 
                     <!-- Due date chip — colour-coded by urgency, uses structured due_date column -->
                     <div v-if="notification.type === 'payment_due' && notification.due_date" class="mb-2">
                         <span
-                            :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                            :class="[
+                                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
                                 getDueDateColor(notification.due_date) === 'red'
                                     ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
                                     : getDueDateColor(notification.due_date) === 'amber'
                                       ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
-                                      : 'bg-green-100 text-green-700 ring-1 ring-green-200']"
+                                      : 'bg-green-100 text-green-700 ring-1 ring-green-200',
+                            ]"
                         >
                             <CalendarClock :size="11" />
                             {{ dueDateLabel(notification.due_date) }}
@@ -775,10 +758,7 @@ const accountBalance = computed(() => {
                         </span>
                     </div>
 
-                    <p
-                        class="text-sm leading-relaxed"
-                        :class="notification.type === 'payment_due' ? 'text-amber-800' : 'text-blue-800'"
-                    >
+                    <p class="text-sm leading-relaxed" :class="notification.type === 'payment_due' ? 'text-amber-800' : 'text-blue-800'">
                         {{ notification.message }}
                     </p>
                     <p
@@ -792,10 +772,12 @@ const accountBalance = computed(() => {
                     <!-- Pay Now shortcut — scrolls to the correct term in the payment tab -->
                     <div v-if="notification.type === 'payment_due' && notification.payment_term_id" class="mt-2">
                         <button
-                            @click="() => {
-                                paymentForm.selected_term_id = notification.payment_term_id!;
-                                activeTab = 'payment';
-                            }"
+                            @click="
+                                () => {
+                                    paymentForm.selected_term_id = notification.payment_term_id!;
+                                    activeTab = 'payment';
+                                }
+                            "
                             class="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-green-700"
                         >
                             Pay Now
@@ -837,8 +819,13 @@ const accountBalance = computed(() => {
                         <span :class="getAssessmentStatusConfig(latestAssessment.status).textColor">{{ latestAssessment.status }}</span>
                     </div>
                     <div v-if="user">
-                        <span :class="['rounded-full px-3 py-1 text-xs font-semibold',
-                                     user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700']">{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span>
+                        <span
+                            :class="[
+                                'rounded-full px-3 py-1 text-xs font-semibold',
+                                user.is_irregular ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700',
+                            ]"
+                            >{{ user.is_irregular ? 'Irregular' : 'Regular' }}</span
+                        >
                     </div>
                 </div>
             </div>
@@ -869,11 +856,9 @@ const accountBalance = computed(() => {
                     <h3 class="mb-2 text-sm font-medium text-gray-600">Total Paid</h3>
                     <p class="text-3xl font-bold text-green-600">{{ formatCurrency(totalPaid) }}</p>
                     <p class="mt-2 text-xs text-gray-500">
-                        <span v-if="latestAssessment">
-                            {{ latestAssessment.semester }} {{ latestAssessment.school_year }}
-                        </span>
+                        <span v-if="latestAssessment"> {{ latestAssessment.semester }} {{ latestAssessment.school_year }} </span>
                         <span v-else>All payments</span>
-                        &mdash; {{ paymentHistory.filter(t => t.status === 'paid').length }} payment(s)
+                        &mdash; {{ paymentHistory.filter((t) => t.status === 'paid').length }} payment(s)
                     </p>
                 </div>
 
@@ -1029,25 +1014,50 @@ const accountBalance = computed(() => {
                                                         If no payment exists for the term yet, shows a tooltip.
                                                     -->
                                                     <button
-                                                        @click="() => {
-                                                            const termTx = transactions
-                                                                .filter(t => t.kind === 'payment' && (
-                                                                    (t.meta && t.meta.selected_term_id === term.id) ||
-                                                                    (t.meta && t.meta.term_name === term.term_name)
-                                                                ))
-                                                                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                                                            if (termTx) viewTransaction(termTx);
-                                                        }"
-                                                        :disabled="!transactions.some(t => t.kind === 'payment' && t.meta && (t.meta.selected_term_id === term.id || t.meta.term_name === term.term_name))"
+                                                        @click="
+                                                            () => {
+                                                                const termTx = transactions
+                                                                    .filter(
+                                                                        (t) =>
+                                                                            t.kind === 'payment' &&
+                                                                            ((t.meta && t.meta.selected_term_id === term.id) ||
+                                                                                (t.meta && t.meta.term_name === term.term_name)),
+                                                                    )
+                                                                    .sort(
+                                                                        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+                                                                    )[0];
+                                                                if (termTx) viewTransaction(termTx);
+                                                            }
+                                                        "
+                                                        :disabled="
+                                                            !transactions.some(
+                                                                (t) =>
+                                                                    t.kind === 'payment' &&
+                                                                    t.meta &&
+                                                                    (t.meta.selected_term_id === term.id || t.meta.term_name === term.term_name),
+                                                            )
+                                                        "
                                                         :class="[
                                                             'rounded px-2 py-1 text-xs transition-colors',
-                                                            transactions.some(t => t.kind === 'payment' && t.meta && (t.meta.selected_term_id === term.id || t.meta.term_name === term.term_name))
+                                                            transactions.some(
+                                                                (t) =>
+                                                                    t.kind === 'payment' &&
+                                                                    t.meta &&
+                                                                    (t.meta.selected_term_id === term.id || t.meta.term_name === term.term_name),
+                                                            )
                                                                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                                                                 : 'cursor-not-allowed bg-gray-200 text-gray-400',
                                                         ]"
-                                                        :title="transactions.some(t => t.kind === 'payment' && t.meta && (t.meta.selected_term_id === term.id || t.meta.term_name === term.term_name))
-                                                            ? 'View payment details'
-                                                            : 'No payment recorded for this term yet'"
+                                                        :title="
+                                                            transactions.some(
+                                                                (t) =>
+                                                                    t.kind === 'payment' &&
+                                                                    t.meta &&
+                                                                    (t.meta.selected_term_id === term.id || t.meta.term_name === term.term_name),
+                                                            )
+                                                                ? 'View payment details'
+                                                                : 'No payment recorded for this term yet'
+                                                        "
                                                     >
                                                         View
                                                     </button>
@@ -1090,8 +1100,18 @@ const accountBalance = computed(() => {
                         <!-- ── Enrolled Subjects Accordion ──────────────────────────────── -->
                         <div v-if="enrolledSubjectPanels.length > 0" class="mt-8 border-t pt-6">
                             <h3 class="text-md mb-4 flex items-center gap-2 font-semibold text-gray-800">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    class="h-5 w-5 text-gray-500"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
                                 </svg>
                                 ENROLLED SUBJECTS
                             </h3>
@@ -1110,7 +1130,10 @@ const accountBalance = computed(() => {
                                     <div>
                                         <span class="font-medium text-gray-800">{{ panel.label }}</span>
                                         <span class="ml-2 text-xs text-gray-500">{{ panel.schoolYear }}</span>
-                                        <span v-if="panel.course !== '—'" class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                        <span
+                                            v-if="panel.course !== '—'"
+                                            class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
+                                        >
                                             {{ panel.course }}
                                         </span>
                                     </div>
@@ -1175,9 +1198,7 @@ const accountBalance = computed(() => {
                                         </tbody>
                                         <tfoot class="border-t-2 border-gray-200 bg-gray-50">
                                             <tr>
-                                                <td colspan="2" class="px-4 py-2 text-xs font-semibold text-gray-600">
-                                                    Total
-                                                </td>
+                                                <td colspan="2" class="px-4 py-2 text-xs font-semibold text-gray-600">Total</td>
                                                 <td class="px-4 py-2 text-center text-xs font-bold text-gray-800">
                                                     {{ panel.totalUnits }}
                                                 </td>
@@ -1208,9 +1229,7 @@ const accountBalance = computed(() => {
                                     <strong>{{ latestAssessment.semester }} {{ latestAssessment.school_year }}</strong>
                                     — {{ latestAssessment.assessment_number }}
                                 </p>
-                                <p v-else class="mt-0.5 text-xs text-gray-500">
-                                    Showing all payment history (no active assessment found)
-                                </p>
+                                <p v-else class="mt-0.5 text-xs text-gray-500">Showing all payment history (no active assessment found)</p>
                             </div>
                         </div>
 
@@ -1500,10 +1519,7 @@ const accountBalance = computed(() => {
                             </div>
                             <div class="col-span-2">
                                 <p class="text-xs text-gray-500">Amount</p>
-                                <p
-                                    class="text-2xl font-bold"
-                                    :class="selectedTransaction.kind === 'charge' ? 'text-red-600' : 'text-green-600'"
-                                >
+                                <p class="text-2xl font-bold" :class="selectedTransaction.kind === 'charge' ? 'text-red-600' : 'text-green-600'">
                                     {{ selectedTransaction.kind === 'charge' ? '+' : '−' }}{{ formatCurrency(selectedTransaction.amount) }}
                                 </p>
                             </div>

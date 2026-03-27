@@ -37,6 +37,7 @@ interface Assessment {
     semester: string;
     year_level: string;
     course: string | null;
+    total_assessment: number;
     fee_breakdown: Array<{
         subject_id?: number;
         code?: string;
@@ -98,13 +99,24 @@ const toggle = (key: string) => {
 };
 
 // ─── Summary per term ─────────────────────────────────────────────────────────
-const calculateTermSummary = (transactions: Transaction[]): TermSummary => {
-    if (!transactions?.length) return { total_assessment: 0, total_paid: 0, current_balance: 0 };
+// total_assessment comes from allAssessments (StudentAssessment.total_assessment).
+// kind='charge' Transaction rows no longer exist — assessment totals are authoritative.
+const assessmentByTermKey = computed(() => {
+    const map: Record<string, number> = {};
+    for (const a of props.allAssessments) {
+        const startYear = parseInt(String(a.school_year?.split('-')[0] ?? ''), 10);
+        const key = `${startYear} ${a.semester}`;
+        map[key] = a.total_assessment ?? 0;
+    }
+    return map;
+});
 
-    const charges  = transactions.filter((t) => t.kind === 'charge').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
-    const payments = transactions.filter((t) => t.kind === 'payment' && t.status === 'paid').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
-
-    return { total_assessment: charges, total_paid: payments, current_balance: charges - payments };
+const calculateTermSummary = (termKey: string, transactions: Transaction[]): TermSummary => {
+    const totalAssessment = assessmentByTermKey.value[termKey] ?? 0;
+    const payments = transactions
+        .filter((t) => t.kind === 'payment' && t.status === 'paid')
+        .reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+    return { total_assessment: totalAssessment, total_paid: payments, current_balance: totalAssessment - payments };
 };
 
 // ─── Enrolled Subjects by Term ────────────────────────────────────────────────
@@ -386,16 +398,16 @@ const payNow = () => {
                     <div class="flex items-center gap-10 text-right">
                         <div>
                             <p class="text-xs text-gray-500">Total Assessed</p>
-                            <p class="font-bold text-red-600">₱{{ formatCurrency(calculateTermSummary(transactions).total_assessment) }}</p>
+                            <p class="font-bold text-red-600">₱{{ formatCurrency(calculateTermSummary(String(termKey), transactions).total_assessment) }}</p>
                         </div>
                         <div>
                             <p class="text-xs text-gray-500">Total Paid</p>
-                            <p class="font-bold text-green-600">₱{{ formatCurrency(calculateTermSummary(transactions).total_paid) }}</p>
+                            <p class="font-bold text-green-600">₱{{ formatCurrency(calculateTermSummary(String(termKey), transactions).total_paid) }}</p>
                         </div>
                         <div>
                             <p class="text-xs text-gray-500">Balance</p>
-                            <p class="font-bold" :class="calculateTermSummary(transactions).current_balance > 0 ? 'text-red-600' : 'text-green-600'">
-                                ₱{{ formatCurrency(Math.abs(calculateTermSummary(transactions).current_balance)) }}
+                            <p class="font-bold" :class="calculateTermSummary(String(termKey), transactions).current_balance > 0 ? 'text-red-600' : 'text-green-600'">
+                                ₱{{ formatCurrency(Math.abs(calculateTermSummary(String(termKey), transactions).current_balance)) }}
                             </p>
                         </div>
 
@@ -465,7 +477,7 @@ const payNow = () => {
                                             class="rounded-full px-2 py-1 text-xs font-semibold"
                                             :class="t.kind === 'charge' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'"
                                         >
-                                            {{ t.kind }}
+                                            {{ t.kind === 'charge' ? 'Assessment' : 'Payment' }}
                                         </span>
                                     </td>
                                     <td class="p-3 text-sm">
@@ -480,7 +492,7 @@ const payNow = () => {
                                         <span v-else class="text-gray-400">—</span>
                                     </td>
                                     <td class="p-3 font-semibold" :class="t.kind === 'charge' ? 'text-red-600' : 'text-green-600'">
-                                        {{ t.kind === 'charge' ? '+' : '−' }}₱{{ formatCurrency(t.amount) }}
+                                        {{ t.kind === 'charge' ? '−' : '+' }}₱{{ formatCurrency(t.amount) }}
                                     </td>
                                     <td class="p-3">
                                         <span
@@ -704,7 +716,7 @@ const payNow = () => {
                                         class="inline-block rounded-full px-2 py-0.5 text-xs font-semibold"
                                         :class="selectedTransaction.kind === 'charge' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'"
                                     >
-                                        {{ selectedTransaction.kind }}
+                                        {{ selectedTransaction.kind === 'charge' ? 'Assessment' : 'Payment' }}
                                     </span>
                                 </div>
                                 <div>
@@ -731,7 +743,7 @@ const payNow = () => {
                                 <div class="col-span-2">
                                     <p class="text-xs text-gray-500">Amount</p>
                                     <p class="text-2xl font-bold" :class="selectedTransaction.kind === 'charge' ? 'text-red-600' : 'text-green-600'">
-                                        {{ selectedTransaction.kind === 'charge' ? '+' : '−' }}₱{{ formatCurrency(selectedTransaction.amount) }}
+                                        {{ selectedTransaction.kind === 'charge' ? '−' : '+' }}₱{{ formatCurrency(selectedTransaction.amount) }}
                                     </p>
                                 </div>
                                 <div v-if="!isStaff" class="col-span-2">

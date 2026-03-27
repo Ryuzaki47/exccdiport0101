@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentAssessment;
+use App\Models\StudentPaymentTerm;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WorkflowApproval;
@@ -23,8 +24,10 @@ class AccountingDashboardController extends Controller
             default                     => 'Summer',
         };
 
-        // ── Transaction aggregates ─────────────────────────────────────────────
-        $totalCharges  = (float) Transaction::where('kind', 'charge')->sum('amount');
+        // ── Financial aggregates ──────────────────────────────────────────────
+        // Total assessed = sum of all active assessment totals.
+        // No longer derived from kind='charge' Transaction rows — those are gone.
+        $totalCharges  = (float) StudentAssessment::where('status', 'active')->sum('total_assessment');
         $totalPayments = (float) Transaction::where('kind', 'payment')->where('status', 'paid')->sum('amount');
         $collectionRate = $totalCharges > 0
             ? round(($totalPayments / $totalCharges) * 100, 2)

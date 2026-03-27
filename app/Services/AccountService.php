@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\StudentPaymentTerm;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -33,10 +34,10 @@ class AccountService
     /**
      * Recompute and persist the authoritative balance for a user.
      *
-     * Balance = SUM(charge transactions) - SUM(paid payment transactions)
+     * Balance = SUM(StudentPaymentTerm.balance) across all active assessments.
      *
      * Positive  → student owes money.
-     * Zero/negative → fully paid (or over-paid / credit).
+     * Zero      → fully paid.
      *
      * @param  User|null  $user  Null-safe: no-op when null.
      */
@@ -46,16 +47,15 @@ class AccountService
             return;
         }
 
-        $charges = (float) $user->transactions()
-            ->where('kind', 'charge')
-            ->sum('amount');
+        // Sum outstanding term balances across all active assessments.
+        // kind='charge' Transaction rows are no longer created — balance comes
+        // directly from StudentPaymentTerm.balance which is decremented on payment.
+        $balance = (float) StudentPaymentTerm::whereHas(
+            'assessment',
+            fn ($q) => $q->where('user_id', $user->id)->where('status', 'active')
+        )->sum('balance');
 
-        $payments = (float) $user->transactions()
-            ->where('kind', 'payment')
-            ->where('status', 'paid')
-            ->sum('amount');
-
-        $balance = round($charges - $payments, 2);
+        $balance = round($balance, 2);
 
         // ── Single source of truth: accounts.balance ──────────────────────────
         // Guard against orphan account creation that bypasses generateAccountNumber().

@@ -18,12 +18,12 @@ const breadcrumbItems: BreadcrumbItem[] = [
     },
 ];
 
-const passwordInput        = ref<HTMLInputElement | null>(null);
+const passwordInput = ref<HTMLInputElement | null>(null);
 const currentPasswordInput = ref<HTMLInputElement | null>(null);
 
 const form = useForm({
-    current_password:      '',
-    password:              '',
+    current_password: '',
+    password: '',
     password_confirmation: '',
 });
 
@@ -66,13 +66,9 @@ const submit = () => {
 
         <SettingsLayout>
             <div class="space-y-6">
-                <HeadingSmall
-                    title="Update password"
-                    description="Ensure your account is using a long, random password to stay secure"
-                />
+                <HeadingSmall title="Update password" description="Ensure your account is using a long, random password to stay secure" />
 
                 <form @submit.prevent="submit" class="space-y-6">
-
                     <!-- Current Password -->
                     <div class="grid gap-2">
                         <Label for="current_password">Current password</Label>
@@ -133,12 +129,9 @@ const submit = () => {
                             leave-active-class="transition ease-in-out duration-300"
                             leave-to-class="opacity-0"
                         >
-                            <p v-show="recentlySuccessful" class="text-sm font-medium text-green-600">
-                                ✓ Password updated successfully.
-                            </p>
+                            <p v-show="recentlySuccessful" class="text-sm font-medium text-green-600">✓ Password updated successfully.</p>
                         </Transition>
                     </div>
-
                 </form>
             </div>
         </SettingsLayout>

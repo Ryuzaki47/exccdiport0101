@@ -50,7 +50,7 @@ const props = withDefaults(defineProps<Props>(), {
 const isEditing = computed(() => !!props.notification?.id);
 const searchQuery = ref('');
 const termSelectionMode = ref<'none' | 'by_name' | 'by_id'>(
-    props.notification?.target_term_name ? 'by_name' : (props.notification?.term_ids?.length ? 'by_id' : 'none'),
+    props.notification?.target_term_name ? 'by_name' : props.notification?.term_ids?.length ? 'by_id' : 'none',
 );
 
 const formatDateForInput = (dateString: string | undefined | null): string => {
@@ -65,8 +65,8 @@ const form = useForm({
     target_role: props.notification?.target_role || 'student',
     start_date: formatDateForInput(props.notification?.start_date),
     end_date: formatDateForInput(props.notification?.end_date),
-    due_date: formatDateForInput(props.notification?.due_date),           // ← NEW
-    payment_term_id: props.notification?.payment_term_id || null,         // ← NEW
+    due_date: formatDateForInput(props.notification?.due_date), // ← NEW
+    payment_term_id: props.notification?.payment_term_id || null, // ← NEW
     user_id: props.notification?.user_id || null,
     is_active: props.notification?.is_active !== false,
     term_ids: props.notification?.term_ids || [],
@@ -75,12 +75,15 @@ const form = useForm({
 });
 
 // When type changes away from payment_due, clear due_date
-watch(() => form.type, (newType) => {
-    if (newType !== 'payment_due') {
-        form.due_date = '';
-        form.payment_term_id = null;
-    }
-});
+watch(
+    () => form.type,
+    (newType) => {
+        if (newType !== 'payment_due') {
+            form.due_date = '';
+            form.payment_term_id = null;
+        }
+    },
+);
 
 const submit = () => {
     if (termSelectionMode.value === 'none') {
@@ -165,8 +168,10 @@ const breadcrumbs = [
                         </div>
                     </div>
                     <div v-if="isEditing" class="text-right">
-                        <div class="inline-flex items-center gap-2 rounded-lg px-4 py-2"
-                            :class="form.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'">
+                        <div
+                            class="inline-flex items-center gap-2 rounded-lg px-4 py-2"
+                            :class="form.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                        >
                             <span class="text-sm font-medium">{{ form.is_active ? '✓ Active' : '○ Inactive' }}</span>
                         </div>
                     </div>
@@ -174,7 +179,6 @@ const breadcrumbs = [
 
                 <!-- Main Form Grid -->
                 <div class="grid grid-cols-3 gap-8">
-
                     <!-- Left Column: Form (2/3 width) -->
                     <div class="col-span-2 space-y-6">
                         <Card>
@@ -183,23 +187,27 @@ const breadcrumbs = [
                             </CardHeader>
                             <CardContent>
                                 <form class="space-y-6">
-
                                     <!-- Title -->
                                     <div>
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">Notification Title *</label>
-                                        <input v-model="form.title" type="text"
+                                        <input
+                                            v-model="form.title"
+                                            type="text"
                                             placeholder="e.g., Midterm Payment Due Reminder"
                                             class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                                            required />
+                                            required
+                                        />
                                         <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
                                     </div>
 
                                     <!-- Message -->
                                     <div>
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">Message Content</label>
-                                        <textarea v-model="form.message"
+                                        <textarea
+                                            v-model="form.message"
                                             placeholder="Enter your notification message. Include payment amount, deadline, and payment instructions."
-                                            class="h-40 w-full resize-none rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500">
+                                            class="h-40 w-full resize-none rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                                        >
                                         </textarea>
                                         <p class="mt-1 text-xs text-gray-500">{{ form.message.length }} characters</p>
                                         <p v-if="form.errors.message" class="mt-1 text-sm text-red-600">{{ form.errors.message }}</p>
@@ -208,8 +216,10 @@ const breadcrumbs = [
                                     <!-- Notification Type -->
                                     <div>
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">Notification Type</label>
-                                        <select v-model="form.type"
-                                            class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500">
+                                        <select
+                                            v-model="form.type"
+                                            class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                                        >
                                             <option v-for="option in typeOptions" :key="option.value" :value="option.value">
                                                 {{ option.label }}
                                             </option>
@@ -221,14 +231,17 @@ const breadcrumbs = [
                                     <div v-if="form.type === 'payment_due'" class="rounded-lg border border-amber-200 bg-amber-50 p-4">
                                         <h4 class="mb-3 text-sm font-semibold text-amber-900">💳 Payment Due Date</h4>
                                         <p class="mb-3 text-xs text-amber-700">
-                                            Set the actual payment deadline. This is displayed as a colour-coded chip on the student dashboard
-                                            (red = urgent, amber = soon, green = plenty of time). It is separate from the notification's
-                                            visibility end date below.
+                                            Set the actual payment deadline. This is displayed as a colour-coded chip on the student dashboard (red =
+                                            urgent, amber = soon, green = plenty of time). It is separate from the notification's visibility end date
+                                            below.
                                         </p>
                                         <div>
                                             <label class="mb-1 block text-sm font-medium text-gray-700">Payment Due Date</label>
-                                            <input v-model="form.due_date" type="date"
-                                                class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-amber-500" />
+                                            <input
+                                                v-model="form.due_date"
+                                                type="date"
+                                                class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-amber-500"
+                                            />
                                             <p class="mt-1 text-xs text-gray-500">
                                                 Leave blank if no specific payment deadline applies to this notification.
                                             </p>
@@ -240,21 +253,26 @@ const breadcrumbs = [
                                     <div class="grid grid-cols-2 gap-4">
                                         <div>
                                             <label class="mb-2 block text-sm font-semibold text-gray-900">Start Date *</label>
-                                            <input v-model="form.start_date" type="date"
+                                            <input
+                                                v-model="form.start_date"
+                                                type="date"
                                                 class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                                                required />
+                                                required
+                                            />
                                             <p class="mt-1 text-xs text-gray-500">When this notification becomes visible</p>
                                             <p v-if="form.errors.start_date" class="mt-1 text-sm text-red-600">{{ form.errors.start_date }}</p>
                                         </div>
                                         <div>
                                             <label class="mb-2 block text-sm font-semibold text-gray-900">End Date (Optional)</label>
-                                            <input v-model="form.end_date" type="date"
-                                                class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500" />
+                                            <input
+                                                v-model="form.end_date"
+                                                type="date"
+                                                class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                                            />
                                             <p class="mt-1 text-xs text-gray-500">Leave empty for ongoing notifications</p>
                                             <p v-if="form.errors.end_date" class="mt-1 text-sm text-red-600">{{ form.errors.end_date }}</p>
                                         </div>
                                     </div>
-
                                 </form>
                             </CardContent>
                         </Card>
@@ -266,13 +284,14 @@ const breadcrumbs = [
                             </CardHeader>
                             <CardContent>
                                 <div class="space-y-6">
-
                                     <!-- Target Role -->
                                     <div>
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">Who should see this? *</label>
-                                        <select v-model="form.target_role"
+                                        <select
+                                            v-model="form.target_role"
                                             class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                                            required>
+                                            required
+                                        >
                                             <option value="">-- Select Audience --</option>
                                             <option v-for="option in roleOptions" :key="option.value" :value="option.value">
                                                 {{ option.label }}
@@ -286,18 +305,19 @@ const breadcrumbs = [
 
                                     <!-- Specific Student Selector -->
                                     <div v-if="form.target_role === 'student'">
-                                        <label class="mb-2 block text-sm font-semibold text-gray-900">
-                                            Send to Specific Student (Optional)
-                                        </label>
+                                        <label class="mb-2 block text-sm font-semibold text-gray-900"> Send to Specific Student (Optional) </label>
                                         <p class="mb-2 text-xs text-gray-600">
                                             Leave empty to send to <strong>all matching students</strong>. Select a student for a
                                             <strong>personal notification</strong> only that student will see.
                                         </p>
 
                                         <div class="mb-3">
-                                            <input v-model="searchQuery" type="text"
+                                            <input
+                                                v-model="searchQuery"
+                                                type="text"
                                                 placeholder="Search by name or email"
-                                                class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500" />
+                                                class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                                            />
                                         </div>
 
                                         <div v-if="selectedStudent" class="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
@@ -306,18 +326,31 @@ const breadcrumbs = [
                                                     <p class="font-medium text-gray-900">{{ selectedStudent.name }}</p>
                                                     <p class="text-sm text-gray-600">{{ selectedStudent.email }}</p>
                                                 </div>
-                                                <Button type="button" variant="ghost" size="sm"
-                                                    @click="form.user_id = null" class="text-red-600 hover:text-red-700">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    @click="form.user_id = null"
+                                                    class="text-red-600 hover:text-red-700"
+                                                >
                                                     Clear
                                                 </Button>
                                             </div>
                                         </div>
 
-                                        <div v-if="!selectedStudent && filteredStudents.length > 0"
-                                            class="max-h-64 overflow-y-auto rounded-lg border border-gray-300">
-                                            <div v-for="student in filteredStudents" :key="student.id"
-                                                @click="form.user_id = student.id; searchQuery = ''"
-                                                class="cursor-pointer border-b border-gray-200 p-4 last:border-b-0 hover:bg-blue-50">
+                                        <div
+                                            v-if="!selectedStudent && filteredStudents.length > 0"
+                                            class="max-h-64 overflow-y-auto rounded-lg border border-gray-300"
+                                        >
+                                            <div
+                                                v-for="student in filteredStudents"
+                                                :key="student.id"
+                                                @click="
+                                                    form.user_id = student.id;
+                                                    searchQuery = '';
+                                                "
+                                                class="cursor-pointer border-b border-gray-200 p-4 last:border-b-0 hover:bg-blue-50"
+                                            >
                                                 <p class="font-medium text-gray-900">{{ student.name }}</p>
                                                 <p class="text-sm text-gray-600">{{ student.email }}</p>
                                             </div>
@@ -338,27 +371,39 @@ const breadcrumbs = [
                                 <div class="space-y-5">
                                     <p class="text-xs text-gray-600">
                                         Limit this notification to students who have a specific payment term.
-                                        <strong>Example:</strong> Setting "Midterm" means only students with a Midterm payment term
-                                        on their assessment will see this notification — perfect for "Midterm payment is due" announcements.
+                                        <strong>Example:</strong> Setting "Midterm" means only students with a Midterm payment term on their
+                                        assessment will see this notification — perfect for "Midterm payment is due" announcements.
                                     </p>
 
                                     <!-- Selection Mode -->
                                     <div>
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">Term filter type</label>
                                         <div class="space-y-2">
-                                            <label class="flex items-center gap-3 cursor-pointer">
-                                                <input v-model="termSelectionMode" type="radio" value="none"
-                                                    class="h-4 w-4 border-gray-300 focus:ring-2 focus:ring-blue-500" />
+                                            <label class="flex cursor-pointer items-center gap-3">
+                                                <input
+                                                    v-model="termSelectionMode"
+                                                    type="radio"
+                                                    value="none"
+                                                    class="h-4 w-4 border-gray-300 focus:ring-2 focus:ring-blue-500"
+                                                />
                                                 <span class="text-sm text-gray-700">No filter — show to all matching students</span>
                                             </label>
-                                            <label class="flex items-center gap-3 cursor-pointer">
-                                                <input v-model="termSelectionMode" type="radio" value="by_name"
-                                                    class="h-4 w-4 border-gray-300 focus:ring-2 focus:ring-blue-500" />
+                                            <label class="flex cursor-pointer items-center gap-3">
+                                                <input
+                                                    v-model="termSelectionMode"
+                                                    type="radio"
+                                                    value="by_name"
+                                                    class="h-4 w-4 border-gray-300 focus:ring-2 focus:ring-blue-500"
+                                                />
                                                 <span class="text-sm text-gray-700">By term name (e.g., "Midterm", "Prelim")</span>
                                             </label>
-                                            <label class="flex items-center gap-3 cursor-pointer">
-                                                <input v-model="termSelectionMode" type="radio" value="by_id"
-                                                    class="h-4 w-4 border-gray-300 focus:ring-2 focus:ring-blue-500" />
+                                            <label class="flex cursor-pointer items-center gap-3">
+                                                <input
+                                                    v-model="termSelectionMode"
+                                                    type="radio"
+                                                    value="by_id"
+                                                    class="h-4 w-4 border-gray-300 focus:ring-2 focus:ring-blue-500"
+                                                />
                                                 <span class="text-sm text-gray-700">By specific payment term IDs</span>
                                             </label>
                                         </div>
@@ -367,8 +412,10 @@ const breadcrumbs = [
                                     <!-- By Term Name -->
                                     <div v-if="termSelectionMode === 'by_name'">
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">Which term? *</label>
-                                        <select v-model="form.target_term_name"
-                                            class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500">
+                                        <select
+                                            v-model="form.target_term_name"
+                                            class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                                        >
                                             <option value="">-- Select a Term --</option>
                                             <option value="Upon Registration">Upon Registration</option>
                                             <option value="Prelim">Prelim</option>
@@ -379,7 +426,9 @@ const breadcrumbs = [
                                         <p class="mt-1 text-xs text-gray-500">
                                             Only students who have this term in their assessment will see the notification.
                                         </p>
-                                        <p v-if="form.errors.target_term_name" class="mt-1 text-sm text-red-600">{{ form.errors.target_term_name }}</p>
+                                        <p v-if="form.errors.target_term_name" class="mt-1 text-sm text-red-600">
+                                            {{ form.errors.target_term_name }}
+                                        </p>
                                     </div>
 
                                     <!-- By Specific IDs -->
@@ -387,9 +436,13 @@ const breadcrumbs = [
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">Select Payment Terms *</label>
                                         <div class="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-300 p-4">
                                             <div v-if="paymentTerms.length === 0" class="text-sm text-gray-500">No payment terms available</div>
-                                            <label v-for="term in paymentTerms" :key="term.id" class="flex items-center gap-3 cursor-pointer">
-                                                <input type="checkbox" :value="term.id" v-model="form.term_ids"
-                                                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500" />
+                                            <label v-for="term in paymentTerms" :key="term.id" class="flex cursor-pointer items-center gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    :value="term.id"
+                                                    v-model="form.term_ids"
+                                                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                                />
                                                 <span class="text-sm text-gray-700">{{ term.term_name }}</span>
                                             </label>
                                         </div>
@@ -401,14 +454,20 @@ const breadcrumbs = [
                                         <label class="mb-2 block text-sm font-semibold text-gray-900">
                                             Show only N days before due date (Optional)
                                         </label>
-                                        <input v-model.number="form.trigger_days_before_due" type="number"
+                                        <input
+                                            v-model.number="form.trigger_days_before_due"
+                                            type="number"
                                             placeholder="e.g., 7 — show 7 days before due date"
-                                            min="0" max="90"
-                                            class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500" />
+                                            min="0"
+                                            max="90"
+                                            class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                                        />
                                         <p class="mt-1 text-xs text-gray-500">
                                             Leave blank to always show this notification regardless of due date proximity.
                                         </p>
-                                        <p v-if="form.errors.trigger_days_before_due" class="mt-1 text-sm text-red-600">{{ form.errors.trigger_days_before_due }}</p>
+                                        <p v-if="form.errors.trigger_days_before_due" class="mt-1 text-sm text-red-600">
+                                            {{ form.errors.trigger_days_before_due }}
+                                        </p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -424,9 +483,14 @@ const breadcrumbs = [
                             </CardHeader>
                             <CardContent>
                                 <div class="space-y-4">
-                                    <button type="button" @click="form.is_active = !form.is_active"
+                                    <button
+                                        type="button"
+                                        @click="form.is_active = !form.is_active"
                                         class="flex w-full items-center justify-center gap-3 rounded-lg px-4 py-4 transition"
-                                        :class="form.is_active ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-white hover:bg-gray-400'">
+                                        :class="
+                                            form.is_active ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-white hover:bg-gray-400'
+                                        "
+                                    >
                                         <component :is="form.is_active ? ToggleRight : ToggleLeft" class="h-6 w-6" />
                                         <span class="font-semibold">
                                             {{ form.is_active ? 'Notification Active' : 'Notification Inactive' }}
@@ -467,9 +531,7 @@ const breadcrumbs = [
                                     <p v-else-if="form.user_id">
                                         <strong>Visible to:</strong> {{ selectedStudent?.name ?? 'Selected student' }} only
                                     </p>
-                                    <p v-else>
-                                        <strong>Visible to:</strong> All {{ form.target_role }} users
-                                    </p>
+                                    <p v-else><strong>Visible to:</strong> All {{ form.target_role }} users</p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -481,7 +543,10 @@ const breadcrumbs = [
                             </CardHeader>
                             <CardContent>
                                 <ul class="space-y-2 text-xs text-gray-700">
-                                    <li>✓ For "Midterm payment due" — set type to <strong>Payment Due</strong>, select term filter <strong>Midterm</strong>, and set a <strong>Payment Due Date</strong></li>
+                                    <li>
+                                        ✓ For "Midterm payment due" — set type to <strong>Payment Due</strong>, select term filter
+                                        <strong>Midterm</strong>, and set a <strong>Payment Due Date</strong>
+                                    </li>
                                     <li>✓ The due date chip appears as red (≤7 days), amber (≤14 days), or green on the student's dashboard</li>
                                     <li>✓ General announcements like "Enrollment open" — leave term filter as None</li>
                                     <li>✓ Remember to <strong>Activate</strong> the notification before saving</li>
@@ -496,8 +561,7 @@ const breadcrumbs = [
                     <Link :href="route('notifications.index')">
                         <Button type="button" variant="outline" class="px-6">Cancel</Button>
                     </Link>
-                    <Button type="submit" :disabled="form.processing" @click="submit"
-                        class="bg-blue-600 px-8 text-white hover:bg-blue-700">
+                    <Button type="submit" :disabled="form.processing" @click="submit" class="bg-blue-600 px-8 text-white hover:bg-blue-700">
                         <span v-if="form.processing">Saving...</span>
                         <span v-else>{{ isEditing ? 'Update Notification' : 'Create Notification' }}</span>
                     </Button>
@@ -508,5 +572,10 @@ const breadcrumbs = [
 </template>
 
 <style scoped>
-input, textarea, select, button { transition: all 0.2s ease; }
+input,
+textarea,
+select,
+button {
+    transition: all 0.2s ease;
+}
 </style>

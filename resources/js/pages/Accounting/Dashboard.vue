@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
@@ -17,7 +18,6 @@ import {
     Users,
 } from 'lucide-vue-next';
 import { ref } from 'vue';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 type Stats = {
@@ -93,8 +93,6 @@ const props = defineProps<{
 const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 'Accounting Dashboard' }];
 
 const activeTab = ref<'overview' | 'payments' | 'students'>('overview');
-
-
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -342,7 +340,9 @@ const viewStudent = (studentId: number) => {
                             </div>
                             <div class="flex-1">
                                 <p class="text-sm font-medium text-gray-900">Outstanding Balance</p>
-                                <p class="text-xs text-gray-600">{{ studentFeeStats.pending_assessments_count > 0 ? 'Needs attention' : 'All clear' }}</p>
+                                <p class="text-xs text-gray-600">
+                                    {{ studentFeeStats.pending_assessments_count > 0 ? 'Needs attention' : 'All clear' }}
+                                </p>
                             </div>
                         </Link>
                     </div>

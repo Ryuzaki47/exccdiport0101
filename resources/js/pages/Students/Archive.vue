@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
-import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
 interface Student {
@@ -32,35 +32,25 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const search       = ref(props.filters.search || '');
+const search = ref(props.filters.search || '');
 const statusFilter = ref(props.filters.status || '');
 
 let timeout: ReturnType<typeof setTimeout>;
 watch([search, statusFilter], () => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
-        router.get(
-            route('students.archive'),
-            { search: search.value, status: statusFilter.value },
-            { preserveState: true, replace: true },
-        );
+        router.get(route('students.archive'), { search: search.value, status: statusFilter.value }, { preserveState: true, replace: true });
     }, 300);
 });
 
-const breadcrumbs = [
-    { title: 'Dashboard', href: route('admin.dashboard') },
-    { title: 'Archives' },
-];
+const breadcrumbs = [{ title: 'Dashboard', href: route('admin.dashboard') }, { title: 'Archives' }];
 
-const formatDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
-
-
+const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
     graduated: { label: 'Graduated', classes: 'bg-blue-100 text-blue-800' },
-    dropped:   { label: 'Dropped',   classes: 'bg-red-100 text-red-800'  },
-    inactive:  { label: 'Inactive',  classes: 'bg-gray-100 text-gray-700' },
+    dropped: { label: 'Dropped', classes: 'bg-red-100 text-red-800' },
+    inactive: { label: 'Inactive', classes: 'bg-gray-100 text-gray-700' },
 };
 
 const totalArchived = props.counts.graduated + props.counts.dropped + props.counts.inactive;
@@ -83,7 +73,7 @@ const closeReinstate = () => {
 };
 
 const submitReinstate = () => {
-    if (! selectedStudent.value) return;
+    if (!selectedStudent.value) return;
     reinstateForm.post(route('students.reinstate', selectedStudent.value.id), {
         onSuccess: () => {
             closeReinstate();
@@ -92,8 +82,7 @@ const submitReinstate = () => {
     });
 };
 
-const canReinstate = (student: Student) =>
-    ['dropped', 'inactive'].includes(student.enrollment_status);
+const canReinstate = (student: Student) => ['dropped', 'inactive'].includes(student.enrollment_status);
 </script>
 
 <template>
@@ -110,32 +99,38 @@ const canReinstate = (student: Student) =>
 
             <!-- Summary cards -->
             <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div class="rounded-lg bg-white p-5 shadow-sm border border-gray-100">
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Archived</p>
+                <div class="rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
+                    <p class="text-xs font-medium tracking-wide text-gray-500 uppercase">Total Archived</p>
                     <p class="mt-1 text-3xl font-bold text-gray-800">{{ totalArchived }}</p>
                 </div>
                 <div
-                    class="rounded-lg p-5 shadow-sm border cursor-pointer transition-colors"
-                    :class="statusFilter === 'graduated' ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-100 hover:border-blue-300'"
+                    class="cursor-pointer rounded-lg border p-5 shadow-sm transition-colors"
+                    :class="statusFilter === 'graduated' ? 'border-blue-600 bg-blue-600' : 'border-gray-100 bg-white hover:border-blue-300'"
                     @click="statusFilter = statusFilter === 'graduated' ? '' : 'graduated'"
                 >
-                    <p :class="['text-xs font-medium uppercase tracking-wide', statusFilter === 'graduated' ? 'text-blue-100' : 'text-gray-500']">Graduated</p>
+                    <p :class="['text-xs font-medium tracking-wide uppercase', statusFilter === 'graduated' ? 'text-blue-100' : 'text-gray-500']">
+                        Graduated
+                    </p>
                     <p :class="['mt-1 text-3xl font-bold', statusFilter === 'graduated' ? 'text-white' : 'text-blue-700']">{{ counts.graduated }}</p>
                 </div>
                 <div
-                    class="rounded-lg p-5 shadow-sm border cursor-pointer transition-colors"
-                    :class="statusFilter === 'dropped' ? 'bg-red-600 border-red-600' : 'bg-white border-gray-100 hover:border-red-300'"
+                    class="cursor-pointer rounded-lg border p-5 shadow-sm transition-colors"
+                    :class="statusFilter === 'dropped' ? 'border-red-600 bg-red-600' : 'border-gray-100 bg-white hover:border-red-300'"
                     @click="statusFilter = statusFilter === 'dropped' ? '' : 'dropped'"
                 >
-                    <p :class="['text-xs font-medium uppercase tracking-wide', statusFilter === 'dropped' ? 'text-red-100' : 'text-gray-500']">Dropped</p>
+                    <p :class="['text-xs font-medium tracking-wide uppercase', statusFilter === 'dropped' ? 'text-red-100' : 'text-gray-500']">
+                        Dropped
+                    </p>
                     <p :class="['mt-1 text-3xl font-bold', statusFilter === 'dropped' ? 'text-white' : 'text-red-700']">{{ counts.dropped }}</p>
                 </div>
                 <div
-                    class="rounded-lg p-5 shadow-sm border cursor-pointer transition-colors"
-                    :class="statusFilter === 'inactive' ? 'bg-gray-700 border-gray-700' : 'bg-white border-gray-100 hover:border-gray-400'"
+                    class="cursor-pointer rounded-lg border p-5 shadow-sm transition-colors"
+                    :class="statusFilter === 'inactive' ? 'border-gray-700 bg-gray-700' : 'border-gray-100 bg-white hover:border-gray-400'"
                     @click="statusFilter = statusFilter === 'inactive' ? '' : 'inactive'"
                 >
-                    <p :class="['text-xs font-medium uppercase tracking-wide', statusFilter === 'inactive' ? 'text-gray-200' : 'text-gray-500']">Inactive</p>
+                    <p :class="['text-xs font-medium tracking-wide uppercase', statusFilter === 'inactive' ? 'text-gray-200' : 'text-gray-500']">
+                        Inactive
+                    </p>
                     <p :class="['mt-1 text-3xl font-bold', statusFilter === 'inactive' ? 'text-white' : 'text-gray-700']">{{ counts.inactive }}</p>
                 </div>
             </div>
@@ -159,7 +154,10 @@ const canReinstate = (student: Student) =>
                 </select>
                 <button
                     v-if="search || statusFilter"
-                    @click="search = ''; statusFilter = ''"
+                    @click="
+                        search = '';
+                        statusFilter = '';
+                    "
                     class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
                 >
                     Clear
@@ -167,7 +165,7 @@ const canReinstate = (student: Student) =>
             </div>
 
             <!-- Table -->
-            <div class="overflow-hidden rounded-lg bg-white shadow-sm border border-gray-100">
+            <div class="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-gray-100 text-sm">
                     <thead class="bg-gray-50">
                         <tr>
@@ -183,17 +181,11 @@ const canReinstate = (student: Student) =>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 bg-white">
-                        <tr
-                            v-for="student in students.data"
-                            :key="student.id"
-                            class="hover:bg-gray-50 transition-colors"
-                        >
-                            <td class="px-5 py-4 font-mono text-gray-700 text-xs">{{ student.student_id }}</td>
+                        <tr v-for="student in students.data" :key="student.id" class="transition-colors hover:bg-gray-50">
+                            <td class="px-5 py-4 font-mono text-xs text-gray-700">{{ student.student_id }}</td>
                             <td class="px-5 py-4 font-medium text-gray-900">
                                 {{ student.user?.last_name }}, {{ student.user?.first_name }}
-                                <span v-if="student.user?.middle_initial" class="text-gray-400">
-                                    {{ student.user.middle_initial }}.
-                                </span>
+                                <span v-if="student.user?.middle_initial" class="text-gray-400"> {{ student.user.middle_initial }}. </span>
                             </td>
                             <td class="px-5 py-4 text-gray-600">{{ student.user?.email }}</td>
                             <td class="px-5 py-4 text-gray-700">{{ student.user?.course }}</td>
@@ -205,7 +197,7 @@ const canReinstate = (student: Student) =>
                                 >
                                     {{ statusConfig[student.enrollment_status].label }}
                                 </span>
-                                <span v-else class="text-gray-400 text-xs">{{ student.enrollment_status }}</span>
+                                <span v-else class="text-xs text-gray-400">{{ student.enrollment_status }}</span>
                             </td>
                             <td class="px-5 py-4 text-right text-gray-700">
                                 {{ formatCurrency(Math.abs(student.account?.balance ?? 0)) }}
@@ -216,13 +208,13 @@ const canReinstate = (student: Student) =>
                                 <div class="flex items-center gap-2">
                                     <Link
                                         :href="route('student-fees.show', student.user?.id ?? student.id) + '?from=archive'"
-                                        class="inline-flex items-center rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-100 transition-colors"
+                                        class="inline-flex items-center rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 transition-colors ring-inset hover:bg-indigo-100"
                                     >
                                         Fee Details
                                     </Link>
                                     <Link
                                         :href="route('students.workflow-history', student.id)"
-                                        class="inline-flex items-center rounded-md bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-200 hover:bg-gray-100 transition-colors"
+                                        class="inline-flex items-center rounded-md bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200 transition-colors ring-inset hover:bg-gray-100"
                                     >
                                         Workflow
                                     </Link>
@@ -230,7 +222,7 @@ const canReinstate = (student: Student) =>
                                     <button
                                         v-if="canReinstate(student)"
                                         @click="openReinstate(student)"
-                                        class="inline-flex items-center rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-200 hover:bg-green-100 transition-colors"
+                                        class="inline-flex items-center rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-green-200 transition-colors ring-inset hover:bg-green-100"
                                     >
                                         Reinstate
                                     </button>
@@ -247,10 +239,7 @@ const canReinstate = (student: Student) =>
                 </table>
 
                 <!-- Pagination -->
-                <div
-                    v-if="students.links?.length > 3"
-                    class="border-t bg-gray-50 px-5 py-3 flex justify-center gap-1"
-                >
+                <div v-if="students.links?.length > 3" class="flex justify-center gap-1 border-t bg-gray-50 px-5 py-3">
                     <Link
                         v-for="link in students.links"
                         :key="link.label"
@@ -269,40 +258,34 @@ const canReinstate = (student: Student) =>
 
         <!-- ── Reinstate Confirmation Modal ──────────────────────────────── -->
         <Teleport to="body">
-            <div
-                v-if="reinstateModal"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-                @click.self="closeReinstate"
-            >
+            <div v-if="reinstateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="closeReinstate">
                 <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
                     <!-- Header -->
                     <div class="flex items-center justify-between border-b px-6 py-4">
                         <h2 class="text-base font-semibold text-gray-900">Reinstate Student</h2>
-                        <button @click="closeReinstate" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                        <button @click="closeReinstate" class="text-xl leading-none text-gray-400 hover:text-gray-600">&times;</button>
                     </div>
 
                     <!-- Body -->
-                    <div class="px-6 py-5 space-y-4">
+                    <div class="space-y-4 px-6 py-5">
                         <p class="text-sm text-gray-600">
                             You are reinstating
                             <span class="font-semibold text-gray-900">
                                 {{ selectedStudent?.user?.last_name }}, {{ selectedStudent?.user?.first_name }}
                             </span>
                             from
-                            <span class="font-medium capitalize text-red-600">{{ selectedStudent?.enrollment_status }}</span>
+                            <span class="font-medium text-red-600 capitalize">{{ selectedStudent?.enrollment_status }}</span>
                             back to
                             <span class="font-medium text-green-600">Active</span>.
                         </p>
 
                         <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">
-                                Reason <span class="text-gray-400">(optional)</span>
-                            </label>
+                            <label class="mb-1 block text-xs font-medium text-gray-700"> Reason <span class="text-gray-400">(optional)</span> </label>
                             <textarea
                                 v-model="reinstateForm.reason"
                                 rows="3"
                                 placeholder="e.g. Student resolved financial obligations and returned to school."
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none resize-none"
+                                class="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none"
                             />
                             <p v-if="reinstateForm.errors.reason" class="mt-1 text-xs text-red-500">
                                 {{ reinstateForm.errors.reason }}
@@ -312,16 +295,13 @@ const canReinstate = (student: Student) =>
 
                     <!-- Footer -->
                     <div class="flex justify-end gap-3 border-t px-6 py-4">
-                        <button
-                            @click="closeReinstate"
-                            class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
+                        <button @click="closeReinstate" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                             Cancel
                         </button>
                         <button
                             @click="submitReinstate"
                             :disabled="reinstateForm.processing"
-                            class="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                            class="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
                         >
                             {{ reinstateForm.processing ? 'Reinstating…' : 'Confirm Reinstate' }}
                         </button>

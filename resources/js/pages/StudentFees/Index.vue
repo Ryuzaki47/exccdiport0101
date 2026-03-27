@@ -2,12 +2,11 @@
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { Edit, Eye, Plus, Search, TrendingDown, TrendingUp, UserPlus, UserX } from 'lucide-vue-next';
-import { useForm } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
 import { useDataFormatting } from '@/composables/useDataFormatting';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Edit, Eye, Plus, Search, TrendingDown, TrendingUp, UserPlus, UserX } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 
 interface PaymentTerm {
     id: number;
@@ -104,8 +103,6 @@ const getStatusColor = (status: string) => {
             return 'bg-gray-500 text-white';
     }
 };
-
-
 
 /**
  * Accurate remaining balance — resolved in priority order:
@@ -214,7 +211,7 @@ const closeDrop = () => {
 };
 
 const submitDrop = () => {
-    if (! selectedDropStudent.value) return;
+    if (!selectedDropStudent.value) return;
     dropForm.post(route('student-fees.drop', selectedDropStudent.value.id), {
         onSuccess: () => closeDrop(),
     });
@@ -447,34 +444,27 @@ const submitDrop = () => {
 
         <!-- ── Drop Confirmation Modal ──────────────────────────────────────────── -->
         <Teleport to="body">
-            <div
-                v-if="dropModal"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-                @click.self="closeDrop"
-            >
+            <div v-if="dropModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="closeDrop">
                 <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
                     <div class="flex items-center justify-between border-b px-6 py-4">
                         <h2 class="text-base font-semibold text-gray-900">Drop Student</h2>
-                        <button @click="closeDrop" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                        <button @click="closeDrop" class="text-xl leading-none text-gray-400 hover:text-gray-600">&times;</button>
                     </div>
 
-                    <div class="px-6 py-5 space-y-4">
+                    <div class="space-y-4 px-6 py-5">
                         <p class="text-sm text-gray-600">
                             You are marking
                             <span class="font-semibold text-gray-900">{{ selectedDropStudent?.name }}</span>
-                            as <span class="font-medium text-red-600">Dropped</span>.
-                            This will move them to the Student Archives.
+                            as <span class="font-medium text-red-600">Dropped</span>. This will move them to the Student Archives.
                         </p>
 
                         <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">
-                                Reason <span class="text-gray-400">(optional)</span>
-                            </label>
+                            <label class="mb-1 block text-xs font-medium text-gray-700"> Reason <span class="text-gray-400">(optional)</span> </label>
                             <textarea
                                 v-model="dropForm.reason"
                                 rows="3"
                                 placeholder="e.g. Student failed to complete payment obligations."
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none resize-none"
+                                class="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
                             />
                             <p v-if="dropForm.errors.reason" class="mt-1 text-xs text-red-500">
                                 {{ dropForm.errors.reason }}
@@ -483,16 +473,13 @@ const submitDrop = () => {
                     </div>
 
                     <div class="flex justify-end gap-3 border-t px-6 py-4">
-                        <button
-                            @click="closeDrop"
-                            class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
+                        <button @click="closeDrop" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                             Cancel
                         </button>
                         <button
                             @click="submitDrop"
                             :disabled="dropForm.processing"
-                            class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                         >
                             {{ dropForm.processing ? 'Dropping…' : 'Confirm Drop' }}
                         </button>

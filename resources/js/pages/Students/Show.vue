@@ -61,9 +61,7 @@ const remainingBalance = computed<number>(() => accountBalance.value);
                 <div class="mt-4 border-t pt-4">
                     <p class="text-lg font-semibold">
                         Outstanding Balance:
-                        <span :class="remainingBalance > 0 ? 'text-red-600' : 'text-green-600'">
-                            ₱{{ Math.abs(remainingBalance).toFixed(2) }}
-                        </span>
+                        <span :class="remainingBalance > 0 ? 'text-red-600' : 'text-green-600'"> ₱{{ Math.abs(remainingBalance).toFixed(2) }} </span>
                     </p>
                 </div>
             </div>
@@ -86,21 +84,30 @@ const remainingBalance = computed<number>(() => accountBalance.value);
 
                 <!-- Add Payment Form -->
                 <form @submit.prevent="addPayment" class="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <input v-model="payment.amount" type="number" placeholder="Amount"
-                        class="rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" required />
-                    <input v-model="payment.description" placeholder="Description"
-                        class="rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" required />
+                    <input
+                        v-model="payment.amount"
+                        type="number"
+                        placeholder="Amount"
+                        class="rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        required
+                    />
+                    <input
+                        v-model="payment.description"
+                        placeholder="Description"
+                        class="rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        required
+                    />
                     <select v-model="payment.payment_method" class="rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500">
                         <option value="cash">Cash</option>
                         <option value="gcash">GCash</option>
                         <option value="bank">Bank Transfer</option>
                     </select>
-                    <input v-model="payment.reference_number" placeholder="Reference No."
-                        class="rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500" />
-                    <button type="submit"
-                        class="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 md:col-span-4">
-                        Add Payment
-                    </button>
+                    <input
+                        v-model="payment.reference_number"
+                        placeholder="Reference No."
+                        class="rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 md:col-span-4">Add Payment</button>
                 </form>
             </div>
         </div>

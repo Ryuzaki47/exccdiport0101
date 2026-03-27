@@ -1,14 +1,14 @@
 // Base User type — mirrors the resolveAuthUser() output in HandleInertiaRequests
 export interface User {
     id: number;
-    name: string;           // "LAST, First MI." — computed accessor
+    name: string; // "LAST, First MI." — computed accessor
     first_name: string;
     last_name: string;
     middle_initial?: string | null;
     email: string;
-    role: string;           // 'admin' | 'accounting' | 'student'
+    role: string; // 'admin' | 'accounting' | 'student'
 
-    avatar?: string | null;          // Full URL built from profile_picture — for display
+    avatar?: string | null; // Full URL built from profile_picture — for display
     profile_picture?: string | null; // Raw storage path — for settings page
     email_verified_at?: string | null;
 
