@@ -136,19 +136,6 @@ const balanceCardConfig = computed(() => {
 
 // ─── Payment Terms ─────────────────────────────────────────────────────────────
 
-const availableTermsForPayment = computed(() => {
-    const unpaidTerms: PaymentTerm[] = ((selectedAssessment.value as any)?.paymentTerms
-        ?? props.assessment?.paymentTerms
-        ?? [])
-        .filter((t: PaymentTerm) => parseFloat(String(t.balance)) > 0)
-        .sort((a: PaymentTerm, b: PaymentTerm) => a.term_order - b.term_order);
-    return unpaidTerms.map((term: PaymentTerm, index: number) => ({
-        ...term,
-        isSelectable: index === 0,
-        hasCarryover: term.remarks?.toLowerCase().includes('carried') ?? false,
-    }));
-});
-
 const allTermsSorted = computed((): PaymentTerm[] => {
     const terms: PaymentTerm[] =
         (selectedAssessment.value as any)?.paymentTerms
@@ -297,56 +284,6 @@ const feeCalculationSummary = computed(() => {
     return parts.length > 0 ? parts.join(' + ') : '—';
 });
 
-// FEE LINE ITEMS (Legacy grouping for backward compatibility) – shows category totals
-// FIX #1: Previously, items with category === 'Other' were silently excluded, causing
-// the sum of the Fee Breakdown to be ₱975 short of Total Assessment.
-// The fix groups ALL categories (including 'Other') into named display lines.
-
-const feeLineItems = computed(() => {
-    // Human-readable labels for known categories
-    const labelMap: Record<string, string> = {
-        Tuition:       'Tuition Fee',
-        Miscellaneous: 'Miscellaneous Fee',
-        Laboratory:    'Laboratory Fee',
-        Library:       'Library Fee',
-        Athletic:      'Athletic Fee',
-        Registration:  'Registration Fee',
-        Other:         'Other Fees',  // ← was silently excluded before
-    };
-
-    const breakdown: Array<{ category: string; total: number; items: number }> = [];
-    const selectedAssess = selectedAssessment.value as any;
-    if (!selectedAssess) return [];
-
-    // Tuition (stored as a separate scalar column for backwards compatibility)
-    if (selectedAssess.tuition_fee > 0) {
-        breakdown.push({ category: 'Tuition', total: selectedAssess.tuition_fee, items: 1 });
-    }
-
-    const storedBreakdown = selectedAssess.fee_breakdown ?? [];
-    if (storedBreakdown.length > 0) {
-        const grouped: Record<string, any[]> = {};
-        for (const item of storedBreakdown) {
-            // Skip Tuition rows — already handled by the tuition_fee column above
-            if (item.category === 'Tuition') continue;
-            if (!grouped[item.category]) grouped[item.category] = [];
-            grouped[item.category].push(item);
-        }
-        for (const [category, items] of Object.entries(grouped)) {
-            breakdown.push({
-                category,
-                total: parseFloat(items.reduce((s: number, i: any) => s + parseFloat(String(i.amount)), 0).toFixed(2)),
-                items: items.length,
-            });
-        }
-    } else if (selectedAssess.other_fees > 0) {
-        // Legacy assessments without fee_breakdown JSON: show other_fees as one line
-        breakdown.push({ category: 'Miscellaneous', total: selectedAssess.other_fees, items: 1 });
-    }
-
-    return breakdown.map((item) => ({ ...item, displayLabel: labelMap[item.category] ?? item.category }));
-});
-
 // Helper function to read config values (since we're in a Vue component, not Laravel)
 function config(key: string, defaultValue: any = null): any {
     const configMap: Record<string, any> = {
@@ -355,18 +292,6 @@ function config(key: string, defaultValue: any = null): any {
     };
     return configMap[key] ?? defaultValue;
 }
-
-// Verification: total breakdown should equal the total assessment
-const feeBreakdownVerification = computed(() => {
-    const calculatedTotal = Math.round((totalTuition.value + totalLab.value + totalMiscellaneous.value) * 100) / 100;
-    const assessmentTotal = Math.round(totalAssessment.value * 100) / 100;
-    return {
-        calculated: calculatedTotal,
-        assessment: assessmentTotal,
-        isValid: Math.abs(calculatedTotal - assessmentTotal) < 0.01, // Allow 1 cent rounding difference
-        discrepancy: Math.round((assessmentTotal - calculatedTotal) * 100) / 100,
-    };
-});
 
 // ─── Transaction history ───────────────────────────────────────────────────────
 
@@ -565,14 +490,6 @@ const txSubjectPanels = computed((): Record<string, ReturnType<typeof buildSubje
         result[group.key] = panel.subjects.length > 0 ? panel : null;
     }
     return result;
-});
-
-// Total units for the currently selected assessment — used in the Fee Breakdown header
-const totalUnitsForSelected = computed(() => {
-    const panel = enrolledSubjectTerms.value.find(
-        (p) => p.assessmentId === selectedAssessmentId.value,
-    );
-    return panel?.totalUnits ?? 0;
 });
 
 // ─── Payment form ──────────────────────────────────────────────────────────────

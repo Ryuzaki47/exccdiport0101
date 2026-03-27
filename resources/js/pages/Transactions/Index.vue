@@ -198,7 +198,7 @@ const toggleSubjectTerm = (assessmentId: number) => {
 const subjectPanelsByTerm = computed(() => {
     const result: Record<string, ReturnType<typeof buildSubjectPanel> | null> = {};
 
-    for (const [termKey, transactions] of Object.entries(props.transactionsByTerm ?? {})) {
+    for (const [termKey] of Object.entries(props.transactionsByTerm ?? {})) {
         // Extract year and semester from termKey (e.g., "2026 1st Sem")
         const parts = termKey.split(' ');
         const year = parts[0];
