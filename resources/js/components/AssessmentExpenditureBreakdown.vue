@@ -106,10 +106,6 @@ const groupedCategories = computed((): CategoryGroup[] => {
         }));
 });
 
-const grandTotal = computed(() =>
-    groupedCategories.value.reduce((s, g) => s + g.subtotal, 0),
-);
-
 // Count of line items for summary header
 const lineItemCount = computed(() =>
     props.feeBreakdown.length,
