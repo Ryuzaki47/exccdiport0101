@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import EnrolledSubjectsSkeleton from '@/components/EnrolledSubjectsSkeleton.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { AlertCircle, CalendarClock, CheckCircle, ChevronDown, Clock, CreditCard, XCircle } from 'lucide-vue-next';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const { formatCurrency, formatDate, getPaymentTermStatusConfig, getTransactionStatusConfig, getAssessmentStatusConfig } = useDataFormatting();
 
@@ -281,6 +282,13 @@ onMounted(() => {
             autoRefreshInterval.value = null;
         }
     });
+
+    // ── Dismiss skeleton once props are fully resolved ────────────────────────
+    // nextTick guarantees the skeleton shows for at least one rendered frame
+    // before being replaced by real data, preventing a content flash.
+    nextTick(() => {
+        isSubjectsLoading.value = false;
+    });
 });
 
 // Clean up interval on unmount
@@ -474,6 +482,12 @@ const enrolledSubjectPanels = computed(() => {
 });
 
 const expandedSubjectPanels = ref<Set<number>>(new Set());
+
+// ── Skeleton loading state ────────────────────────────────────────────────────
+// Starts true so the skeleton renders on the first frame.
+// Cleared inside onMounted → nextTick so it only resolves after Vue has
+// finished the initial DOM update with prop data available.
+const isSubjectsLoading = ref(true);
 
 function toggleSubjectPanel(assessmentId: number) {
     if (expandedSubjectPanels.value.has(assessmentId)) {
@@ -1098,7 +1112,7 @@ const accountBalance = computed(() => {
                         </div>
 
                         <!-- ── Enrolled Subjects Accordion ──────────────────────────────── -->
-                        <div v-if="enrolledSubjectPanels.length > 0" class="mt-8 border-t pt-6">
+                        <div class="mt-8 border-t pt-6">
                             <h3 class="text-md mb-4 flex items-center gap-2 font-semibold text-gray-800">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -1116,106 +1130,114 @@ const accountBalance = computed(() => {
                                 ENROLLED SUBJECTS
                             </h3>
 
-                            <div
-                                v-for="panel in enrolledSubjectPanels"
-                                :key="panel.assessmentId"
-                                class="mb-3 overflow-hidden rounded-lg border border-gray-200 bg-white"
-                            >
-                                <!-- Panel header — click to expand/collapse -->
-                                <button
-                                    type="button"
-                                    class="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
-                                    @click="toggleSubjectPanel(panel.assessmentId)"
+                            <!-- ── Skeleton state ── -->
+                            <template v-if="isSubjectsLoading">
+                                <EnrolledSubjectsSkeleton variant="compact" :rows="5" />
+                            </template>
+
+                            <!-- ── Real data ── -->
+                            <template v-else-if="enrolledSubjectPanels.length > 0">
+                                <div
+                                    v-for="panel in enrolledSubjectPanels"
+                                    :key="panel.assessmentId"
+                                    class="mb-3 overflow-hidden rounded-lg border border-gray-200 bg-white"
                                 >
-                                    <div>
-                                        <span class="font-medium text-gray-800">{{ panel.label }}</span>
-                                        <span class="ml-2 text-xs text-gray-500">{{ panel.schoolYear }}</span>
-                                        <span
-                                            v-if="panel.course !== '—'"
-                                            class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
-                                        >
-                                            {{ panel.course }}
-                                        </span>
-                                    </div>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-xs text-gray-500">
-                                            {{ panel.subjectCount }} subject{{ panel.subjectCount !== 1 ? 's' : '' }} · {{ panel.totalUnits }} units
-                                        </span>
-                                        <ChevronDown
-                                            class="h-4 w-4 text-gray-400 transition-transform duration-200"
-                                            :class="{ 'rotate-180': expandedSubjectPanels.has(panel.assessmentId) }"
-                                        />
-                                    </div>
-                                </button>
-
-                                <!-- Subjects table — shown when panel is expanded -->
-                                <div v-show="expandedSubjectPanels.has(panel.assessmentId)">
-                                    <table class="w-full border-collapse text-sm">
-                                        <thead class="border-t border-gray-200 bg-gray-50">
-                                            <tr>
-                                                <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Code</th>
-                                                <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Subject</th>
-                                                <th class="px-4 py-2.5 text-center font-semibold text-gray-600">Units</th>
-                                                <th class="px-4 py-2.5 text-right font-semibold text-gray-600">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-gray-100">
-                                            <tr
-                                                v-for="subject in panel.subjects"
-                                                :key="subject.subject_id"
-                                                class="transition-colors hover:bg-gray-50"
+                                    <!-- Panel header — click to expand/collapse -->
+                                    <button
+                                        type="button"
+                                        class="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                                        @click="toggleSubjectPanel(panel.assessmentId)"
+                                    >
+                                        <div>
+                                            <span class="font-medium text-gray-800">{{ panel.label }}</span>
+                                            <span class="ml-2 text-xs text-gray-500">{{ panel.schoolYear }}</span>
+                                            <span
+                                                v-if="panel.course !== '—'"
+                                                class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
                                             >
-                                                <td class="px-4 py-2.5 font-mono text-xs text-gray-500">
-                                                    {{ subject.code }}
-                                                </td>
-                                                <td class="px-4 py-2.5 text-gray-800">
-                                                    {{ subject.name }}
-                                                    <span
-                                                        v-if="subject.hasLab"
-                                                        class="ml-1.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700"
-                                                    >
-                                                        Lab
-                                                    </span>
-                                                </td>
-                                                <td class="px-4 py-2.5 text-center text-gray-600">
-                                                    {{ subject.units }}
-                                                </td>
-                                                <td class="px-4 py-2.5 text-right">
-                                                    <span
-                                                        v-if="subject.isEnrolled"
-                                                        class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
-                                                    >
-                                                        ✓ Enrolled
-                                                    </span>
-                                                    <span
-                                                        v-else
-                                                        class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500"
-                                                    >
-                                                        ○ Not Confirmed
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                        <tfoot class="border-t-2 border-gray-200 bg-gray-50">
-                                            <tr>
-                                                <td colspan="2" class="px-4 py-2 text-xs font-semibold text-gray-600">Total</td>
-                                                <td class="px-4 py-2 text-center text-xs font-bold text-gray-800">
-                                                    {{ panel.totalUnits }}
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+                                                {{ panel.course }}
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs text-gray-500">
+                                                {{ panel.subjectCount }} subject{{ panel.subjectCount !== 1 ? 's' : '' }} · {{ panel.totalUnits }} units
+                                            </span>
+                                            <ChevronDown
+                                                class="h-4 w-4 text-gray-400 transition-transform duration-200"
+                                                :class="{ 'rotate-180': expandedSubjectPanels.has(panel.assessmentId) }"
+                                            />
+                                        </div>
+                                    </button>
 
-                        <!-- Empty state — assessment exists but has no subject breakdown yet -->
-                        <div
-                            v-else-if="props.allAssessments && props.allAssessments.length > 0"
-                            class="mt-8 rounded-lg border border-dashed border-gray-200 py-8 text-center"
-                        >
-                            <p class="text-sm text-gray-400">No subject breakdown available for your current assessment.</p>
+                                    <!-- Subjects table — shown when panel is expanded -->
+                                    <div v-show="expandedSubjectPanels.has(panel.assessmentId)">
+                                        <table class="w-full border-collapse text-sm">
+                                            <thead class="border-t border-gray-200 bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Code</th>
+                                                    <th class="px-4 py-2.5 text-left font-semibold text-gray-600">Subject</th>
+                                                    <th class="px-4 py-2.5 text-center font-semibold text-gray-600">Units</th>
+                                                    <th class="px-4 py-2.5 text-right font-semibold text-gray-600">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-100">
+                                                <tr
+                                                    v-for="subject in panel.subjects"
+                                                    :key="subject.subject_id"
+                                                    class="transition-colors hover:bg-gray-50"
+                                                >
+                                                    <td class="px-4 py-2.5 font-mono text-xs text-gray-500">
+                                                        {{ subject.code }}
+                                                    </td>
+                                                    <td class="px-4 py-2.5 text-gray-800">
+                                                        {{ subject.name }}
+                                                        <span
+                                                            v-if="subject.hasLab"
+                                                            class="ml-1.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700"
+                                                        >
+                                                            Lab
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-2.5 text-center text-gray-600">
+                                                        {{ subject.units }}
+                                                    </td>
+                                                    <td class="px-4 py-2.5 text-right">
+                                                        <span
+                                                            v-if="subject.isEnrolled"
+                                                            class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
+                                                        >
+                                                            ✓ Enrolled
+                                                        </span>
+                                                        <span
+                                                            v-else
+                                                            class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500"
+                                                        >
+                                                            ○ Not Confirmed
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot class="border-t-2 border-gray-200 bg-gray-50">
+                                                <tr>
+                                                    <td colspan="2" class="px-4 py-2 text-xs font-semibold text-gray-600">Total</td>
+                                                    <td class="px-4 py-2 text-center text-xs font-bold text-gray-800">
+                                                        {{ panel.totalUnits }}
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- ── Empty state — assessment exists but no subject breakdown yet ── -->
+                            <div
+                                v-else-if="props.allAssessments && props.allAssessments.length > 0"
+                                class="rounded-lg border border-dashed border-gray-200 py-8 text-center"
+                            >
+                                <p class="text-sm text-gray-400">No subject breakdown available for your current assessment.</p>
+                            </div>
                         </div>
                     </div>
 

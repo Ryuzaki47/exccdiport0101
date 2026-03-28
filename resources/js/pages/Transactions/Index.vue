@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import EnrolledSubjectsSkeleton from '@/components/EnrolledSubjectsSkeleton.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ChevronDown, BookOpen, FlaskConical } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useDataFormatting } from '@/composables/useDataFormatting';
 const { formatCurrency } = useDataFormatting();
 
@@ -82,6 +83,17 @@ const expanded            = ref<Record<string, boolean>>({});
 const showPastSemesters   = ref(false);
 const selectedTransaction = ref<Transaction | null>(null);
 const showDetailsDialog   = ref(false);
+
+// ── Skeleton loading state ────────────────────────────────────────────────────
+// Starts true so the skeleton renders on the first frame before Vue resolves
+// the subject panel computed properties from props.
+const isSubjectsLoading = ref(true);
+
+onMounted(() => {
+    nextTick(() => {
+        isSubjectsLoading.value = false;
+    });
+});
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const isStaff = computed(() => ['admin', 'accounting', 'super_admin'].includes(props.auth.user.role));
@@ -555,7 +567,14 @@ const payNow = () => {
                     </div>
 
                     <!-- ── Enrolled Subjects for this term ── -->
-                    <div v-if="subjectPanelsByTerm[termKey]" class="border-t border-gray-100">
+
+                    <!-- Skeleton state: shown on first render for every expanded term -->
+                    <div v-if="isSubjectsLoading" class="border-t border-gray-100 p-4">
+                        <EnrolledSubjectsSkeleton variant="detailed" :rows="5" />
+                    </div>
+
+                    <!-- Real data: shown once loading resolves and a panel exists for this term -->
+                    <div v-else-if="subjectPanelsByTerm[termKey]" class="border-t border-gray-100">
                         <button
                             type="button"
                             class="flex w-full items-center justify-between bg-indigo-50 px-5 py-3 text-left transition-colors hover:bg-indigo-100 select-none"
