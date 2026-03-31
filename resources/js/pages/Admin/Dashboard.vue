@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { AlertCircle, CheckCircle2, FileText, Users } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Props {
@@ -54,28 +53,24 @@ const adminStats = computed(() => [
         title: 'Total Admins',
         value: props.stats?.total_admins || 0,
         description: `${props.stats?.active_admins || 0} active`,
-        icon: Users,
         color: 'blue',
     },
     {
         title: 'Total Users',
         value: props.stats?.total_users || 0,
         description: `${props.stats?.total_students || 0} students`,
-        icon: Users,
         color: 'purple',
     },
     {
         title: 'Pending Approvals',
         value: props.stats?.pending_approvals || 0,
         description: 'Awaiting action',
-        icon: AlertCircle,
         color: 'orange',
     },
     {
         title: 'System Status',
         value: 'Operational',
         description: 'All systems healthy',
-        icon: CheckCircle2,
         color: 'green',
     },
 ]);
@@ -109,11 +104,6 @@ const getColorClass = (color: string) => {
             <!-- Stats Grid -->
             <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <div v-for="stat in adminStats" :key="stat.title" class="ccdi-stat-card">
-                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl"
-                        :class="stat.color === 'blue' ? 'bg-blue-100' : stat.color === 'purple' ? 'bg-purple-100' : stat.color === 'orange' ? 'bg-amber-100' : 'bg-emerald-100'">
-                        <component :is="stat.icon" :size="20"
-                            :class="stat.color === 'blue' ? 'text-blue-600' : stat.color === 'purple' ? 'text-purple-600' : stat.color === 'orange' ? 'text-amber-600' : 'text-emerald-600'" />
-                    </div>
                     <div class="min-w-0">
                         <p class="truncate text-xs font-medium text-muted-foreground">{{ stat.title }}</p>
                         <p class="text-xl font-bold text-foreground">{{ stat.value }}</p>
@@ -130,39 +120,21 @@ const getColorClass = (color: string) => {
                     <p class="mb-4 text-xs text-muted-foreground">Common administrative tasks</p>
                     <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                         <Link :href="route('users.create')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100">
-                                <Users :size="16" class="text-blue-600" />
-                            </div>
                             Add Admin User
                         </Link>
                         <Link href="/admin/notifications/create" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100">
-                                <FileText :size="16" class="text-amber-600" />
-                            </div>
                             Manage Notifications
                         </Link>
                         <Link :href="route('users.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-purple-100">
-                                <Users :size="16" class="text-purple-600" />
-                            </div>
                             View All Admins
                         </Link>
                         <Link :href="route('student-fees.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100">
-                                <Users :size="16" class="text-emerald-600" />
-                            </div>
                             View Students
                         </Link>
                         <Link :href="route('approvals.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-rose-100">
-                                <AlertCircle :size="16" class="text-rose-600" />
-                            </div>
                             Payment Approvals
                         </Link>
                         <Link :href="route('students.archive')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                                <FileText :size="16" class="text-gray-600" />
-                            </div>
                             Archives
                         </Link>
                     </div>
@@ -171,16 +143,12 @@ const getColorClass = (color: string) => {
                 <!-- System Status -->
                 <div class="ccdi-card p-5">
                     <div class="mb-4 flex items-center gap-2">
-                        <CheckCircle2 :size="18" class="text-emerald-500" />
                         <h2 class="text-base font-semibold text-foreground">System Status</h2>
                         <span class="ml-auto ccdi-badge-green text-xs">Real-time</span>
                     </div>
 
                     <!-- Overall health -->
-                    <div class="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-200">
-                            <CheckCircle2 :size="20" class="text-emerald-700" />
-                        </div>
+                    <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                         <div>
                             <p class="text-sm font-semibold text-emerald-900">All Systems Operational</p>
                             <p class="text-xs text-emerald-700">All services are running normally</p>
@@ -249,10 +217,7 @@ const getColorClass = (color: string) => {
                     <Link href="/admin/notifications" class="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">View All →</Link>
                 </div>
                 <div class="divide-y divide-border">
-                    <div v-for="notif in stats.recent_notifications" :key="notif.id" class="flex items-start gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors">
-                        <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 mt-0.5">
-                            <FileText :size="14" class="text-blue-600" />
-                        </div>
+                    <div v-for="notif in stats.recent_notifications" :key="notif.id" class="flex items-start justify-between px-5 py-3.5 hover:bg-muted/30 transition-colors">
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-medium text-foreground">{{ notif.title }}</p>
                             <p class="text-xs text-muted-foreground mt-0.5">Target: {{ notif.target_role }} · {{ notif.created_at }}</p>
