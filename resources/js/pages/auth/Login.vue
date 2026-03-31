@@ -1,20 +1,15 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import axios from 'axios';
-import { ArrowLeft, Briefcase, Eye, EyeOff, GraduationCap, LoaderCircle, User } from 'lucide-vue-next';
+import { ArrowLeft, Briefcase, Eye, EyeOff, GraduationCap, LoaderCircle, Shield } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
-defineProps<{
-    status?: string;
-    canResetPassword: boolean;
-}>();
+defineProps<{ status?: string; canResetPassword: boolean }>();
 
 const selectedRole = ref<'admin' | 'accounting' | 'student' | null>(null);
 const showPassword = ref(false);
@@ -28,222 +23,143 @@ const form = useForm({
 });
 
 const roleOptions = [
-    {
-        value: 'admin',
-        label: 'Admin',
-        icon: User,
-        color: 'bg-red-600 hover:bg-red-700',
-        borderColor: 'border-red-600',
-        description: 'System administrators and managers',
-    },
-    {
-        value: 'accounting',
-        label: 'Accounting',
-        icon: Briefcase,
-        color: 'bg-blue-600 hover:bg-blue-700',
-        borderColor: 'border-blue-600',
-        description: 'Accounting staff and financial officers',
-    },
-    {
-        value: 'student',
-        label: 'Student',
-        icon: GraduationCap,
-        color: 'bg-green-600 hover:bg-green-700',
-        borderColor: 'border-green-600',
-        description: 'Students and learners',
-    },
+    { value: 'admin', label: 'Admin', icon: Shield, accentBg: '#fef2f2', accentText: '#991b1b', iconBg: '#dc2626', description: 'System administrators and managers' },
+    { value: 'accounting', label: 'Accounting', icon: Briefcase, accentBg: '#eff6ff', accentText: '#1e40af', iconBg: '#2563eb', description: 'Accounting staff and financial officers' },
+    { value: 'student', label: 'Student', icon: GraduationCap, accentBg: '#f0fdf4', accentText: '#166534', iconBg: '#16a34a', description: 'Students and learners' },
 ] as const;
 
 const currentRole = computed(() => roleOptions.find((r) => r.value === selectedRole.value));
-
-const selectRole = (role: 'admin' | 'accounting' | 'student') => {
-    selectedRole.value = role;
-    form.role = role;
-};
-
-const backToRoleSelection = () => {
-    selectedRole.value = null;
-    form.reset('password');
-};
+const selectRole = (role: 'admin' | 'accounting' | 'student') => { selectedRole.value = role; form.role = role; };
+const backToRoleSelection = () => { selectedRole.value = null; form.reset('password'); };
 
 const submit = async () => {
-    // Get CSRF token and add it to the form
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-    if (!csrfToken) {
-        console.error('CSRF token not found in meta tag');
-        return;
-    }
-
+    if (!csrfToken) return;
     isSubmitting.value = true;
-
     try {
-        // Submit form via axios with explicit CSRF token header
-        await axios.post(
-            '/login',
-            {
-                email: form.email,
-                password: form.password,
-                remember: form.remember ? 1 : 0,
-                role: form.role,
-                _token: csrfToken, // Include token as POST parameter
-            },
-            {
-                headers: {
-                    'X-CSRF-TOKEN': csrfToken,
-                    Accept: 'application/json',
-                },
-            },
-        );
-
-        // On success, reload the page or redirect
+        await axios.post('/login', { email: form.email, password: form.password, remember: form.remember ? 1 : 0, role: form.role, _token: csrfToken }, { headers: { 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' } });
         window.location.href = '/dashboard';
     } catch (error: any) {
-        console.error('Login error:', error);
-
-        // Handle validation errors or other errors
-        if (error.response?.status === 422) {
-            form.errors = error.response.data.errors || {};
-        } else if (error.response?.status === 419) {
-            console.error('CSRF token validation failed');
-            // Reload to get a fresh token
-            window.location.reload();
-        }
+        if (error.response?.status === 422) { form.errors = error.response.data.errors || {}; }
+        else if (error.response?.status === 419) { window.location.reload(); }
     } finally {
         isSubmitting.value = false;
     }
 };
-
-const togglePasswordVisibility = () => {
-    showPassword.value = !showPassword.value;
-};
 </script>
 
 <template>
-    <AuthBase
-        :title="selectedRole ? `Log in as ${currentRole?.label}` : 'Welcome to CCDI Account Portal'"
-        :description="selectedRole ? 'Enter your credentials to continue' : 'Select your role to get started'"
-    >
-        <Head title="Log in" />
+    <Head title="Log in" />
 
-        <div v-if="status" class="mb-4 text-center text-sm font-medium text-green-600">
-            {{ status }}
-        </div>
-
-        <!-- ROLE SELECTION -->
-        <div v-if="!selectedRole" class="space-y-4">
-            <div class="mb-6 text-center">
-                <p class="text-sm text-gray-600">Choose your role to access the portal</p>
+    <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12" style="font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: linear-gradient(135deg, #f0f4ff 0%, #f8fafc 60%, #f0f9ff 100%);">
+        <div class="w-full max-w-sm">
+            <!-- Logo -->
+            <div class="mb-8 text-center">
+                <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-bold text-white shadow-lg" style="background: linear-gradient(135deg, #0d2a5e 0%, #1d6fe6 100%);">CC</div>
+                <p class="text-sm font-medium text-gray-500">CCDI Account Portal</p>
             </div>
 
-            <div class="space-y-3">
-                <button
-                    v-for="role in roleOptions"
-                    :key="role.value"
-                    type="button"
-                    @click="selectRole(role.value)"
-                    :class="[
-                        'w-full rounded-lg p-4 font-medium text-white transition-all',
-                        'flex transform items-center gap-4 hover:scale-105',
-                        role.color,
-                    ]"
-                >
-                    <div class="rounded-lg bg-white/20 p-3">
-                        <component :is="role.icon" :size="24" />
-                    </div>
-                    <div class="flex-1 text-left">
-                        <p class="text-lg font-semibold">{{ role.label }}</p>
-                        <p class="text-sm text-white/80">{{ role.description }}</p>
-                    </div>
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
-            </div>
+            <!-- Card -->
+            <div class="overflow-hidden rounded-2xl bg-white shadow-xl" style="border: 1px solid #e8edf5;">
 
-            <div class="border-t pt-4 text-center text-sm text-muted-foreground">
-                Don't have an account?
-                <TextLink :href="route('register')">Sign up as Student</TextLink>
-            </div>
-        </div>
+                <!-- Status message -->
+                <div v-if="status" class="border-b border-green-100 bg-green-50 px-6 py-3 text-center text-sm font-medium text-green-700">{{ status }}</div>
 
-        <!-- LOGIN FORM -->
-        <div v-else class="space-y-6">
-            <!-- ROLE BADGE -->
-            <div class="flex items-center justify-between rounded-lg border-2 p-4" :class="currentRole?.borderColor">
-                <div class="flex items-center gap-3">
-                    <div :class="['rounded-lg p-2 text-white', currentRole?.color]">
-                        <component :is="currentRole?.icon" :size="20" />
+                <!-- ROLE SELECTION -->
+                <template v-if="!selectedRole">
+                    <div class="px-6 pt-6 pb-4 text-center">
+                        <h1 class="text-xl font-bold text-gray-900">Welcome to CCDI Portal</h1>
+                        <p class="mt-1 text-sm text-gray-500">Select your role to get started</p>
                     </div>
-                    <div>
-                        <p class="text-sm text-gray-600">Logging in as</p>
-                        <p class="font-semibold text-gray-900">{{ currentRole?.label }}</p>
+                    <div class="space-y-2.5 px-6 pb-6">
+                        <button
+                            v-for="role in roleOptions" :key="role.value"
+                            type="button" @click="selectRole(role.value)"
+                            class="group flex w-full items-center gap-3.5 rounded-xl p-3.5 text-left transition-all hover:scale-[1.01] hover:shadow-sm"
+                            :style="{ background: role.accentBg, border: '1px solid transparent' }"
+                        >
+                            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white" :style="{ background: role.iconBg }">
+                                <component :is="role.icon" :size="18" />
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm font-semibold text-gray-900">{{ role.label }}</p>
+                                <p class="text-xs text-gray-500">{{ role.description }}</p>
+                            </div>
+                            <svg class="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                        </button>
                     </div>
-                </div>
-                <button type="button" @click="backToRoleSelection" class="rounded-lg p-2 hover:bg-gray-100">
-                    <ArrowLeft :size="20" class="text-gray-600" />
-                </button>
-            </div>
+                    <div class="border-t border-gray-100 px-6 py-4 text-center text-sm text-gray-500">
+                        Don't have an account? <TextLink :href="route('register')" class="font-medium text-blue-600">Sign up as Student</TextLink>
+                    </div>
+                </template>
 
-            <form @submit.prevent="submit" class="flex flex-col gap-6">
-                <div class="grid gap-6">
-                    <!-- EMAIL -->
-                    <div class="grid gap-2">
-                        <Label for="email">Email address</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            v-model="form.email"
-                            required
-                            autofocus
-                            autocomplete="email"
-                            :class="{ 'border-red-500': form.errors.email }"
-                        />
-                        <InputError :message="form.errors.email" />
+                <!-- LOGIN FORM -->
+                <template v-else>
+                    <div class="px-6 pt-6 pb-2">
+                        <h1 class="text-xl font-bold text-gray-900">Log in as {{ currentRole?.label }}</h1>
+                        <p class="mt-0.5 text-sm text-gray-500">Enter your credentials to continue</p>
                     </div>
 
-                    <!-- PASSWORD -->
-                    <div class="grid gap-2">
-                        <div class="flex items-center justify-between">
-                            <Label for="password">Password</Label>
-                            <TextLink v-if="canResetPassword" :href="route('password.request')" class="text-sm"> Forgot password? </TextLink>
+                    <!-- Role badge -->
+                    <div class="mx-6 mt-4 flex items-center justify-between rounded-xl p-3" :style="{ background: currentRole?.accentBg, border: '1.5px solid ' + currentRole?.iconBg + '40' }">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-lg text-white" :style="{ background: currentRole?.iconBg }">
+                                <component :is="currentRole?.icon" :size="16" />
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">Logging in as</p>
+                                <p class="text-sm font-semibold" :style="{ color: currentRole?.accentText }">{{ currentRole?.label }}</p>
+                            </div>
+                        </div>
+                        <button type="button" @click="backToRoleSelection" class="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-all hover:bg-white/70 hover:text-gray-600">
+                            <ArrowLeft :size="15" />
+                        </button>
+                    </div>
+
+                    <form @submit.prevent="submit" class="space-y-4 px-6 py-5">
+                        <div class="space-y-1.5">
+                            <Label for="email" class="text-sm font-medium text-gray-700">Email address</Label>
+                            <Input id="email" type="email" v-model="form.email" required autofocus autocomplete="email" class="h-10 rounded-xl border-gray-200 bg-gray-50 text-sm focus:bg-white" />
+                            <InputError :message="form.errors.email" />
                         </div>
 
-                        <div class="relative">
-                            <Input
-                                id="password"
-                                :type="showPassword ? 'text' : 'password'"
-                                v-model="form.password"
-                                required
-                                autocomplete="current-password"
-                                class="pr-10"
-                            />
-                            <button type="button" @click="togglePasswordVisibility" class="absolute top-1/2 right-3 -translate-y-1/2 text-gray-500">
-                                <Eye v-if="!showPassword" :size="18" />
-                                <EyeOff v-else :size="18" />
-                            </button>
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <Label for="password" class="text-sm font-medium text-gray-700">Password</Label>
+                                <TextLink v-if="canResetPassword" :href="route('password.request')" class="text-xs text-blue-600 hover:underline">Forgot password?</TextLink>
+                            </div>
+                            <div class="relative">
+                                <Input id="password" :type="showPassword ? 'text' : 'password'" v-model="form.password" required autocomplete="current-password" class="h-10 rounded-xl border-gray-200 bg-gray-50 pr-10 text-sm focus:bg-white" />
+                                <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <Eye v-if="!showPassword" :size="16" /><EyeOff v-else :size="16" />
+                                </button>
+                            </div>
+                            <InputError :message="form.errors.password" />
                         </div>
 
-                        <InputError :message="form.errors.password" />
-                    </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox v-model:checked="form.remember" id="remember" />
+                            <Label for="remember" class="text-sm text-gray-600">Remember me</Label>
+                        </div>
 
-                    <!-- REMEMBER -->
-                    <div class="flex items-center space-x-3">
-                        <Checkbox v-model:checked="form.remember" />
-                        <span>Remember me</span>
-                    </div>
+                        <button
+                            type="submit"
+                            :disabled="isSubmitting"
+                            class="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
+                            :style="{ background: 'linear-gradient(135deg, ' + currentRole?.iconBg + ' 0%, ' + currentRole?.iconBg + 'cc 100%)' }"
+                        >
+                            <LoaderCircle v-if="isSubmitting" :size="16" class="animate-spin" />
+                            Log in
+                        </button>
 
-                    <!-- SUBMIT -->
-                    <Button type="submit" class="mt-4 w-full" :class="currentRole?.color" :disabled="isSubmitting">
-                        <LoaderCircle v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                        Log in
-                    </Button>
-                </div>
+                        <p class="text-center text-xs text-gray-400">
+                            <button type="button" @click="backToRoleSelection" class="text-blue-600 hover:underline">← Back to role selection</button>
+                        </p>
+                    </form>
+                </template>
+            </div>
 
-                <div class="text-center text-sm text-muted-foreground">
-                    <button type="button" @click="backToRoleSelection" class="text-blue-600 hover:underline">← Back to role selection</button>
-                </div>
-            </form>
+            <p class="mt-6 text-center text-xs text-gray-400">© {{ new Date().getFullYear() }} CCDI Account Portal. All rights reserved.</p>
         </div>
-    </AuthBase>
+    </div>
 </template>

@@ -65,10 +65,17 @@ const { formatCurrency } = useDataFormatting();
 
 const breadcrumbs = [{ title: 'Dashboard', href: route('dashboard') }, { title: 'Student Fee Management' }];
 
-const search = ref(props.filters.search || '');
-const selectedCourse = ref(props.filters.course || '');
-const selectedYearLevel = ref(props.filters.year_level || '');
-const selectedStatus = ref(props.filters.status || '');
+// Expose props for template
+const courses = computed(() => props.courses);
+const yearLevels = computed(() => props.yearLevels);
+const statuses = computed(() => props.statuses);
+
+const searchForm = ref({
+    search: props.filters.search || '',
+    course: props.filters.course || '',
+    year_level: props.filters.year_level || '',
+    status: props.filters.status || '',
+});
 
 let searchTimeout: ReturnType<typeof setTimeout>;
 const performSearch = () => {
@@ -77,19 +84,23 @@ const performSearch = () => {
         router.get(
             route('student-fees.index'),
             {
-                search: search.value,
-                course: selectedCourse.value,
-                year_level: selectedYearLevel.value,
-                status: selectedStatus.value,
+                search: searchForm.value.search,
+                course: searchForm.value.course,
+                year_level: searchForm.value.year_level,
+                status: searchForm.value.status,
             },
             { preserveState: true, replace: true },
         );
     }, 300);
 };
 
-watch([search, selectedCourse, selectedYearLevel, selectedStatus], () => {
+watch(searchForm, () => {
     performSearch();
-});
+}, { deep: true });
+
+const search = () => {
+    performSearch();
+};
 
 const getStatusColor = (status: string) => {
     switch (status) {
@@ -102,6 +113,17 @@ const getStatusColor = (status: string) => {
         default:
             return 'bg-gray-500 text-white';
     }
+};
+
+const getStatusConfig = (status: string) => {
+    const map: Record<string, { badge: string; label: string }> = {
+        active: { badge: 'bg-green-100 text-green-800 border border-green-200', label: 'Active' },
+        graduated: { badge: 'bg-blue-100 text-blue-800 border border-blue-200', label: 'Graduated' },
+        pending: { badge: 'bg-yellow-100 text-yellow-800 border border-yellow-200', label: 'Pending' },
+        suspended: { badge: 'bg-orange-100 text-orange-800 border border-orange-200', label: 'Suspended' },
+        dropped: { badge: 'bg-red-100 text-red-800 border border-red-200', label: 'Dropped' },
+    };
+    return map[status] ?? { badge: 'bg-gray-100 text-gray-800 border border-gray-200', label: status };
 };
 
 /**
@@ -194,6 +216,13 @@ const totalOutstanding = computed(() => props.students.data.reduce((sum, s) => s
 const fullyPaidCount = computed(() => props.students.data.filter((s) => getRemainingBalance(s) === 0).length);
 const behindCount = computed(() => props.students.data.filter((s) => getBalanceTimingStatus(s) === 'red').length);
 
+const summary = computed(() => ({
+    shownStudents: totalStudents.value,
+    totalOutstanding: totalOutstanding.value,
+    fullyPaid: fullyPaidCount.value,
+    behindSchedule: behindCount.value,
+}));
+
 // ── Drop modal ─────────────────────────────────────────────────────────────
 const dropModal = ref(false);
 const selectedDropStudent = ref<Student | null>(null);
@@ -219,273 +248,167 @@ const submitDrop = () => {
 </script>
 
 <template>
-    <Head title="Student Fee Management" />
-
     <AppLayout>
-        <div class="space-y-6 p-6">
+        <Head title="Student Fee Management" />
+
+        <div class="w-full space-y-5 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
-            <!-- Header -->
-            <div class="flex items-center justify-between">
+            <!-- Page Header -->
+            <div class="ccdi-page-header">
                 <div>
-                    <h1 class="text-3xl font-bold">Student Fee Management</h1>
-                    <p class="mt-1 text-gray-600">Manage student assessments and fees</p>
+                    <h1 class="ccdi-section-title">Student Fee Management</h1>
+                    <p class="ccdi-section-desc">Manage student assessments and fee records</p>
                 </div>
-                <div class="flex gap-2">
-                    <Link :href="route('student-fees.create-student')">
-                        <Button variant="outline" class="flex items-center gap-2">
-                            <UserPlus class="h-4 w-4" />
-                            Add Student
-                        </Button>
+                <div class="flex items-center gap-2">
+                    <Link :href="route('student-fees.create-student')" class="ccdi-btn-secondary">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                        Add Student
                     </Link>
-                    <Link :href="route('student-fees.create')">
-                        <Button class="flex items-center gap-2">
-                            <Plus class="h-4 w-4" />
-                            Create Assessment
-                        </Button>
+                    <Link :href="route('student-fees.create')" class="ccdi-btn-primary">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Create Assessment
                     </Link>
                 </div>
             </div>
 
-            <!-- Summary Cards -->
-            <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <div class="rounded-xl border bg-white p-4 shadow-sm">
-                    <p class="text-sm text-gray-500">Shown Students</p>
-                    <p class="mt-1 text-2xl font-bold text-gray-900">{{ totalStudents }}</p>
+            <!-- Stats -->
+            <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100">
+                        <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Shown Students</p>
+                        <p class="text-xl font-bold text-foreground">{{ summary.shownStudents }}</p>
+                    </div>
                 </div>
-                <div class="rounded-xl border bg-white p-4 shadow-sm">
-                    <p class="text-sm text-gray-500">Total Outstanding</p>
-                    <p class="mt-1 text-2xl font-bold text-red-600">{{ formatCurrency(totalOutstanding) }}</p>
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-red-100">
+                        <svg class="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Total Outstanding</p>
+                        <p class="text-xl font-bold text-red-600">₱{{ summary.totalOutstanding.toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</p>
+                    </div>
                 </div>
-                <div class="rounded-xl border bg-white p-4 shadow-sm">
-                    <p class="text-sm text-gray-500">Fully Paid</p>
-                    <p class="mt-1 text-2xl font-bold text-green-600">{{ fullyPaidCount }}</p>
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100">
+                        <svg class="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Fully Paid</p>
+                        <p class="text-xl font-bold text-emerald-600">{{ summary.fullyPaid }}</p>
+                    </div>
                 </div>
-                <div class="rounded-xl border bg-white p-4 shadow-sm">
-                    <p class="text-sm text-gray-500">Behind Schedule</p>
-                    <p class="mt-1 text-2xl font-bold text-red-500">{{ behindCount }}</p>
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100">
+                        <svg class="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Behind Schedule</p>
+                        <p class="text-xl font-bold" :class="summary.behindSchedule > 0 ? 'text-amber-600' : 'text-foreground'">{{ summary.behindSchedule }}</p>
+                    </div>
                 </div>
             </div>
 
             <!-- Filters -->
-            <div class="rounded-xl border bg-white p-4 shadow-sm">
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div class="ccdi-card p-4">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div class="relative">
-                        <Search class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                        <Input v-model="search" placeholder="Search by ID or name..." class="pl-10" />
+                        <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <input v-model="searchForm.search" type="text" placeholder="Search by ID or name..." class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" @keyup.enter="search" />
                     </div>
-                    <select
-                        v-model="selectedCourse"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                    >
+                    <select v-model="searchForm.course" class="rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" @change="search">
                         <option value="">All Courses</option>
                         <option v-for="course in courses" :key="course" :value="course">{{ course }}</option>
                     </select>
-                    <select
-                        v-model="selectedYearLevel"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                    >
+                    <select v-model="searchForm.year_level" class="rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" @change="search">
                         <option value="">All Year Levels</option>
-                        <option v-for="year in yearLevels" :key="year" :value="year">{{ year }}</option>
+                        <option v-for="level in yearLevels" :key="level" :value="level">{{ level }}</option>
                     </select>
-                    <select
-                        v-model="selectedStatus"
-                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                    >
+                    <select v-model="searchForm.status" class="rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" @change="search">
                         <option value="">All Statuses</option>
-                        <option v-for="(label, value) in statuses" :key="value" :value="value">{{ label }}</option>
+                        <option value="active">Active</option>
+                        <option value="graduated">Graduated</option>
+                        <option value="inactive">Inactive</option>
                     </select>
                 </div>
             </div>
 
             <!-- Table -->
-            <div class="overflow-hidden rounded-xl border bg-white shadow-sm">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">Account ID</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">Course</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">Year Level</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase">Remaining Balance</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white">
-                            <tr v-if="students.data.length === 0">
-                                <td colspan="7" class="px-6 py-12 text-center text-gray-400">
-                                    <Search class="mx-auto mb-2 h-8 w-8 opacity-40" />
-                                    <p class="font-medium">No students found</p>
-                                </td>
-                            </tr>
-                            <tr v-for="student in students.data" :key="student.id" class="transition-colors hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
-                                    {{ student.account_id }}
-                                </td>
-                                <td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
-                                    {{ student.name }}
-                                </td>
-                                <td class="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                                    {{ student.course }}
-                                </td>
-                                <td class="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                                    {{ student.year_level }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="getStatusColor(student.status)">
-                                        {{ student.status }}
-                                    </span>
-                                </td>
-
-                                <!-- Remaining Balance with timing indicator -->
-                                <td class="px-6 py-4 text-right whitespace-nowrap">
-                                    <div class="flex flex-col items-end gap-1">
-                                        <div class="flex items-center justify-end gap-1.5">
-                                            <component
-                                                v-if="getBalanceIcon(student)"
-                                                :is="getBalanceIcon(student)"
-                                                class="h-3.5 w-3.5"
-                                                :class="getBalanceTimingStatus(student) === 'red' ? 'text-red-500' : 'text-green-500'"
-                                            />
-                                            <span class="text-sm" :class="getBalanceClasses(student)">
-                                                {{ formatCurrency(getRemainingBalance(student)) }}
-                                            </span>
-                                        </div>
-                                        <span
-                                            v-if="getBalanceBadge(student)"
-                                            class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                                            :class="getBalanceBadge(student)!.cls"
-                                        >
-                                            {{ getBalanceBadge(student)!.label }}
-                                        </span>
+            <div class="ccdi-card overflow-hidden">
+                <table class="min-w-full divide-y divide-border">
+                    <thead class="bg-muted/50">
+                        <tr>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Account ID</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Course</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Year Level</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Balance</th>
+                            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border bg-card">
+                        <tr v-for="student in students.data" :key="student.id" class="transition-colors hover:bg-muted/30">
+                            <td class="px-5 py-3.5 text-xs font-mono text-muted-foreground">{{ student.account_id }}</td>
+                            <td class="px-5 py-3.5">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
+                                        {{ student.name.split(',')[0]?.charAt(0) ?? '?' }}
                                     </div>
-                                </td>
+                                    <span class="text-sm font-medium text-foreground">{{ student.name }}</span>
+                                </div>
+                            </td>
+                            <td class="px-5 py-3.5 text-sm text-muted-foreground">{{ student.course }}</td>
+                            <td class="px-5 py-3.5 text-sm text-muted-foreground">{{ student.year_level }}</td>
+                            <td class="px-5 py-3.5">
+                                <span :class="getStatusConfig(student.status).badge">{{ getStatusConfig(student.status).label }}</span>
+                            </td>
+                            <td class="px-5 py-3.5 text-right">
+                                <span class="text-sm font-semibold" :class="(student.remaining_balance ?? 0) > 0 ? 'text-red-600' : 'text-emerald-600'">
+                                    {{ formatCurrency(student.remaining_balance ?? 0) }}
+                                </span>
+                            </td>
+                            <td class="px-5 py-3.5 text-right">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <Link :href="route('student-fees.show', student.id)" class="rounded-lg border border-border bg-card p-1.5 text-muted-foreground transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" title="View">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                    </Link>
+                                    <Link :href="route('student-fees.edit', student.id)" class="rounded-lg border border-border bg-card p-1.5 text-muted-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700" title="Edit">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    </Link>
+                                    <button v-if="student.status !== 'graduated'" @click="archiveStudent(student.id, student.name)" class="rounded-lg border border-border bg-card p-1.5 text-muted-foreground transition-all hover:border-red-300 hover:bg-red-50 hover:text-red-700" title="Archive">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8m-9 4h4" /></svg>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
 
-                                <td class="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <Link :href="route('student-fees.show', student.id)">
-                                            <button
-                                                class="rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-900"
-                                                title="View Details"
-                                            >
-                                                <Eye class="h-4 w-4" />
-                                            </button>
-                                        </Link>
-                                        <Link :href="route('student-fees.edit', student.id)">
-                                            <button
-                                                class="rounded-lg p-1.5 text-green-600 transition-colors hover:bg-green-50 hover:text-green-900"
-                                                title="Edit Assessment"
-                                            >
-                                                <Edit class="h-4 w-4" />
-                                            </button>
-                                        </Link>
-                                        <!-- Drop button — only for active/pending/suspended -->
-                                        <button
-                                            v-if="['active', 'pending', 'suspended'].includes(student.status)"
-                                            @click="openDrop(student)"
-                                            class="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50 hover:text-red-900"
-                                            title="Drop Student"
-                                        >
-                                            <UserX class="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div v-if="students.last_page > 1" class="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-6 py-4">
-                    <div class="text-sm text-gray-600">Page {{ students.current_page }} of {{ students.last_page }}</div>
-                    <div class="flex gap-2">
-                        <template v-for="(link, index) in students.links" :key="index">
-                            <Link
-                                v-if="link.url"
-                                :href="link.url"
-                                :class="[
-                                    'rounded border px-3 py-1 text-sm transition-colors',
-                                    link.active
-                                        ? 'border-blue-600 bg-blue-600 text-white'
-                                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50',
-                                ]"
-                            >
-                                {{ link.label }}
-                            </Link>
-                            <span
-                                v-else
-                                class="cursor-not-allowed rounded border border-gray-300 bg-gray-100 px-3 py-1 text-sm text-gray-400 opacity-60"
-                            >
-                                {{ link.label }}
-                            </span>
-                        </template>
+                <!-- Empty state -->
+                <div v-if="!students.data?.length" class="flex flex-col items-center justify-center py-16 text-center">
+                    <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                        <svg class="h-6 w-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
+                    <p class="text-base font-semibold text-foreground">No students found</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Try adjusting the search filters above</p>
                 </div>
-            </div>
 
-            <!-- Legend -->
-            <div class="flex items-center gap-6 px-1 text-xs text-gray-500">
-                <div class="flex items-center gap-1.5">
-                    <span class="inline-block h-2 w-2 rounded-full bg-red-500"></span>
-                    <span><strong class="text-red-600">Behind</strong> — 1st term unpaid</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="inline-block h-2 w-2 rounded-full bg-green-500"></span>
-                    <span><strong class="text-green-600">On Track</strong> — paying on schedule</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span>
-                    <span><strong class="text-blue-600">Fully Paid</strong> — no outstanding balance</span>
+                <!-- Legend + Pagination -->
+                <div class="flex flex-col gap-3 border-t border-border bg-muted/20 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-red-500"></span>Behind — 1st term unpaid</span>
+                        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>On Track</span>
+                        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-blue-500"></span>Fully Paid</span>
+                    </div>
+                    <div v-if="students.links && students.links.length > 3" class="flex gap-1">
+                        <Link v-for="(link, index) in students.links" :key="index" :href="link.url || '#'" :class="['rounded-lg border px-3 py-1.5 text-xs font-medium transition-all', link.active ? 'border-blue-600 bg-blue-600 text-white' : 'border-border bg-card text-foreground hover:bg-muted', !link.url ? 'cursor-not-allowed opacity-40' : '']" :disabled="!link.url" v-html="link.label" />
+                    </div>
                 </div>
             </div>
         </div>
-
-        <!-- ── Drop Confirmation Modal ──────────────────────────────────────────── -->
-        <Teleport to="body">
-            <div v-if="dropModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="closeDrop">
-                <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
-                    <div class="flex items-center justify-between border-b px-6 py-4">
-                        <h2 class="text-base font-semibold text-gray-900">Drop Student</h2>
-                        <button @click="closeDrop" class="text-xl leading-none text-gray-400 hover:text-gray-600">&times;</button>
-                    </div>
-
-                    <div class="space-y-4 px-6 py-5">
-                        <p class="text-sm text-gray-600">
-                            You are marking
-                            <span class="font-semibold text-gray-900">{{ selectedDropStudent?.name }}</span>
-                            as <span class="font-medium text-red-600">Dropped</span>. This will move them to the Student Archives.
-                        </p>
-
-                        <div>
-                            <label class="mb-1 block text-xs font-medium text-gray-700"> Reason <span class="text-gray-400">(optional)</span> </label>
-                            <textarea
-                                v-model="dropForm.reason"
-                                rows="3"
-                                placeholder="e.g. Student failed to complete payment obligations."
-                                class="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
-                            />
-                            <p v-if="dropForm.errors.reason" class="mt-1 text-xs text-red-500">
-                                {{ dropForm.errors.reason }}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end gap-3 border-t px-6 py-4">
-                        <button @click="closeDrop" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                            Cancel
-                        </button>
-                        <button
-                            @click="submitDrop"
-                            :disabled="dropForm.processing"
-                            class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                        >
-                            {{ dropForm.processing ? 'Dropping…' : 'Confirm Drop' }}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </Teleport>
     </AppLayout>
 </template>

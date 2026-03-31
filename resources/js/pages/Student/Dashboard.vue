@@ -247,202 +247,141 @@ const dismissReminder = (id: number) => {
     <AppLayout>
         <Head title="Student Dashboard" />
 
-        <div class="w-full space-y-6 p-6">
+        <div class="w-full space-y-5 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
-            <!-- Welcome Header -->
-            <div class="rounded-lg bg-gradient-to-r from-blue-600 to-blue-800 p-6 text-white shadow-lg">
-                <h1 class="mb-2 text-3xl font-bold">Welcome Back, Student!</h1>
-                <p class="text-blue-100">Here's your financial overview and important updates</p>
-            </div>
-
-            <!-- Quick Stats + Quick Actions -->
-            <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:col-span-2">
-                    <!-- Total Assessment Fee -->
-                    <div class="flex items-center gap-4 rounded-lg border-l-4 border-blue-300 bg-white p-6 shadow-md">
-                        <div class="rounded-lg bg-blue-100 p-3"><FileText :size="24" class="text-blue-600" /></div>
-                        <div>
-                            <p class="text-sm text-gray-600">Total Assessment Fee</p>
-                            <p class="text-2xl font-bold text-blue-700">{{ formatCurrency(normalizedStats.total_fees) }}</p>
-                        </div>
+            <!-- Welcome Banner -->
+            <div class="relative overflow-hidden rounded-2xl p-6 text-white shadow-md" style="background: linear-gradient(135deg, hsl(220 85% 18%) 0%, hsl(215 80% 28%) 60%, hsl(210 75% 35%) 100%);">
+                <div class="relative z-10 flex items-start justify-between gap-4">
+                    <div>
+                        <p class="mb-1 text-sm font-medium text-blue-200">Student Portal</p>
+                        <h1 class="text-2xl font-bold text-white">Welcome back, Student!</h1>
+                        <p class="mt-1 text-sm text-blue-100/80">Here's your financial overview and important updates</p>
                     </div>
-
-                    <!-- Total Paid -->
-                    <div class="flex items-center gap-4 rounded-lg border-l-4 border-green-300 bg-white p-6 shadow-md">
-                        <div class="rounded-lg bg-green-100 p-3"><CheckCircle :size="24" class="text-green-600" /></div>
-                        <div>
-                            <p class="text-sm text-gray-600">Total Paid</p>
-                            <p class="text-2xl font-bold text-green-600">{{ formatCurrency(normalizedStats.total_paid) }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Remaining Balance -->
-                    <div
-                        :class="[
-                            'flex items-center gap-4 rounded-lg border-l-4 bg-white p-6 shadow-md',
-                            normalizedStats.remaining_balance > 0 ? 'border-red-300' : 'border-green-300',
-                        ]"
-                    >
-                        <div :class="['rounded-lg p-3', normalizedStats.remaining_balance > 0 ? 'bg-red-100' : 'bg-green-100']">
-                            <Wallet :size="24" :class="normalizedStats.remaining_balance > 0 ? 'text-red-600' : 'text-green-600'" />
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Remaining Balance</p>
-                            <p :class="['text-2xl font-bold', normalizedStats.remaining_balance > 0 ? 'text-red-600' : 'text-green-600']">
-                                {{ formatCurrency(normalizedStats.remaining_balance) }}
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Pending Charges -->
-                    <div
-                        :class="[
-                            'flex items-center gap-4 rounded-lg border-l-4 bg-white p-6 shadow-md',
-                            pendingChargesInfo.hasWarning ? 'border-yellow-300' : 'border-gray-300',
-                        ]"
-                    >
-                        <div :class="['rounded-lg p-3', pendingChargesInfo.hasWarning ? 'bg-yellow-100' : 'bg-gray-100']">
-                            <Clock :size="24" :class="pendingChargesInfo.hasWarning ? 'text-yellow-600' : 'text-gray-500'" />
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Pending Charges</p>
-                            <p :class="['text-2xl font-bold', pendingChargesInfo.hasWarning ? 'text-yellow-600' : 'text-gray-700']">
-                                {{ pendingChargesInfo.count }}
-                            </p>
-                        </div>
+                    <div class="flex-shrink-0 text-right">
+                        <p class="text-xs text-blue-200">Remaining Balance</p>
+                        <p class="text-3xl font-extrabold text-white">{{ formatCurrency(normalizedStats.remaining_balance) }}</p>
                     </div>
                 </div>
-
-                <!-- Quick Actions -->
-                <div class="rounded-lg bg-white p-6 shadow-md">
-                    <h2 class="mb-4 text-lg font-semibold">Quick Actions</h2>
-                    <div class="space-y-3">
-                        <Link :href="route('student.account')" class="flex items-center gap-3 rounded-lg bg-blue-50 p-3 hover:bg-blue-100">
-                            <Wallet :size="20" class="text-blue-600" /><span class="font-medium">View Account</span>
-                        </Link>
-                        <Link
-                            :href="route('student.account', { tab: 'payment' })"
-                            class="flex items-center gap-3 rounded-lg bg-green-50 p-3 hover:bg-green-100"
-                        >
-                            <CreditCard :size="20" class="text-green-600" /><span class="font-medium">Make Payment</span>
-                        </Link>
-                        <Link :href="route('transactions.index')" class="flex items-center gap-3 rounded-lg bg-purple-50 p-3 hover:bg-purple-100">
-                            <FileText :size="20" class="text-purple-600" /><span class="font-medium">View History</span>
-                        </Link>
-                    </div>
-                </div>
+                <!-- Decorative circles -->
+                <div class="pointer-events-none absolute -top-8 -right-8 h-40 w-40 rounded-full opacity-10" style="background: radial-gradient(circle, #fff 0%, transparent 70%);" />
+                <div class="pointer-events-none absolute -bottom-10 -left-4 h-32 w-32 rounded-full opacity-10" style="background: radial-gradient(circle, #60a5fa 0%, transparent 70%);" />
             </div>
 
             <!-- Awaiting Approval Banner -->
-            <div v-if="hasAwaitingApprovals" class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <div class="h-2 w-2 animate-pulse rounded-full bg-blue-500"></div>
-                <p class="text-sm text-blue-700">
-                    <strong>Checking for updates…</strong> Your payment is awaiting verification. This page will update automatically.
-                </p>
+            <div v-if="hasAwaitingApprovals" class="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                <span class="h-2 w-2 animate-pulse rounded-full bg-blue-500 flex-shrink-0"></span>
+                <p><strong>Checking for updates…</strong> Your payment is awaiting verification. This page will update automatically.</p>
             </div>
 
-            <!-- Main Content -->
-            <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <!-- Left Column -->
-                <div class="space-y-6 lg:col-span-2">
-                    <!-- ── Payment Reminders ────────────────────────────────────────── -->
-                    <!-- Routes: reminders.read, reminders.dismiss (PaymentReminderController) -->
-                    <!-- Buttons are now wired — previously only showed a static badge.  -->
-                    <div v-if="visibleReminders.length > 0" class="rounded-lg bg-white p-6 shadow-md">
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <!-- Total Assessment -->
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100">
+                        <FileText :size="20" class="text-blue-600" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="truncate text-xs font-medium text-muted-foreground">Total Assessment</p>
+                        <p class="text-xl font-bold text-foreground">{{ formatCurrency(normalizedStats.total_fees) }}</p>
+                    </div>
+                </div>
+                <!-- Total Paid -->
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100">
+                        <CheckCircle :size="20" class="text-emerald-600" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="truncate text-xs font-medium text-muted-foreground">Total Paid</p>
+                        <p class="text-xl font-bold text-emerald-600">{{ formatCurrency(normalizedStats.total_paid) }}</p>
+                    </div>
+                </div>
+                <!-- Remaining -->
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl" :class="normalizedStats.remaining_balance > 0 ? 'bg-red-100' : 'bg-emerald-100'">
+                        <Wallet :size="20" :class="normalizedStats.remaining_balance > 0 ? 'text-red-600' : 'text-emerald-600'" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="truncate text-xs font-medium text-muted-foreground">Remaining</p>
+                        <p class="text-xl font-bold" :class="normalizedStats.remaining_balance > 0 ? 'text-red-600' : 'text-emerald-600'">
+                            {{ formatCurrency(normalizedStats.remaining_balance) }}
+                        </p>
+                    </div>
+                </div>
+                <!-- Pending Charges -->
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl" :class="pendingChargesInfo.hasWarning ? 'bg-amber-100' : 'bg-muted'">
+                        <Clock :size="20" :class="pendingChargesInfo.hasWarning ? 'text-amber-600' : 'text-muted-foreground'" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="truncate text-xs font-medium text-muted-foreground">Pending Charges</p>
+                        <p class="text-xl font-bold" :class="pendingChargesInfo.hasWarning ? 'text-amber-600' : 'text-foreground'">
+                            {{ pendingChargesInfo.count }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main content grid -->
+            <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                <!-- Left column (2/3) -->
+                <div class="space-y-5 lg:col-span-2">
+
+                    <!-- Payment Reminders -->
+                    <div v-if="visibleReminders.length > 0" class="ccdi-card p-5">
                         <div class="mb-4 flex items-center gap-2">
-                            <h2 class="text-xl font-semibold">Payment Reminders</h2>
-                            <span
-                                v-if="props.unreadReminderCount && props.unreadReminderCount > 0"
-                                class="inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"
-                            >
-                                {{ props.unreadReminderCount }} new
-                            </span>
+                            <h2 class="text-base font-semibold text-foreground">Payment Reminders</h2>
+                            <span v-if="props.unreadReminderCount && props.unreadReminderCount > 0" class="ccdi-badge-red">{{ props.unreadReminderCount }} new</span>
                         </div>
-                        <div class="space-y-3">
+                        <div class="space-y-2.5">
                             <div
-                                v-for="reminder in visibleReminders"
-                                :key="reminder.id"
-                                :class="[
-                                    'rounded-lg border-l-4 p-4',
-                                    reminder.type === 'overdue' || reminder.type === 'approaching_due'
-                                        ? 'border-red-400 bg-red-50'
-                                        : reminder.type === 'partial_payment'
-                                          ? 'border-yellow-400 bg-yellow-50'
-                                          : 'border-blue-400 bg-blue-50',
-                                ]"
+                                v-for="reminder in visibleReminders" :key="reminder.id"
+                                class="flex items-start justify-between gap-3 rounded-xl border p-3.5"
+                                :class="reminder.type === 'overdue' || reminder.type === 'approaching_due' ? 'border-red-200 bg-red-50' : reminder.type === 'partial_payment' ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'"
                             >
-                                <div class="flex items-start justify-between gap-2">
-                                    <div class="flex-1">
-                                        <h4
-                                            :class="[
-                                                'text-sm font-semibold',
-                                                reminder.type === 'overdue' || reminder.type === 'approaching_due'
-                                                    ? 'text-red-900'
-                                                    : reminder.type === 'partial_payment'
-                                                      ? 'text-yellow-900'
-                                                      : 'text-blue-900',
-                                            ]"
-                                        >
-                                            {{ reminder.message }}
-                                        </h4>
-                                        <p class="mt-1 text-xs text-gray-500">{{ formatDate(reminder.sent_at) }}</p>
-                                    </div>
-
-                                    <!-- Status + action buttons -->
-                                    <div class="flex flex-shrink-0 items-center gap-2">
-                                        <!-- Unread badge + Mark as Read button -->
-                                        <span v-if="reminder.status !== 'read'" class="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700">
-                                            Unread
-                                        </span>
-                                        <button
-                                            v-if="reminder.status !== 'read'"
-                                            @click="markReminderRead(reminder.id)"
-                                            class="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-200"
-                                            title="Mark as read"
-                                        >
-                                            ✓ Mark Read
-                                        </button>
-                                        <span v-else class="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600"> Read </span>
-
-                                        <!-- Dismiss button -->
-                                        <button
-                                            @click="dismissReminder(reminder.id)"
-                                            class="rounded p-1 text-gray-400 transition hover:bg-gray-200 hover:text-gray-600"
-                                            title="Dismiss reminder"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium" :class="reminder.type === 'overdue' || reminder.type === 'approaching_due' ? 'text-red-900' : reminder.type === 'partial_payment' ? 'text-amber-900' : 'text-blue-900'">
+                                        {{ reminder.message }}
+                                    </p>
+                                    <p class="mt-0.5 text-xs text-muted-foreground">{{ formatDate(reminder.sent_at) }}</p>
+                                </div>
+                                <div class="flex flex-shrink-0 items-center gap-1.5">
+                                    <span v-if="reminder.status !== 'read'" class="ccdi-badge-red">Unread</span>
+                                    <button v-if="reminder.status !== 'read'" @click="markReminderRead(reminder.id)" class="ccdi-badge-blue cursor-pointer hover:opacity-80">✓ Mark Read</button>
+                                    <span v-else class="ccdi-badge-gray">Read</span>
+                                    <button @click="dismissReminder(reminder.id)" class="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">✕</button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Recent Transactions -->
-                    <div class="rounded-lg bg-white p-6 shadow-md">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h2 class="text-xl font-semibold">Recent Transactions</h2>
-                            <Link :href="route('transactions.index')" class="text-sm text-blue-600 hover:underline">View All →</Link>
+                    <div class="ccdi-card">
+                        <div class="flex items-center justify-between border-b border-border px-5 py-4">
+                            <h2 class="text-base font-semibold text-foreground">Recent Transactions</h2>
+                            <Link :href="route('transactions.index')" class="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">View All →</Link>
                         </div>
-                        <p v-if="!recentTransactions.length" class="py-4 text-center text-gray-500">No recent transactions</p>
-                        <div v-else class="space-y-3">
-                            <div
-                                v-for="transaction in recentTransactions"
-                                :key="transaction.id"
-                                class="flex items-center justify-between rounded p-3 hover:bg-gray-50"
-                            >
-                                <div>
-                                    <p class="font-medium">{{ formatTransactionType(transaction.type) }}</p>
-                                    <p class="text-sm text-gray-600">{{ transaction.reference || 'N/A' }}</p>
-                                    <p class="text-xs text-gray-500">{{ transaction.created_at ? formatDate(transaction.created_at) : '-' }}</p>
+                        <div v-if="!recentTransactions.length" class="flex flex-col items-center justify-center py-12 text-center">
+                            <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                <FileText :size="20" class="text-muted-foreground" />
+                            </div>
+                            <p class="text-sm font-medium text-muted-foreground">No transactions yet</p>
+                            <p class="mt-1 text-xs text-muted-foreground">Payments you make will appear here</p>
+                        </div>
+                        <div v-else class="divide-y divide-border">
+                            <div v-for="transaction in recentTransactions" :key="transaction.id" class="flex items-center justify-between px-5 py-3.5 hover:bg-muted/50 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100">
+                                        <CreditCard :size="16" class="text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-foreground">{{ formatTransactionType(transaction.type) }}</p>
+                                        <p class="text-xs text-muted-foreground">{{ transaction.reference || 'N/A' }} · {{ transaction.created_at ? formatDate(transaction.created_at) : '-' }}</p>
+                                    </div>
                                 </div>
                                 <div class="text-right">
-                                    <p class="font-semibold">{{ formatCurrency(transaction.amount) }}</p>
-                                    <span
-                                        class="rounded px-2 py-1 text-xs font-medium"
-                                        :class="{ ...getTransactionStatusConfig(transaction.status) }"
-                                    >
+                                    <p class="text-sm font-semibold text-foreground">{{ formatCurrency(transaction.amount) }}</p>
+                                    <span class="inline-block rounded-md px-2 py-0.5 text-xs font-medium" :class="{ ...getTransactionStatusConfig(transaction.status) }">
                                         {{ getTransactionStatusConfig(transaction.status).label }}
                                     </span>
                                 </div>
@@ -451,252 +390,116 @@ const dismissReminder = (id: number) => {
                     </div>
                 </div>
 
-                <!-- Right Column -->
-                <div class="space-y-6">
-                    <!-- Next Payment Due Card -->
-                    <div
-                        v-if="nextPaymentDue"
-                        :class="[
-                            'rounded-lg border-2 p-6 shadow-md',
-                            nextPaymentDue.dueColor === 'red'
-                                ? 'border-red-300 bg-gradient-to-br from-red-50 to-red-100'
-                                : nextPaymentDue.dueColor === 'amber'
-                                  ? 'border-amber-300 bg-gradient-to-br from-amber-50 to-amber-100'
-                                  : 'border-green-300 bg-gradient-to-br from-green-50 to-green-100',
-                        ]"
-                    >
-                        <div class="mb-4 flex items-start justify-between">
-                            <div>
-                                <h3
-                                    :class="[
-                                        'text-lg font-semibold',
-                                        nextPaymentDue.dueColor === 'red'
-                                            ? 'text-red-900'
-                                            : nextPaymentDue.dueColor === 'amber'
-                                              ? 'text-amber-900'
-                                              : 'text-green-900',
-                                    ]"
-                                >
-                                    {{ nextPaymentDue.term_name }}
-                                </h3>
-                                <p
-                                    :class="[
-                                        'mt-1 text-xs',
-                                        nextPaymentDue.dueColor === 'red'
-                                            ? 'text-red-700'
-                                            : nextPaymentDue.dueColor === 'amber'
-                                              ? 'text-amber-700'
-                                              : 'text-green-700',
-                                    ]"
-                                >
-                                    {{ nextPaymentDue.isDueOrOverdue ? 'Payment due soon' : 'Upcoming payment' }}
-                                </p>
-                            </div>
-                            <div
-                                :class="[
-                                    'rounded-lg p-2',
-                                    nextPaymentDue.dueColor === 'red'
-                                        ? 'bg-red-200'
-                                        : nextPaymentDue.dueColor === 'amber'
-                                          ? 'bg-amber-200'
-                                          : 'bg-green-200',
-                                ]"
-                            >
-                                <AlertCircle v-if="nextPaymentDue.dueColor === 'red'" :size="20" class="text-red-700" />
-                                <Clock v-else-if="nextPaymentDue.dueColor === 'amber'" :size="20" class="text-amber-700" />
-                                <CheckCircle v-else :size="20" class="text-green-700" />
-                            </div>
-                        </div>
-
-                        <div
-                            :class="[
-                                'mb-4 rounded-lg border p-4',
-                                nextPaymentDue.dueColor === 'red'
-                                    ? 'border-red-200 bg-white/60'
-                                    : nextPaymentDue.dueColor === 'amber'
-                                      ? 'border-amber-200 bg-white/60'
-                                      : 'border-green-200 bg-white/60',
-                            ]"
-                        >
-                            <div class="space-y-3">
-                                <div>
-                                    <p
-                                        :class="[
-                                            'mb-1 text-xs font-medium',
-                                            nextPaymentDue.dueColor === 'red'
-                                                ? 'text-red-700'
-                                                : nextPaymentDue.dueColor === 'amber'
-                                                  ? 'text-amber-700'
-                                                  : 'text-green-700',
-                                        ]"
-                                    >
-                                        Amount Due
-                                    </p>
-                                    <p
-                                        :class="[
-                                            'text-2xl font-bold',
-                                            nextPaymentDue.dueColor === 'red'
-                                                ? 'text-red-700'
-                                                : nextPaymentDue.dueColor === 'amber'
-                                                  ? 'text-amber-700'
-                                                  : 'text-green-700',
-                                        ]"
-                                    >
-                                        {{ formatCurrency(nextPaymentDue.balance) }}
-                                    </p>
-                                </div>
-                                <div class="border-t border-gray-300 pt-2">
-                                    <p class="mb-1 text-xs text-gray-600">Due Date</p>
-                                    <div class="flex items-center justify-between">
-                                        <p
-                                            :class="[
-                                                'font-semibold',
-                                                nextPaymentDue.dueColor === 'red'
-                                                    ? 'text-red-700'
-                                                    : nextPaymentDue.dueColor === 'amber'
-                                                      ? 'text-amber-700'
-                                                      : 'text-gray-700',
-                                            ]"
-                                        >
-                                            {{ nextPaymentDue.formattedDueDate }}
-                                        </p>
-                                        <span
-                                            v-if="nextPaymentDue.daysUntilDue >= 0"
-                                            :class="[
-                                                'rounded px-2 py-1 text-xs font-medium',
-                                                nextPaymentDue.dueColor === 'red'
-                                                    ? 'bg-red-100 text-red-700'
-                                                    : nextPaymentDue.dueColor === 'amber'
-                                                      ? 'bg-amber-100 text-amber-700'
-                                                      : 'bg-green-100 text-green-700',
-                                            ]"
-                                        >
-                                            {{ nextPaymentDue.daysUntilDue }} day{{ nextPaymentDue.daysUntilDue !== 1 ? 's' : '' }} left
-                                        </span>
-                                        <span v-else class="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700">
-                                            {{ Math.abs(nextPaymentDue.daysUntilDue) }} day{{
-                                                Math.abs(nextPaymentDue.daysUntilDue) !== 1 ? 's' : ''
-                                            }}
-                                            overdue
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex gap-3">
-                            <Link
-                                :href="route('student.account')"
-                                class="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-blue-700"
-                            >
-                                View Details
+                <!-- Right column (1/3) -->
+                <div class="space-y-4">
+                    <!-- Quick Actions -->
+                    <div class="ccdi-card p-5">
+                        <h2 class="mb-3.5 text-base font-semibold text-foreground">Quick Actions</h2>
+                        <div class="space-y-2">
+                            <Link :href="route('student.account')" class="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-sm font-medium text-foreground transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
+                                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100"><Wallet :size="16" class="text-blue-600" /></div>
+                                View Account
                             </Link>
-                            <Link
-                                :href="route('student.account', { tab: 'payment', term_id: nextPaymentDue.id })"
-                                class="flex-1 rounded-lg bg-green-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-green-700"
-                            >
-                                Pay Now
+                            <Link :href="route('student.account', { tab: 'payment' })" class="flex w-full items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-medium text-emerald-800 transition-all hover:bg-emerald-100">
+                                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-200"><CreditCard :size="16" class="text-emerald-700" /></div>
+                                Make Payment
+                            </Link>
+                            <Link :href="route('transactions.index')" class="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-sm font-medium text-foreground transition-all hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700">
+                                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-purple-100"><FileText :size="16" class="text-purple-600" /></div>
+                                Transaction History
                             </Link>
                         </div>
                     </div>
 
-                    <!-- All Paid State -->
-                    <div
-                        v-if="normalizedStats.remaining_balance === 0"
-                        class="rounded-lg border-2 border-green-300 bg-gradient-to-br from-green-50 to-green-100 p-6 shadow-md"
-                    >
-                        <div class="mb-4 flex items-start justify-between">
-                            <div>
-                                <h3 class="text-lg font-semibold text-green-900">Account in Good Standing</h3>
-                                <p class="mt-1 text-xs text-green-700">All payments are current</p>
-                            </div>
-                            <div class="rounded-lg bg-green-200 p-2"><CheckCircle :size="20" class="text-green-700" /></div>
+                    <!-- Next Payment Due -->
+                    <div v-if="nextPaymentDue" class="ccdi-card overflow-hidden">
+                        <div class="px-5 py-3 border-b border-border">
+                            <h2 class="text-base font-semibold text-foreground">Next Payment Due</h2>
                         </div>
-                        <div class="mb-4 rounded-lg border border-green-200 bg-white/60 p-4">
-                            <p class="text-sm text-green-800">Your account balance is fully paid. No payment action is required at this time.</p>
+                        <div class="p-5">
+                            <div class="mb-4 rounded-xl border p-4" :class="nextPaymentDue.dueColor === 'red' ? 'border-red-200 bg-red-50' : nextPaymentDue.dueColor === 'amber' ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                        <p class="text-xs font-medium mb-0.5" :class="nextPaymentDue.dueColor === 'red' ? 'text-red-700' : nextPaymentDue.dueColor === 'amber' ? 'text-amber-700' : 'text-emerald-700'">{{ nextPaymentDue.term_name }}</p>
+                                        <p class="text-2xl font-extrabold" :class="nextPaymentDue.dueColor === 'red' ? 'text-red-700' : nextPaymentDue.dueColor === 'amber' ? 'text-amber-700' : 'text-emerald-700'">{{ formatCurrency(nextPaymentDue.balance) }}</p>
+                                    </div>
+                                    <div class="rounded-lg p-2 flex-shrink-0" :class="nextPaymentDue.dueColor === 'red' ? 'bg-red-200' : nextPaymentDue.dueColor === 'amber' ? 'bg-amber-200' : 'bg-emerald-200'">
+                                        <AlertCircle v-if="nextPaymentDue.dueColor === 'red'" :size="18" :class="nextPaymentDue.dueColor === 'red' ? 'text-red-700' : ''" />
+                                        <Clock v-else-if="nextPaymentDue.dueColor === 'amber'" :size="18" class="text-amber-700" />
+                                        <CheckCircle v-else :size="18" class="text-emerald-700" />
+                                    </div>
+                                </div>
+                                <div class="mt-3 flex items-center justify-between border-t pt-3" :class="nextPaymentDue.dueColor === 'red' ? 'border-red-200' : nextPaymentDue.dueColor === 'amber' ? 'border-amber-200' : 'border-emerald-200'">
+                                    <div>
+                                        <p class="text-xs text-muted-foreground">Due date</p>
+                                        <p class="text-sm font-semibold" :class="nextPaymentDue.dueColor === 'red' ? 'text-red-700' : nextPaymentDue.dueColor === 'amber' ? 'text-amber-700' : 'text-foreground'">{{ nextPaymentDue.formattedDueDate }}</p>
+                                    </div>
+                                    <span v-if="nextPaymentDue.daysUntilDue >= 0" class="rounded-lg px-2.5 py-1 text-xs font-semibold" :class="nextPaymentDue.dueColor === 'red' ? 'bg-red-200 text-red-800' : nextPaymentDue.dueColor === 'amber' ? 'bg-amber-200 text-amber-800' : 'bg-emerald-200 text-emerald-800'">
+                                        {{ nextPaymentDue.daysUntilDue }} day{{ nextPaymentDue.daysUntilDue !== 1 ? 's' : '' }} left
+                                    </span>
+                                    <span v-else class="rounded-lg bg-red-200 px-2.5 py-1 text-xs font-semibold text-red-800">
+                                        {{ Math.abs(nextPaymentDue.daysUntilDue) }} day{{ Math.abs(nextPaymentDue.daysUntilDue) !== 1 ? 's' : '' }} overdue
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <Link :href="route('student.account')" class="flex-1 rounded-xl border border-border bg-card py-2 text-center text-sm font-medium text-foreground transition-all hover:bg-muted">View Details</Link>
+                                <Link :href="route('student.account', { tab: 'payment', term_id: nextPaymentDue.id })" class="flex-1 rounded-xl py-2 text-center text-sm font-semibold text-white transition-all hover:opacity-90" style="background: linear-gradient(135deg, #16a34a, #15803d);">Pay Now</Link>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- All paid state -->
+                    <div v-if="normalizedStats.remaining_balance === 0" class="ccdi-card overflow-hidden">
+                        <div class="flex flex-col items-center gap-2 bg-emerald-50 p-6 text-center">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-200">
+                                <CheckCircle :size="22" class="text-emerald-700" />
+                            </div>
+                            <p class="font-semibold text-emerald-900">Account in Good Standing</p>
+                            <p class="text-xs text-emerald-700">All payments are current. No action required.</p>
                         </div>
                     </div>
 
                     <!-- Data integrity warning -->
-                    <div v-if="!financialDataIsConsistent" class="rounded-lg border border-yellow-400 bg-yellow-50 p-4">
-                        <p class="text-xs text-yellow-800">
-                            <span class="font-semibold">⚠️ Note:</span> There is a discrepancy in your financial data. Please contact support if this
-                            persists.
-                        </p>
+                    <div v-if="!financialDataIsConsistent" class="rounded-xl border border-amber-300 bg-amber-50 p-4">
+                        <p class="text-xs text-amber-800"><strong>⚠ Note:</strong> There is a discrepancy in your financial data. Please contact the accounting office if this persists.</p>
                     </div>
 
-                    <!-- ── Notification Banners ──────────────────────────────────────── -->
-                    <div v-if="activeNotifications.length">
-                        <div class="mb-4 flex items-center gap-2">
-                            <Bell class="h-6 w-6 text-blue-600" />
-                            <h2 class="text-xl font-bold text-gray-900">Important Updates</h2>
+                    <!-- Notifications -->
+                    <div v-if="activeNotifications.length" class="space-y-3">
+                        <div class="flex items-center gap-2 px-1">
+                            <Bell class="h-4 w-4 text-blue-600" />
+                            <h2 class="text-sm font-semibold text-foreground">Important Updates</h2>
                         </div>
-
-                        <div class="space-y-4">
+                        <div class="space-y-2.5">
                             <div
-                                v-for="notification in visibleNotifications"
-                                :key="notification.id"
-                                :class="[
-                                    'rounded-lg border-l-4 bg-white p-5 shadow-md transition-all hover:shadow-lg',
-                                    notification.type === 'payment_due' ? 'border-amber-500 hover:bg-amber-50' : 'border-blue-500 hover:bg-blue-50',
-                                ]"
+                                v-for="notification in visibleNotifications" :key="notification.id"
+                                class="ccdi-card p-4 transition-all hover:shadow-md"
+                                :class="notification.type === 'payment_due' ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-blue-500'"
                             >
-                                <!-- Header: title + dismiss -->
                                 <div class="mb-2 flex items-start justify-between gap-2">
-                                    <h3 class="flex-1 text-base font-bold text-gray-900">{{ notification.title }}</h3>
-                                    <button
-                                        @click="dismissNotification(notification.id)"
-                                        class="flex-shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
-                                        title="Dismiss notification"
-                                    >
-                                        ✕
-                                    </button>
+                                    <h3 class="flex-1 text-sm font-semibold text-foreground">{{ notification.title }}</h3>
+                                    <button @click="dismissNotification(notification.id)" class="flex-shrink-0 rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Dismiss">✕</button>
                                 </div>
-
-                                <!-- Due date chip -->
-                                <div v-if="notification.type === 'payment_due' && notification.due_date" class="mb-3">
-                                    <span
-                                        :class="[
-                                            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
-                                            getNotifDueDateColor(notification.due_date) === 'red'
-                                                ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
-                                                : getNotifDueDateColor(notification.due_date) === 'amber'
-                                                  ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
-                                                  : 'bg-green-100 text-green-700 ring-1 ring-green-200',
-                                        ]"
-                                    >
-                                        <CalendarClock :size="12" />
-                                        {{ dueDateLabel(notification.due_date) }}
-                                        <span class="font-normal opacity-75">· {{ formatDate(notification.due_date) }}</span>
+                                <div v-if="notification.type === 'payment_due' && notification.due_date" class="mb-2">
+                                    <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold" :class="getNotifDueDateColor(notification.due_date) === 'red' ? 'bg-red-100 text-red-700 ring-1 ring-red-200' : getNotifDueDateColor(notification.due_date) === 'amber' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200'">
+                                        <CalendarClock :size="11" />
+                                        {{ dueDateLabel(notification.due_date) }} · {{ formatDate(notification.due_date) }}
                                     </span>
                                 </div>
-
-                                <!-- Message body -->
-                                <p class="mb-3 text-sm leading-relaxed text-gray-700">{{ notification.message }}</p>
-
-                                <!-- Footer: date window + pay now -->
-                                <div class="flex items-center justify-between gap-2 border-t border-gray-200 pt-3">
-                                    <div class="space-y-0.5 text-xs text-gray-500">
-                                        <p v-if="notification.start_date">📅 From: {{ formatDate(notification.start_date) }}</p>
-                                        <p v-if="notification.end_date">📅 Until: {{ formatDate(notification.end_date) }}</p>
+                                <p class="text-xs leading-relaxed text-muted-foreground">{{ notification.message }}</p>
+                                <div class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+                                    <div class="space-y-0.5 text-xs text-muted-foreground">
+                                        <p v-if="notification.start_date">From: {{ formatDate(notification.start_date) }}</p>
+                                        <p v-if="notification.end_date">Until: {{ formatDate(notification.end_date) }}</p>
                                     </div>
-                                    <Link
-                                        v-if="notification.type === 'payment_due' && notification.payment_term_id"
-                                        :href="route('student.account', { tab: 'payment', term_id: notification.payment_term_id })"
-                                        class="flex-shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700"
-                                    >
-                                        Pay Now
-                                    </Link>
+                                    <Link v-if="notification.type === 'payment_due' && notification.payment_term_id" :href="route('student.account', { tab: 'payment', term_id: notification.payment_term_id })" class="flex-shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-emerald-700">Pay Now</Link>
                                 </div>
                             </div>
                         </div>
-
-                        <div v-if="hasMoreNotifications" class="mt-4">
-                            <button
-                                @click="showAllNotifications = !showAllNotifications"
-                                class="w-full rounded-lg bg-blue-600 px-4 py-2 text-center font-medium text-white transition-colors hover:bg-blue-700"
-                            >
-                                {{ showAllNotifications ? 'Show Less' : `View More Updates (${activeNotifications.length - 3} more)` }}
+                        <div v-if="hasMoreNotifications" class="mt-2">
+                            <button @click="showAllNotifications = !showAllNotifications" class="w-full rounded-xl border border-border bg-card py-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted">
+                                {{ showAllNotifications ? 'Show Less' : `View More (${activeNotifications.length - 3} more)` }}
                             </button>
                         </div>
                     </div>

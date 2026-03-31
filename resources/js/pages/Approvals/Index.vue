@@ -172,181 +172,140 @@ const refreshApprovals = () => {
 </script>
 
 <template>
-    <Head title="Payment Approvals" />
     <AppLayout>
-        <div class="w-full space-y-6 p-6">
+        <Head title="Payment Approvals" />
+
+        <div class="w-full space-y-5 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
-            <div>
-                <div class="mb-6 flex items-center justify-between">
+            <!-- Page Header -->
+            <div class="ccdi-page-header">
+                <div>
+                    <h1 class="ccdi-section-title">Payment Approvals</h1>
+                    <p class="ccdi-section-desc">Review and approve student payment submissions</p>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-3 gap-4">
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100">
+                        <svg class="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
                     <div>
-                        <div class="flex items-center gap-3">
-                            <h1 class="text-3xl font-bold">Payment Approvals</h1>
-                            <span v-if="pendingCount > 0" class="rounded-full bg-yellow-100 px-2.5 py-0.5 text-sm font-semibold text-yellow-800">
-                                {{ pendingCount }} pending
-                            </span>
-                        </div>
-                        <p class="text-gray-500">Review and verify student payment submissions</p>
+                        <p class="text-xs font-medium text-muted-foreground">Pending</p>
+                        <p class="text-xl font-bold text-amber-600">{{ pendingCount }}</p>
+                        <p class="text-xs text-muted-foreground">Awaiting review</p>
                     </div>
-                    <button
-                        @click="refreshApprovals"
-                        title="Refresh approvals"
-                        class="rounded-lg border border-gray-300 bg-white p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-                    >
-                        <RotateCcw :size="20" />
-                    </button>
                 </div>
-
-                <!-- Filters Row -->
-                <div class="flex flex-col gap-4 md:flex-row">
-                    <div class="relative flex-1">
-                        <Search class="absolute top-3 left-3 text-gray-400" :size="18" />
-                        <input
-                            v-model="searchQuery"
-                            type="text"
-                            placeholder="Search by student name, ID, or reference..."
-                            class="w-full rounded-lg border border-gray-300 py-2 pr-4 pl-10 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                        />
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100">
+                        <svg class="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </div>
-
-                    <!-- Year Dropdown -->
-                    <select
-                        v-model="filters.year"
-                        @change="applyFilter"
-                        class="min-w-[140px] rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="">All Years</option>
-                        <option v-for="year in uniqueYears" :key="year" :value="String(year)">
-                            {{ year }}
-                        </option>
-                    </select>
-
-                    <!-- Term Dropdown -->
-                    <select
-                        v-model="filters.semester"
-                        @change="applyFilter"
-                        class="min-w-[180px] rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="">All Terms</option>
-                        <option v-for="term in termOptions" :key="term" :value="term">
-                            {{ term }}
-                        </option>
-                    </select>
-
-                    <!-- Status Filter -->
-                    <select
-                        v-model="filters.status"
-                        @change="applyFilter"
-                        class="min-w-[120px] rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                    </select>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Approved</p>
+                        <p class="text-xl font-bold text-emerald-600">{{ approvedCount }}</p>
+                        <p class="text-xs text-muted-foreground">This period</p>
+                    </div>
+                </div>
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-red-100">
+                        <svg class="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Rejected</p>
+                        <p class="text-xl font-bold text-red-600">{{ rejectedCount }}</p>
+                        <p class="text-xs text-muted-foreground">This period</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Empty state -->
-            <div v-if="filteredApprovals.length === 0" class="py-16 text-center text-gray-400">
-                {{ searchQuery || filters.year || filters.semester || filters.status ? 'No approvals match your filters.' : 'No approvals found.' }}
+            <!-- Filter tabs -->
+            <div class="flex gap-1 rounded-xl border border-border bg-muted/30 p-1 w-fit">
+                <button
+                    v-for="f in ['all', 'pending', 'approved', 'rejected']"
+                    :key="f"
+                    @click="filterStatus = f"
+                    class="rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition-all"
+                    :class="filterStatus === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                >
+                    {{ f }}
+                    <span v-if="f === 'pending' && pendingCount > 0" class="ml-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">{{ pendingCount }}</span>
+                </button>
             </div>
 
-            <!-- Approvals list -->
-            <div v-else class="space-y-4">
-                <div v-for="approval in filteredApprovals" :key="approval.id" class="rounded-xl border bg-white p-5 shadow-sm">
-                    <div class="flex items-start justify-between gap-4">
-                        <div class="flex-1 space-y-1">
-                            <div class="flex items-center gap-2">
-                                <h3 class="text-lg font-semibold">{{ getStudentName(approval) }}</h3>
-                                <span
-                                    class="rounded-full px-2 py-1 text-xs font-semibold"
-                                    :class="{
-                                        'bg-yellow-100 text-yellow-800': approval.status === 'pending',
-                                        'bg-green-100 text-green-800': approval.status === 'approved',
-                                        'bg-red-100 text-red-800': approval.status === 'rejected',
-                                    }"
-                                    >{{ approval.status }}</span
-                                >
-                            </div>
-                            <p class="text-sm text-gray-500">
-                                Ref: <span class="font-mono">{{ approval.workflow_instance.workflowable.reference }}</span>
-                            </p>
-                        </div>
-                        <p class="text-2xl font-bold whitespace-nowrap text-blue-700">
-                            {{ formatCurrency(approval.workflow_instance.metadata?.amount ?? approval.workflow_instance.workflowable.amount) }}
-                        </p>
-                    </div>
+            <!-- Approvals Table -->
+            <div class="ccdi-card overflow-hidden">
+                <table class="min-w-full divide-y divide-border">
+                    <thead class="bg-muted/50">
+                        <tr>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reference</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Student</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment Term</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Method</th>
+                            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amount</th>
+                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Submitted</th>
+                            <th class="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border bg-card">
+                        <tr v-for="approval in filteredApprovals" :key="approval.id" class="transition-colors hover:bg-muted/30">
+                            <td class="px-5 py-3.5">
+                                <span class="font-mono text-xs text-blue-600">{{ approval.reference }}</span>
+                            </td>
+                            <td class="px-5 py-3.5">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
+                                        {{ (approval.student_name || 'S').charAt(0) }}
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-foreground">{{ approval.student_name }}</p>
+                                        <p class="text-xs text-muted-foreground">{{ approval.account_id }}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-5 py-3.5 text-sm text-muted-foreground">{{ approval.term_name || 'N/A' }}</td>
+                            <td class="px-5 py-3.5">
+                                <span class="ccdi-badge-blue">{{ approval.payment_method || 'N/A' }}</span>
+                            </td>
+                            <td class="px-5 py-3.5 text-right">
+                                <span class="text-sm font-semibold text-emerald-600">₱{{ Number(approval.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</span>
+                            </td>
+                            <td class="px-5 py-3.5 text-sm text-muted-foreground">{{ formatDate(approval.created_at) }}</td>
+                            <td class="px-5 py-3.5 text-center">
+                                <span :class="approval.status === 'awaiting_approval' ? 'ccdi-badge-yellow' : approval.status === 'approved' ? 'ccdi-badge-green' : 'ccdi-badge-red'">
+                                    {{ approval.status === 'awaiting_approval' ? 'Pending' : approval.status === 'approved' ? 'Approved' : 'Rejected' }}
+                                </span>
+                            </td>
+                            <td class="px-5 py-3.5 text-right">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <Link :href="route('approvals.show', approval.id)" class="rounded-lg border border-border bg-card p-1.5 text-muted-foreground transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" title="View details">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                    </Link>
+                                    <template v-if="approval.status === 'awaiting_approval'">
+                                        <button @click="approvePayment(approval.id)" class="rounded-lg border border-emerald-300 bg-emerald-50 p-1.5 text-emerald-700 transition-all hover:bg-emerald-100" title="Approve">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                                        </button>
+                                        <button @click="rejectPayment(approval.id)" class="rounded-lg border border-red-300 bg-red-50 p-1.5 text-red-700 transition-all hover:bg-red-100" title="Reject">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </template>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
 
-                    <div class="mt-3 grid grid-cols-2 gap-3 text-sm text-gray-600 md:grid-cols-4">
-                        <div>
-                            <p class="text-xs tracking-wide text-gray-400 uppercase">Term</p>
-                            <p>
-                                {{ approval.workflow_instance.workflowable.meta?.term_name ?? approval.workflow_instance.workflowable.type ?? '—' }}
-                            </p>
-                        </div>
-                        <div>
-                            <p class="text-xs tracking-wide text-gray-400 uppercase">Method</p>
-                            <p>{{ formatMethod(approval.workflow_instance.workflowable.payment_channel ?? '') }}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs tracking-wide text-gray-400 uppercase">Account ID</p>
-                            <p>{{ approval.workflow_instance.workflowable.user?.account_id ?? '—' }}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs tracking-wide text-gray-400 uppercase">Submitted</p>
-                            <p>{{ formatDate(approval.created_at) }}</p>
-                        </div>
+                <!-- Empty state -->
+                <div v-if="!filteredApprovals.length" class="flex flex-col items-center justify-center py-16 text-center">
+                    <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                        <svg class="h-6 w-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </div>
-
-                    <!-- Approve / Decline buttons — only visible on pending approvals -->
-                    <div v-if="approval.status === 'pending'" class="mt-4 flex flex-wrap gap-3">
-                        <button
-                            @click="approve(approval.id)"
-                            :disabled="approveProcessing === approval.id || approveForm.processing"
-                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-green-600 hover:to-green-700 hover:shadow-lg focus:ring-2 focus:ring-green-300 focus:outline-none disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <CheckCircle2 :size="18" class="transition-transform group-hover:scale-110" />
-                            <span>{{ approveProcessing === approval.id ? 'Approving…' : 'Approve' }}</span>
-                        </button>
-                        <button
-                            @click="openRejectDialog(approval.id)"
-                            :disabled="approveProcessing === approval.id || approveForm.processing"
-                            class="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-red-600 hover:to-red-700 hover:shadow-lg focus:ring-2 focus:ring-red-300 focus:outline-none disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <XCircle :size="18" class="transition-transform group-hover:scale-110" />
-                            <span>Decline</span>
-                        </button>
-                    </div>
+                    <p class="text-base font-semibold text-foreground">No {{ filterStatus === 'all' ? '' : filterStatus }} approvals</p>
+                    <p class="mt-1 text-sm text-muted-foreground">{{ filterStatus === 'pending' ? 'All payments are reviewed.' : 'Nothing to show here.' }}</p>
                 </div>
             </div>
         </div>
-
-        <!-- Decline Dialog -->
-        <Dialog v-model:open="showRejectDialog">
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Decline Payment</DialogTitle>
-                    <DialogDescription>Provide a reason. The student will be notified.</DialogDescription>
-                </DialogHeader>
-                <div class="mt-2 space-y-4">
-                    <textarea
-                        v-model="rejectForm.comments"
-                        class="min-h-[100px] w-full rounded-lg border p-3 text-sm focus:ring-2 focus:ring-red-400 focus:outline-none"
-                        placeholder="Enter rejection reason (required)..."
-                    />
-                    <p v-if="rejectForm.errors.comments" class="text-sm text-red-500">
-                        {{ rejectForm.errors.comments }}
-                    </p>
-                    <div class="flex justify-end gap-3">
-                        <Button variant="outline" @click="showRejectDialog = false">Cancel</Button>
-                        <Button variant="destructive" :disabled="rejectForm.processing || !rejectForm.comments.trim()" @click="submitRejection">
-                            <span v-if="rejectForm.processing">Declining…</span>
-                            <span v-else>Confirm Decline</span>
-                        </Button>
-                    </div>
-                </div>
-            </DialogContent>
-        </Dialog>
     </AppLayout>
 </template>

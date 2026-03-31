@@ -128,6 +128,13 @@ const getTrendColor = (index: number) => {
     return current > previous ? 'text-green-600' : 'text-red-600';
 };
 
+const feeStats = computed(() => ({
+    totalAssessments: props.studentFeeStats?.total_assessments || 0,
+    totalAssessmentAmount: props.studentFeeStats?.total_assessment_amount || 0,
+    pendingAssessments: props.studentFeeStats?.pending_assessments_count || 0,
+    recentPayments: props.studentFeeStats?.recent_payments_amount || 0,
+}));
+
 const refreshData = () => {
     router.reload({ only: ['stats', 'recentPayments', 'studentsWithBalance', 'studentFeeStats'] });
 };
@@ -141,435 +148,175 @@ const viewStudent = (studentId: number) => {
     <AppLayout>
         <Head title="Accounting Dashboard" />
 
-        <div class="w-full space-y-6 p-6">
+        <div class="w-full space-y-5 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
-            <!-- Header -->
-            <div class="flex items-center justify-between">
+            <!-- Page header -->
+            <div class="ccdi-page-header">
                 <div>
-                    <h1 class="text-3xl font-bold">Accounting Dashboard</h1>
-                    <p class="mt-1 text-gray-600">{{ currentTerm.semester }} - {{ currentTerm.year }}-{{ currentTerm.year + 1 }}</p>
+                    <h1 class="ccdi-section-title">Accounting Dashboard</h1>
+                    <p class="ccdi-section-desc">{{ currentTerm }} — Financial overview and payment tracking</p>
                 </div>
-                <div class="flex gap-2">
-                    <button @click="refreshData" class="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200">
-                        <RefreshCw :size="16" />
-                        Refresh
-                    </button>
-                    <!-- Manage Fees button removed (Fee Management disabled) -->
-                </div>
+                <button @click="refreshPage" class="ccdi-btn-secondary gap-2">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Refresh
+                </button>
             </div>
 
-            <!-- Statistics Cards -->
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <!-- Total Students -->
-                <div class="rounded-lg bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="mb-1 text-sm text-gray-600">Total Students</p>
-                            <p class="text-3xl font-bold text-gray-900">{{ stats.total_students }}</p>
-                            <p class="mt-2 text-xs text-green-600">{{ stats.active_students }} active</p>
-                        </div>
-                        <div class="rounded-lg bg-blue-100 p-3">
-                            <Users :size="24" class="text-blue-600" />
-                        </div>
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100">
+                        <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
-                </div>
-
-                <!-- Total Collections -->
-                <div class="rounded-lg bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="mb-1 text-sm text-gray-600">Total Collections</p>
-                            <p class="text-2xl font-bold text-green-600">
-                                {{ formatCurrency(stats.total_payments) }}
-                            </p>
-                            <p class="mt-2 text-xs text-gray-500">All-time</p>
-                        </div>
-                        <div class="rounded-lg bg-green-100 p-3">
-                            <CheckCircle :size="24" class="text-green-600" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pending Payments -->
-                <div class="rounded-lg bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="mb-1 text-sm text-gray-600">Pending Payments</p>
-                            <p class="text-2xl font-bold text-red-600">
-                                {{ formatCurrency(stats.total_pending) }}
-                            </p>
-                            <p class="mt-2 text-xs text-gray-500">Outstanding</p>
-                        </div>
-                        <div class="rounded-lg bg-red-100 p-3">
-                            <Clock :size="24" class="text-red-600" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Collection Rate -->
-                <div class="rounded-lg bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="mb-1 text-sm text-gray-600">Collection Rate</p>
-                            <p class="text-3xl font-bold" :class="getCollectionRateColor(stats.collection_rate)">{{ stats.collection_rate }}%</p>
-                            <p class="mt-2 text-xs text-gray-500">Overall efficiency</p>
-                        </div>
-                        <div class="rounded-lg bg-purple-100 p-3">
-                            <TrendingUp :size="24" class="text-purple-600" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Student Fee Management Widget -->
-            <div v-if="studentFeeStats" class="rounded-lg border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 shadow-md">
-                <div class="mb-6 flex items-center justify-between">
                     <div>
-                        <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900">
-                            <FileText :size="24" class="text-blue-600" />
-                            Student Fee Management
-                        </h2>
-                        <p class="mt-1 text-sm text-gray-600">Assessment and fee tracking overview</p>
-                    </div>
-                    <Link
-                        :href="route('student-fees.index')"
-                        class="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
-                    >
-                        <Receipt :size="16" />
-                        Manage Assessments
-                    </Link>
-                </div>
-
-                <!-- Student Fee Stats Grid -->
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div class="rounded-lg bg-white p-4 shadow transition-shadow hover:shadow-md">
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1">
-                                <p class="mb-1 text-sm text-gray-600">Total Assessments</p>
-                                <p class="text-2xl font-bold text-gray-900">{{ studentFeeStats.total_assessments }}</p>
-                                <p class="mt-1 text-xs text-blue-600">Active enrollments</p>
-                            </div>
-                            <div class="rounded-lg bg-blue-100 p-2">
-                                <Users :size="20" class="text-blue-600" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-lg bg-white p-4 shadow transition-shadow hover:shadow-md">
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1">
-                                <p class="mb-1 text-sm text-gray-600">Total Assessment</p>
-                                <p class="text-xl font-bold text-indigo-600">
-                                    {{ formatCurrency(studentFeeStats.total_assessment_amount) }}
-                                </p>
-                                <p class="mt-1 text-xs text-gray-500">Current term</p>
-                            </div>
-                            <div class="rounded-lg bg-indigo-100 p-2">
-                                <TrendingUp :size="20" class="text-indigo-600" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-lg bg-white p-4 shadow transition-shadow hover:shadow-md">
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1">
-                                <p class="mb-1 text-sm text-gray-600">Pending Assessments</p>
-                                <p class="text-xl font-bold text-red-600">
-                                    {{ studentFeeStats.pending_assessments_count }}
-                                </p>
-                                <p class="mt-1 text-xs text-gray-500">Outstanding</p>
-                            </div>
-                            <div class="rounded-lg bg-red-100 p-2">
-                                <AlertCircle :size="20" class="text-red-600" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-lg bg-white p-4 shadow transition-shadow hover:shadow-md">
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1">
-                                <p class="mb-1 text-sm text-gray-600">Recent Payments</p>
-                                <p class="text-xl font-bold text-green-600">
-                                    {{ formatCurrency(studentFeeStats.recent_payments_amount) }}
-                                </p>
-                                <p class="mt-1 text-xs text-gray-500">Last 30 days</p>
-                            </div>
-                            <div class="rounded-lg bg-green-100 p-2">
-                                <DollarSign :size="20" class="text-green-600" />
-                            </div>
-                        </div>
+                        <p class="text-xs font-medium text-muted-foreground">Total Students</p>
+                        <p class="text-xl font-bold text-foreground">{{ stats.totalStudents }}</p>
+                        <p class="text-xs text-muted-foreground">{{ stats.activeStudents }} active</p>
                     </div>
                 </div>
-
-                <!-- Quick Actions for Student Fees -->
-                <div class="mt-4 border-t border-blue-200 pt-4">
-                    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                        <Link
-                            :href="route('student-fees.create')"
-                            class="flex items-center gap-2 rounded-lg border border-blue-200 bg-white p-3 transition-colors hover:bg-blue-50"
-                        >
-                            <div class="rounded bg-blue-500 p-2">
-                                <FileText :size="16" class="text-white" />
-                            </div>
-                            <div class="flex-1">
-                                <p class="text-sm font-medium text-gray-900">Create Assessment</p>
-                                <p class="text-xs text-gray-600">New student fee</p>
-                            </div>
-                        </Link>
-
-                        <Link
-                            :href="route('student-fees.index')"
-                            class="flex items-center gap-2 rounded-lg border border-blue-200 bg-white p-3 transition-colors hover:bg-blue-50"
-                        >
-                            <div class="rounded bg-indigo-500 p-2">
-                                <Users :size="16" class="text-white" />
-                            </div>
-                            <div class="flex-1">
-                                <p class="text-sm font-medium text-gray-900">View All Students</p>
-                                <p class="text-xs text-gray-600">Manage fees</p>
-                            </div>
-                        </Link>
-
-                        <Link
-                            :href="route('student-fees.index', { filter: 'outstanding' })"
-                            class="flex items-center gap-2 rounded-lg border border-blue-200 bg-white p-3 transition-colors hover:bg-blue-50"
-                        >
-                            <div class="rounded bg-red-500 p-2">
-                                <CreditCard :size="16" class="text-white" />
-                            </div>
-                            <div class="flex-1">
-                                <p class="text-sm font-medium text-gray-900">Outstanding Balance</p>
-                                <p class="text-xs text-gray-600">
-                                    {{ studentFeeStats.pending_assessments_count > 0 ? 'Needs attention' : 'All clear' }}
-                                </p>
-                            </div>
-                        </Link>
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100">
+                        <svg class="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Total Collections</p>
+                        <p class="text-xl font-bold text-emerald-600">₱{{ Number(stats.totalCollections).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</p>
+                        <p class="text-xs text-muted-foreground">All-time</p>
+                    </div>
+                </div>
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-red-100">
+                        <svg class="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Pending Payments</p>
+                        <p class="text-xl font-bold text-red-600">₱{{ Number(stats.pendingPayments).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</p>
+                        <p class="text-xs text-muted-foreground">Outstanding</p>
+                    </div>
+                </div>
+                <div class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-purple-100">
+                        <svg class="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Collection Rate</p>
+                        <p class="text-xl font-bold" :class="Number(stats.collectionRate) >= 50 ? 'text-emerald-600' : 'text-red-600'">{{ Number(stats.collectionRate).toFixed(2) }}%</p>
+                        <p class="text-xs text-muted-foreground">Overall efficiency</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Tabs -->
-            <div class="rounded-lg bg-white shadow-md">
-                <div class="border-b">
-                    <nav class="flex gap-4 px-6">
-                        <button
-                            @click="activeTab = 'overview'"
-                            :class="[
-                                'border-b-2 px-2 py-4 text-sm font-medium transition-colors',
-                                activeTab === 'overview' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700',
-                            ]"
-                        >
-                            Overview
-                        </button>
-                        <button
-                            @click="activeTab = 'payments'"
-                            :class="[
-                                'border-b-2 px-2 py-4 text-sm font-medium transition-colors',
-                                activeTab === 'payments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700',
-                            ]"
-                        >
-                            Recent Payments
-                        </button>
-                        <button
-                            @click="activeTab = 'students'"
-                            :class="[
-                                'border-b-2 px-2 py-4 text-sm font-medium transition-colors',
-                                activeTab === 'students' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700',
-                            ]"
-                        >
-                            Outstanding Balances
-                        </button>
-                    </nav>
+            <!-- Fee Management + Quick actions -->
+            <div class="ccdi-card p-5">
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-semibold text-foreground">Student Fee Management</h2>
+                        <p class="text-xs text-muted-foreground">Assessment and fee tracking overview</p>
+                    </div>
+                    <Link :href="route('student-fees.index')" class="ccdi-btn-primary text-xs px-3 py-1.5">Manage Assessments</Link>
                 </div>
-
-                <!-- Tab Content -->
-                <div class="p-6">
-                    <!-- Overview Tab -->
-                    <div v-if="activeTab === 'overview'" class="space-y-6">
-                        <div>
-                            <h3 class="mb-4 text-lg font-semibold">Payment Trends (Last 6 Months)</h3>
-                            <div class="rounded-lg bg-gray-50 p-4">
-                                <div class="flex h-64 items-end justify-between gap-2">
-                                    <div v-for="(trend, index) in paymentTrends" :key="trend.month" class="flex flex-1 flex-col items-center">
-                                        <div class="mb-2 flex items-center gap-1">
-                                            <component
-                                                v-if="getTrendIcon(index)"
-                                                :is="getTrendIcon(index)"
-                                                :size="16"
-                                                :class="getTrendColor(index)"
-                                            />
-                                        </div>
-                                        <div
-                                            class="group relative w-full cursor-pointer rounded-t bg-blue-500 transition-colors hover:bg-blue-600"
-                                            :style="{
-                                                height: `${(trend.total / Math.max(...paymentTrends.map((t) => t.total))) * 100}%`,
-                                                minHeight: '20px',
-                                            }"
-                                        >
-                                            <div
-                                                class="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 transform rounded bg-gray-900 px-3 py-2 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100"
-                                            >
-                                                {{ formatCurrency(trend.total) }}<br />
-                                                {{ trend.count }} payments
-                                            </div>
-                                        </div>
-                                        <p class="mt-2 text-xs text-gray-600">{{ formatMonth(trend.month) }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                            <div>
-                                <h3 class="mb-4 text-lg font-semibold">Payment Methods</h3>
-                                <div class="space-y-3">
-                                    <div v-for="method in paymentByMethod" :key="method.method" class="rounded-lg bg-gray-50 p-4">
-                                        <div class="mb-2 flex items-center justify-between">
-                                            <span class="font-medium">{{ method.method }}</span>
-                                            <span class="text-sm text-gray-600">{{ method.count }} transactions</span>
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="h-2 flex-1 rounded-full bg-gray-200">
-                                                <div
-                                                    class="h-2 rounded-full bg-blue-500"
-                                                    :style="{
-                                                        width: `${(method.total / paymentByMethod.reduce((sum, m) => sum + m.total, 0)) * 100}%`,
-                                                    }"
-                                                ></div>
-                                            </div>
-                                            <span class="text-sm font-semibold">{{ formatCurrency(method.total) }}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 class="mb-4 text-lg font-semibold">Students by Year Level</h3>
-                                <div class="space-y-3">
-                                    <div v-for="level in studentsByYearLevel" :key="level.year_level" class="rounded-lg bg-gray-50 p-4">
-                                        <div class="mb-2 flex items-center justify-between">
-                                            <span class="font-medium">{{ level.year_level }}</span>
-                                            <span class="text-lg font-bold text-blue-600">{{ level.count }}</span>
-                                        </div>
-                                        <div class="h-2 flex-1 rounded-full bg-gray-200">
-                                            <div
-                                                class="h-2 rounded-full bg-green-500"
-                                                :style="{
-                                                    width: `${(level.count / stats.total_students) * 100}%`,
-                                                }"
-                                            ></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div class="rounded-xl border border-border bg-muted/30 p-4">
+                        <p class="text-xs text-muted-foreground">Total Assessments</p>
+                        <p class="text-2xl font-bold text-foreground">{{ feeStats.totalAssessments }}</p>
+                        <p class="text-xs text-blue-600">Active enrollments</p>
                     </div>
-
-                    <!-- Payments Tab -->
-                    <div v-if="activeTab === 'payments'">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h3 class="text-lg font-semibold">Recent Payments</h3>
-                            <Link :href="route('transactions.index')" class="text-sm text-blue-600 hover:text-blue-800"> View All → </Link>
-                        </div>
-
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-200">
-                                    <tr v-for="payment in recentPayments" :key="payment.id" class="hover:bg-gray-50">
-                                        <td class="px-4 py-3 text-sm font-medium">{{ payment.reference }}</td>
-                                        <td class="px-4 py-3 text-sm">{{ payment.student_name }}</td>
-                                        <td class="px-4 py-3 text-sm font-semibold text-green-600">
-                                            {{ formatCurrency(payment.amount) }}
-                                        </td>
-                                        <td class="px-4 py-3 text-sm">
-                                            <span
-                                                class="rounded-full px-2 py-1 text-xs"
-                                                :class="payment.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'"
-                                            >
-                                                {{ payment.status }}
-                                            </span>
-                                        </td>
-                                        <td class="px-4 py-3 text-sm text-gray-600">{{ formatDate(payment.created_at) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div v-if="!recentPayments.length" class="py-8 text-center text-gray-500">No recent payments found</div>
+                    <div class="rounded-xl border border-border bg-muted/30 p-4">
+                        <p class="text-xs text-muted-foreground">Total Assessment</p>
+                        <p class="text-2xl font-bold text-blue-600">₱{{ Number(feeStats.totalAssessmentAmount).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</p>
+                        <p class="text-xs text-muted-foreground">Current term</p>
                     </div>
-
-                    <!-- Students Tab -->
-                    <div v-if="activeTab === 'students'">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h3 class="text-lg font-semibold">Students with Outstanding Balances</h3>
-                            <Link :href="route('students.index')" class="text-sm text-blue-600 hover:text-blue-800"> View All Students → </Link>
-                        </div>
-
-                        <div class="space-y-3">
-                            <div
-                                v-for="student in studentsWithBalance"
-                                :key="student.id"
-                                class="cursor-pointer rounded-lg bg-gray-50 p-4 transition-colors hover:bg-gray-100"
-                                @click="viewStudent(student.id)"
-                            >
-                                <div class="flex items-start justify-between">
-                                    <div class="flex-1">
-                                        <p class="font-medium text-gray-900">{{ student.name }}</p>
-                                        <p class="text-sm text-gray-600">{{ student.account_id }} • {{ student.email }}</p>
-                                        <p class="mt-1 text-xs text-gray-500">{{ student.course }} - {{ student.year_level }}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="text-lg font-bold text-red-600">{{ formatCurrency(student.balance) }}</p>
-                                        <p class="text-xs text-gray-500">Outstanding</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div v-if="!studentsWithBalance.length" class="py-8 text-center text-gray-500">No students with outstanding balances</div>
+                    <div class="rounded-xl border border-border bg-muted/30 p-4">
+                        <p class="text-xs text-muted-foreground">Pending Assessments</p>
+                        <p class="text-2xl font-bold" :class="feeStats.pendingAssessments > 0 ? 'text-amber-600' : 'text-foreground'">{{ feeStats.pendingAssessments }}</p>
+                        <p class="text-xs text-muted-foreground">Outstanding</p>
                     </div>
+                    <div class="rounded-xl border border-border bg-muted/30 p-4">
+                        <p class="text-xs text-muted-foreground">Recent Payments</p>
+                        <p class="text-2xl font-bold text-emerald-600">₱{{ Number(feeStats.recentPayments).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</p>
+                        <p class="text-xs text-muted-foreground">Last 30 days</p>
+                    </div>
+                </div>
+                <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <Link :href="route('student-fees.create')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-all hover:border-blue-300 hover:bg-blue-50">
+                        <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100"><svg class="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></div>
+                        <div><p class="text-sm font-medium text-foreground">Create Assessment</p><p class="text-xs text-muted-foreground">New student fee</p></div>
+                    </Link>
+                    <Link :href="route('student-fees.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-all hover:border-blue-300 hover:bg-blue-50">
+                        <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-100"><svg class="h-4 w-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg></div>
+                        <div><p class="text-sm font-medium text-foreground">View All Students</p><p class="text-xs text-muted-foreground">Manage fees</p></div>
+                    </Link>
+                    <Link :href="route('approvals.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-all hover:border-red-200 hover:bg-red-50">
+                        <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-red-100"><svg class="h-4 w-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                        <div><p class="text-sm font-medium text-foreground">Outstanding Balance</p><p class="text-xs text-muted-foreground">View pending</p></div>
+                    </Link>
                 </div>
             </div>
 
-            <!-- Quick Actions — Fee/Subject links removed -->
-            <div class="rounded-lg bg-white p-6 shadow-md">
-                <h3 class="mb-4 text-lg font-semibold">Quick Actions</h3>
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Link
-                        :href="route('students.index')"
-                        class="flex items-center gap-3 rounded-lg bg-purple-50 p-4 transition-colors hover:bg-purple-100"
-                    >
-                        <div class="rounded bg-purple-500 p-2">
-                            <Users :size="20" class="text-white" />
+            <!-- Tabs: Overview / Recent Payments / Outstanding -->
+            <div class="ccdi-card overflow-hidden">
+                <div class="flex border-b border-border bg-muted/20">
+                    <button v-for="tab in ['Overview', 'Recent Payments', 'Outstanding Balances']" :key="tab" @click="activeTab = tab" class="px-5 py-3 text-sm font-medium transition-all" :class="activeTab === tab ? 'border-b-2 border-blue-600 text-blue-700 bg-card' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'">
+                        {{ tab }}
+                    </button>
+                </div>
+                <div class="p-5">
+                    <!-- Overview: Payment Trends Chart placeholder -->
+                    <div v-if="activeTab === 'Overview'">
+                        <h3 class="mb-4 text-sm font-semibold text-foreground">Payment Trends (Last 6 Months)</h3>
+                        <div v-if="chartData && chartData.length > 0" class="space-y-2.5">
+                            <div v-for="(month, i) in chartData" :key="i" class="flex items-center gap-3">
+                                <span class="w-12 text-xs text-muted-foreground text-right flex-shrink-0">{{ month.label }}</span>
+                                <div class="flex-1 rounded-full bg-muted h-5 overflow-hidden">
+                                    <div class="h-full rounded-full bg-blue-500 transition-all" :style="{ width: month.percentage + '%' }"></div>
+                                </div>
+                                <span class="w-24 text-xs font-medium text-foreground text-right flex-shrink-0">₱{{ Number(month.amount).toLocaleString('en-PH', { minimumFractionDigits: 0 }) }}</span>
+                            </div>
                         </div>
-                        <div>
-                            <p class="font-medium text-gray-900">Manage Students</p>
-                            <p class="text-xs text-gray-600">View all students</p>
+                        <div v-else class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                            <svg class="mb-3 h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                            <p class="text-sm">No payment data available yet</p>
                         </div>
-                    </Link>
+                    </div>
 
-                    <Link
-                        :href="route('transactions.index')"
-                        class="flex items-center gap-3 rounded-lg bg-orange-50 p-4 transition-colors hover:bg-orange-100"
-                    >
-                        <div class="rounded bg-orange-500 p-2">
-                            <DollarSign :size="20" class="text-white" />
+                    <!-- Recent Payments -->
+                    <div v-if="activeTab === 'Recent Payments'">
+                        <div v-if="recentPayments && recentPayments.length > 0" class="divide-y divide-border">
+                            <div v-for="payment in recentPayments" :key="payment.id" class="flex items-center justify-between py-3">
+                                <div>
+                                    <p class="text-sm font-medium text-foreground">{{ payment.student_name }}</p>
+                                    <p class="text-xs text-muted-foreground">{{ payment.reference }} · {{ payment.date }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-semibold text-emerald-600">+₱{{ Number(payment.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</p>
+                                    <span class="ccdi-badge-green text-xs">{{ payment.status }}</span>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <p class="font-medium text-gray-900">View Transactions</p>
-                            <p class="text-xs text-gray-600">All transactions</p>
+                        <div v-else class="py-10 text-center text-sm text-muted-foreground">No recent payments recorded</div>
+                    </div>
+
+                    <!-- Outstanding -->
+                    <div v-if="activeTab === 'Outstanding Balances'">
+                        <div v-if="outstandingBalances && outstandingBalances.length > 0" class="divide-y divide-border">
+                            <div v-for="balance in outstandingBalances" :key="balance.student_id" class="flex items-center justify-between py-3">
+                                <div>
+                                    <p class="text-sm font-medium text-foreground">{{ balance.student_name }}</p>
+                                    <p class="text-xs text-muted-foreground">{{ balance.account_id }} · {{ balance.year_level }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-semibold text-red-600">₱{{ Number(balance.balance).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</p>
+                                    <span class="ccdi-badge-red">Outstanding</span>
+                                </div>
+                            </div>
                         </div>
-                    </Link>
+                        <div v-else class="flex flex-col items-center justify-center py-12 text-center">
+                            <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100"><svg class="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                            <p class="text-sm font-medium text-foreground">All clear!</p>
+                            <p class="text-xs text-muted-foreground mt-1">No outstanding balances found</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

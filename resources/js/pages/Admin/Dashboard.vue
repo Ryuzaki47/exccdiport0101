@@ -92,195 +92,175 @@ const getColorClass = (color: string) => {
 </script>
 
 <template>
-    <Head title="Admin Dashboard" />
-
     <AppLayout>
-        <div class="w-full p-6">
+        <Head title="Admin Dashboard" />
+
+        <div class="w-full space-y-5 p-6">
             <Breadcrumbs :items="breadcrumbs" />
 
-            <!-- Welcome Header -->
-            <div class="mb-8">
-                <h1 class="mb-2 text-4xl font-bold text-gray-900">Admin Dashboard</h1>
-                <p class="text-gray-600">Welcome to your administration center</p>
-            </div>
-
-            <!-- Quick Stats Grid -->
-            <div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <div v-for="(stat, index) in adminStats" :key="index">
-                    <Card>
-                        <CardHeader class="pb-3">
-                            <CardTitle class="text-sm font-medium text-gray-700">{{ stat.title }}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div class="flex items-center justify-between">
-                                <div class="text-3xl font-bold text-gray-900">{{ stat.value }}</div>
-                                <component :is="stat.icon" :class="['h-8 w-8', getColorClass(stat.color)]" />
-                            </div>
-                            <p class="mt-2 text-xs text-gray-500">{{ stat.description }}</p>
-                        </CardContent>
-                    </Card>
+            <!-- Page header -->
+            <div class="ccdi-page-header">
+                <div>
+                    <h1 class="ccdi-section-title">Admin Dashboard</h1>
+                    <p class="ccdi-section-desc">Welcome to your administration center</p>
                 </div>
             </div>
 
-            <!-- Main Content Grid -->
-            <div class="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div v-for="stat in adminStats" :key="stat.title" class="ccdi-stat-card">
+                    <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl"
+                        :class="stat.color === 'blue' ? 'bg-blue-100' : stat.color === 'purple' ? 'bg-purple-100' : stat.color === 'orange' ? 'bg-amber-100' : 'bg-emerald-100'">
+                        <component :is="stat.icon" :size="20"
+                            :class="stat.color === 'blue' ? 'text-blue-600' : stat.color === 'purple' ? 'text-purple-600' : stat.color === 'orange' ? 'text-amber-600' : 'text-emerald-600'" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="truncate text-xs font-medium text-muted-foreground">{{ stat.title }}</p>
+                        <p class="text-xl font-bold text-foreground">{{ stat.value }}</p>
+                        <p class="text-xs text-muted-foreground">{{ stat.description }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main grid: Quick Actions + System Status -->
+            <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
                 <!-- Quick Actions -->
-                <Card class="lg:col-span-1">
-                    <CardHeader>
-                        <CardTitle>Quick Actions</CardTitle>
-                        <CardDescription>Common administrative tasks</CardDescription>
-                    </CardHeader>
-                    <CardContent class="space-y-3">
-                        <Link :href="route('users.create')" as="button" class="w-full">
-                            <Button variant="outline" class="w-full justify-start">
-                                <Users class="mr-2 h-4 w-4" />
-                                Add Admin User
-                            </Button>
-                        </Link>
-                        <Link :href="route('notifications.index')" as="button" class="w-full">
-                            <Button variant="outline" class="w-full justify-start">
-                                <FileText class="mr-2 h-4 w-4" />
-                                Manage Notifications
-                            </Button>
-                        </Link>
-                        <Link :href="route('users.index')" as="button" class="w-full">
-                            <Button variant="outline" class="w-full justify-start">
-                                <Users class="mr-2 h-4 w-4" />
-                                View All Admins
-                            </Button>
-                        </Link>
-                        <Link :href="route('student-fees.index')" as="button" class="w-full">
-                            <Button variant="outline" class="w-full justify-start">
-                                <Users class="mr-2 h-4 w-4" />
-                                View Students
-                            </Button>
-                        </Link>
-                        <!-- Fee Management link removed (Fee Management disabled) -->
-                    </CardContent>
-                </Card>
-
-                <!-- System Status & Admin Information -->
-                <div class="space-y-6 lg:col-span-2">
-                    <!-- System Status -->
-                    <Card>
-                        <CardHeader>
-                            <CardTitle class="flex items-center gap-2">
-                                <CheckCircle2 class="h-5 w-5 text-green-500" />
-                                System Status
-                            </CardTitle>
-                            <CardDescription>Real-time system health</CardDescription>
-                        </CardHeader>
-                        <CardContent class="space-y-4">
-                            <div class="rounded-lg border border-green-200 bg-green-50 p-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <h4 class="font-semibold text-green-900">All Systems Operational</h4>
-                                        <p class="mt-1 text-sm text-green-700">All services are running normally</p>
-                                    </div>
-                                    <CheckCircle2 class="h-8 w-8 text-green-500" />
-                                </div>
+                <div class="ccdi-card p-5">
+                    <h2 class="mb-4 text-base font-semibold text-foreground">Quick Actions</h2>
+                    <p class="mb-4 text-xs text-muted-foreground">Common administrative tasks</p>
+                    <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <Link :href="route('users.create')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100">
+                                <Users :size="16" class="text-blue-600" />
                             </div>
-
-                            <div class="grid grid-cols-3 gap-2">
-                                <div class="rounded border border-gray-200 bg-gray-50 p-3">
-                                    <p class="text-xs font-medium text-gray-600">Database</p>
-                                    <p class="mt-1 text-sm font-semibold text-green-600">✓ Online</p>
-                                </div>
-                                <div class="rounded border border-gray-200 bg-gray-50 p-3">
-                                    <p class="text-xs font-medium text-gray-600">API</p>
-                                    <p class="mt-1 text-sm font-semibold text-green-600">✓ Online</p>
-                                </div>
-                                <div class="rounded border border-gray-200 bg-gray-50 p-3">
-                                    <p class="text-xs font-medium text-gray-600">Auth</p>
-                                    <p class="mt-1 text-sm font-semibold text-green-600">✓ Online</p>
-                                </div>
+                            Add Admin User
+                        </Link>
+                        <Link href="/admin/notifications/create" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100">
+                                <FileText :size="16" class="text-amber-600" />
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    <!-- Admin Roles Distribution -->
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Admin Roles</CardTitle>
-                            <CardDescription>Current admin distribution</CardDescription>
-                        </CardHeader>
-                        <CardContent class="space-y-3">
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm text-gray-700">Active Admins</span>
-                                    <span class="font-semibold text-gray-900">{{ props.stats?.active_admins || 0 }}</span>
-                                </div>
-                                <div class="h-2 w-full rounded-full bg-gray-200">
-                                    <div
-                                        class="h-2 rounded-full bg-green-500"
-                                        :style="{
-                                            width: props.stats?.active_admins
-                                                ? (props.stats.active_admins / Math.max(props.stats.total_admins, 1)) * 100 + '%'
-                                                : '0%',
-                                        }"
-                                    ></div>
-                                </div>
+                            Manage Notifications
+                        </Link>
+                        <Link :href="route('users.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-purple-100">
+                                <Users :size="16" class="text-purple-600" />
                             </div>
-
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm text-gray-700">Inactive Admins</span>
-                                    <span class="font-semibold text-gray-900">{{ props.stats?.inactive_admins || 0 }}</span>
-                                </div>
-                                <div class="h-2 w-full rounded-full bg-gray-200">
-                                    <div
-                                        class="h-2 rounded-full bg-red-500"
-                                        :style="{
-                                            width: props.stats?.inactive_admins
-                                                ? (props.stats.inactive_admins / Math.max(props.stats.total_admins, 1)) * 100 + '%'
-                                                : '0%',
-                                        }"
-                                    ></div>
-                                </div>
+                            View All Admins
+                        </Link>
+                        <Link :href="route('student-fees.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100">
+                                <Users :size="16" class="text-emerald-600" />
                             </div>
-                        </CardContent>
-                    </Card>
+                            View Students
+                        </Link>
+                        <Link :href="route('approvals.index')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-rose-100">
+                                <AlertCircle :size="16" class="text-rose-600" />
+                            </div>
+                            Payment Approvals
+                        </Link>
+                        <Link :href="route('students.archive')" class="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                                <FileText :size="16" class="text-gray-600" />
+                            </div>
+                            Archives
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="ccdi-card p-5">
+                    <div class="mb-4 flex items-center gap-2">
+                        <CheckCircle2 :size="18" class="text-emerald-500" />
+                        <h2 class="text-base font-semibold text-foreground">System Status</h2>
+                        <span class="ml-auto ccdi-badge-green text-xs">Real-time</span>
+                    </div>
+
+                    <!-- Overall health -->
+                    <div class="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-200">
+                            <CheckCircle2 :size="20" class="text-emerald-700" />
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-emerald-900">All Systems Operational</p>
+                            <p class="text-xs text-emerald-700">All services are running normally</p>
+                        </div>
+                    </div>
+
+                    <!-- Service rows -->
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="text-sm font-medium text-foreground">Database</span>
+                            </div>
+                            <span class="ccdi-badge-green">Online</span>
+                        </div>
+                        <div class="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="text-sm font-medium text-foreground">API</span>
+                            </div>
+                            <span class="ccdi-badge-green">Online</span>
+                        </div>
+                        <div class="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="text-sm font-medium text-foreground">Auth</span>
+                            </div>
+                            <span class="ccdi-badge-green">Online</span>
+                        </div>
+                        <div class="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="text-sm font-medium text-foreground">Payment Gateway</span>
+                            </div>
+                            <span class="ccdi-badge-green">Online</span>
+                        </div>
+                    </div>
+
+                    <!-- Admin role breakdown -->
+                    <div class="mt-5">
+                        <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Admin Roles</p>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-muted-foreground">Active Admins</span>
+                                <span class="font-semibold text-foreground">{{ stats?.active_admins ?? 0 }}</span>
+                            </div>
+                            <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                <div class="h-full rounded-full bg-blue-500 transition-all" :style="{ width: stats?.total_admins ? ((stats.active_admins / stats.total_admins) * 100) + '%' : '0%' }"></div>
+                            </div>
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-muted-foreground">Inactive Admins</span>
+                                <span class="font-semibold text-foreground">{{ stats?.inactive_admins ?? 0 }}</span>
+                            </div>
+                            <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                <div class="h-full rounded-full bg-gray-400 transition-all" :style="{ width: stats?.total_admins ? ((stats.inactive_admins / stats.total_admins) * 100) + '%' : '0%' }"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Recent Notifications -->
-            <Card>
-                <CardHeader class="flex flex-row items-center justify-between space-y-0">
-                    <div>
-                        <CardTitle>Recent Notifications</CardTitle>
-                        <CardDescription>Latest notifications sent to users</CardDescription>
-                    </div>
-                    <Link :href="route('notifications.index')">
-                        <Button variant="outline" size="sm">View All</Button>
-                    </Link>
-                </CardHeader>
-                <CardContent>
-                    <div v-if="!props.stats?.recent_notifications?.length" class="py-8 text-center">
-                        <FileText class="mx-auto mb-4 h-12 w-12 text-gray-300" />
-                        <p class="text-gray-500">No notifications yet</p>
-                        <p class="mt-1 text-sm text-gray-400">Create one to get started</p>
-                    </div>
-                    <div v-else class="space-y-3">
-                        <div
-                            v-for="notification in props.stats?.recent_notifications?.slice(0, 5)"
-                            :key="notification.id"
-                            class="rounded-lg border p-4 transition hover:bg-gray-50"
-                        >
-                            <div class="flex items-start justify-between">
-                                <div class="flex-1">
-                                    <h4 class="font-semibold text-gray-900">{{ notification.title }}</h4>
-                                    <p class="mt-1 text-sm text-gray-600">
-                                        To: <span class="font-medium capitalize">{{ notification.target_role }}</span>
-                                    </p>
-                                </div>
-                                <span class="rounded bg-blue-100 px-2 py-1 text-xs text-blue-700">{{
-                                    new Date(notification.created_at).toLocaleDateString()
-                                }}</span>
-                            </div>
+            <div v-if="stats?.recent_notifications?.length" class="ccdi-card">
+                <div class="flex items-center justify-between border-b border-border px-5 py-4">
+                    <h2 class="text-base font-semibold text-foreground">Recent Notifications</h2>
+                    <Link href="/admin/notifications" class="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">View All →</Link>
+                </div>
+                <div class="divide-y divide-border">
+                    <div v-for="notif in stats.recent_notifications" :key="notif.id" class="flex items-start gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors">
+                        <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 mt-0.5">
+                            <FileText :size="14" class="text-blue-600" />
                         </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-foreground">{{ notif.title }}</p>
+                            <p class="text-xs text-muted-foreground mt-0.5">Target: {{ notif.target_role }} · {{ notif.created_at }}</p>
+                        </div>
+                        <span class="ccdi-badge-blue flex-shrink-0">{{ notif.target_role }}</span>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     </AppLayout>
 </template>
