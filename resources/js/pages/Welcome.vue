@@ -7,35 +7,10 @@ const page = usePage();
 // Page name and quote data available in page.props if needed
 
 const backgrounds = [
-    '/images/bg1.jpg',
-    '/images/bg2.jpg',
-    '/images/bg3.jpg',
-    '/images/bg4.jpg',
-    '/images/bg5.jpg',
-    '/images/bg6.jpg',
-    '/images/bg7.jpg',
-    '/images/bg11.jpg',
-    '/images/bg12.jpg',
-    '/images/bg13.jpg',
-    '/images/bg14.jpg',
-    '/images/bg15.jpg',
-    '/images/bg16.jpg',
+    '/images/BackgroundImage.jpg',
+    '/images/BackgroundImage01.jpg',
 ];
 
-const currentIndex = ref(0);
-let interval: number;
-
-onMounted(() => {
-    interval = window.setInterval(() => {
-        currentIndex.value = (currentIndex.value + 1) % backgrounds.length;
-    }, 5000);
-});
-
-onUnmounted(() => {
-    clearInterval(interval);
-});
-
-const translateX = computed(() => `-${currentIndex.value * 100}%`);
 </script>
 
 <template>
@@ -44,17 +19,7 @@ const translateX = computed(() => `-${currentIndex.value * 100}%`);
         <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     </Head>
 
-    <div class="relative min-h-screen overflow-hidden text-white">
-        <!-- Slideshow container -->
-        <div class="absolute inset-0 flex transition-transform duration-1000 ease-in-out" :style="{ transform: `translateX(${translateX})` }">
-            <div
-                v-for="(bg, index) in backgrounds"
-                :key="index"
-                class="min-h-screen min-w-full bg-cover bg-center bg-no-repeat"
-                :style="{ backgroundImage: `url(${bg})` }"
-            />
-        </div>
-
+    <div class="relative min-h-screen overflow-hidden text-white" :style="{ backgroundImage: `url(${backgrounds[0]})`, backgroundSize: 'cover', backgroundPosition: 'center' }">
         <!-- Overlay for content -->
         <div class="relative z-10 flex min-h-screen flex-col bg-black/60 p-6 lg:p-8">
             <!-- Top-right nav -->
