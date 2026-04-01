@@ -40,12 +40,18 @@ class EnhancedSubjectSeeder extends Seeder
         Subject::query()->delete();
 
         foreach ($this->subjects() as $s) {
+            // Convert units → lec_units and has_lab → lab_units
+            $lec_units = $s['units'] ?? 0;
+            $lab_units = (($s['has_lab'] ?? false) === true) ? 1 : 0;
+            
             Subject::create(array_merge([
                 'price_per_unit' => $this->pricePerUnit,
                 'has_lab'        => false,
                 'lab_fee'        => 0,
                 'description'    => null,
                 'is_active'      => true,
+                'lec_units'      => $lec_units,
+                'lab_units'      => $lab_units,
             ], $s));
         }
 

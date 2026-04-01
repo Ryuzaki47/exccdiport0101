@@ -79,21 +79,18 @@ class StudentFeeController extends Controller
                 ->map(fn ($byYear) => $byYear
                     ->groupBy('semester')
                     ->map(fn ($bySem) => $bySem->map(fn ($s) => [
-                        'id'             => $s->id,
-                        'code'           => $s->code,
-                        'name'           => $s->name,
-                        'course'         => $s->course,
-                        'lec_units'      => $s->lec_units ?? 0,
-                        'lab_units'      => $s->lab_units ?? 0,
-                        'total_units'    => ($s->lec_units ?? 0) + ($s->lab_units ?? 0),
-                        'price_per_unit' => $rate,
-                        'has_lab'        => (bool) $s->has_lab,
-                        'lab_fee'        => $s->has_lab ? $labFee : 0,
-                        'tuition_cost'   => round(($s->lec_units ?? 0) * $rate, 2),
-                        'lab_cost'       => $s->lab_units > 0 ? $labFee : 0,
-                        'total_cost'     => round(($s->lec_units ?? 0) * $rate + ($s->lab_units > 0 ? $labFee : 0), 2),
-                        'year_level'     => $s->year_level,
-                        'semester'       => $s->semester,
+                        'id'           => $s->id,
+                        'code'         => $s->code,
+                        'name'         => $s->name,
+                        'course'       => $s->course,
+                        'lec_units'    => $s->lec_units ?? 0,
+                        'lab_units'    => $s->lab_units ?? 0,
+                        'total_units'  => ($s->lec_units ?? 0) + ($s->lab_units ?? 0),
+                        'has_lab'      => (bool) $s->has_lab,
+                        'tuition_cost' => round(($s->lec_units ?? 0) * $rate, 2),
+                        'lab_cost'     => $s->lab_units > 0 ? $labFee : 0,
+                        'year_level'   => $s->year_level,
+                        'semester'     => $s->semester,
                     ])->values()->toArray())
                     ->toArray())
                 ->toArray())

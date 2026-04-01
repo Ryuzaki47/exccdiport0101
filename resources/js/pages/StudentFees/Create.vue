@@ -319,6 +319,8 @@ const totalUnits = computed(() => selectedSubjects.value.reduce((sum, s) => sum 
 // The label must show LEC units only so the formula matches the displayed amount.
 const lecUnitsTotal = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.lec_units, 0));
 
+const labUnitsTotal = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.lab_units, 0));
+
 const labSubjectCount = computed(() => selectedSubjects.value.filter((s) => s.lab_cost > 0).length);
 
 // ─── Student list filtering ───────────────────────────────────────────────────
@@ -772,15 +774,22 @@ function statusColor(status: string) {
                      REGULAR — subject browser from student's course
                      ════════════════════════════════════════ -->
                 <div v-if="assessmentType === 'regular'" class="rounded-lg border bg-white shadow-sm">
-                    <div class="flex items-center justify-between border-b px-5 py-4">
+                    <div class="border-b px-5 py-4">
                         <div class="flex items-center gap-2">
                             <BookOpen class="h-4 w-4 text-blue-500" />
-                            <h2 class="font-semibold text-gray-900">Subject Selection</h2>
+                            <h2 class="font-semibold text-gray-900">Regular Assessment</h2>
                         </div>
-                        <p v-if="activeCourse && yearLevel && semester" class="text-xs text-green-600">
-                            ✓ Pre-selected — uncheck any subject the student is NOT taking
-                        </p>
-                        <p v-else class="text-xs text-gray-400">Select year level and semester to load subjects</p>
+                        <div class="mt-2 flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-sm font-medium text-gray-700">{{ totalUnits }} units</p>
+                                <p class="text-xs text-gray-600">School Year: {{ effectiveSchoolYear }}</p>
+                                <p class="text-xs text-gray-600">5 payment terms will be generated</p>
+                            </div>
+                            <p v-if="activeCourse && yearLevel && semester" class="text-xs text-green-600">
+                                ✓ Pre-selected — uncheck any subject the student is NOT taking
+                            </p>
+                            <p v-else class="text-xs text-gray-400">Select year level and semester to load subjects</p>
+                        </div>
                     </div>
 
                     <div class="border-b px-5 py-3">
@@ -1021,8 +1030,7 @@ function statusColor(status: string) {
                         <div>
                             <h2 class="font-semibold text-gray-900">Selected Subjects</h2>
                             <p class="mt-0.5 text-xs text-gray-500">
-                                {{ selectedSubjects.length }} subject{{ selectedSubjects.length !== 1 ? 's' : '' }} · {{ totalUnits }} units ·
-                                {{ labSubjectCount }} lab subject{{ labSubjectCount !== 1 ? 's' : '' }}
+                                {{ selectedSubjects.length }} subject{{ selectedSubjects.length !== 1 ? 's' : '' }} · {{ lecUnitsTotal }} LEC {{ labUnitsTotal > 0 ? '+ ' + labUnitsTotal + ' LAB' : '' }} = {{ totalUnits }} units
                             </p>
                         </div>
                     </div>
@@ -1072,9 +1080,9 @@ function statusColor(status: string) {
                             <span class="text-gray-600">Tuition ({{ lecUnitsTotal }} LEC units × {{ formatCurrency(tuitionPerUnit ?? 364) }})</span>
                             <span class="font-medium">{{ formatCurrency(tuitionTotal) }}</span>
                         </div>
-                        <div v-if="labTotal > 0" class="flex justify-between">
+                        <div class="flex justify-between">
                             <span class="text-gray-600"
-                                >Laboratory ({{ labSubjectCount }} subject{{ labSubjectCount !== 1 ? 's' : '' }} with labs)</span
+                                >Laboratory ({{ labUnitsTotal }} LAB units × {{ formatCurrency(labFeePerSubject ?? 1656) }})</span
                             >
                             <span class="font-medium text-purple-700">{{ formatCurrency(labTotal) }}</span>
                         </div>
