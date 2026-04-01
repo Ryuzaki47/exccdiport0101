@@ -764,6 +764,12 @@ class StudentFeeController extends Controller
             // enrolledSubjectsByAssessment[assessmentId] = int[] of subject IDs
             // confirmed in student_enrollments with status = 'enrolled'.
             'enrolledSubjectsByAssessment' => $enrolledSubjectsByAssessment,
+            // Fee rates passed to Show.vue so the formula label in the Fee Breakdown
+            // card header stays in sync with config/fees.php automatically.
+            // Previously Show.vue hardcoded 364.00 and 1656.00 — if rates change
+            // in config/fees.php the label would silently show the wrong values.
+            'tuitionPerUnit'              => (float) config('fees.tuition_per_unit',    364.00),
+            'labFeePerSubject'            => (float) config('fees.lab_fee_per_subject', 1656.00),
         ]);
     }
 
@@ -1028,9 +1034,15 @@ class StudentFeeController extends Controller
             'semester'             => 'required|in:1st Sem,2nd Sem,Summer',
             'school_year'          => ['required', 'string', 'max:20', 'regex:/^\d{4}-\d{4}$/'],
             'fee_items'            => 'required|array|min:1',
-            'fee_items.*.category' => 'required|string|in:Tuition,Laboratory,Miscellaneous,Other',
-            'fee_items.*.name'     => 'required|string|max:100',
-            'fee_items.*.amount'   => 'required|numeric|min:0',
+            'fee_items.*.category'   => 'required|string|in:Tuition,Laboratory,Miscellaneous,Other',
+            'fee_items.*.name'       => 'required|string|max:100',
+            'fee_items.*.amount'     => 'required|numeric|min:0',
+            // Subject metadata fields — optional, preserved from original fee_breakdown
+            'fee_items.*.subject_id' => 'nullable|integer',
+            'fee_items.*.code'       => 'nullable|string|max:50',
+            'fee_items.*.lec_units'  => 'nullable|integer|min:0',
+            'fee_items.*.lab_units'  => 'nullable|integer|min:0',
+            'fee_items.*.units'      => 'nullable|integer|min:0',
         ]);
 
         DB::beginTransaction();
@@ -1076,14 +1088,32 @@ class StudentFeeController extends Controller
             $rebuiltBreakdown = $feeItems->map(function ($item) use ($existingLookup) {
                 $lookupKey = ($item['category'] ?? '') . '||' . ($item['name'] ?? '');
                 $existing  = $existingLookup->get($lookupKey);
+
+                // lec_units / lab_units priority:
+                //   1. Value sent explicitly by Edit.vue (carried through from original fee_breakdown)
+                //   2. Value from the existingLookup match (same-category+name row in stored breakdown)
+                //   3. Legacy 'units' field from the stored row
+                //   4. Zero (safe default for manually-added misc lines)
+                $lecUnits = (int) ($item['lec_units']
+                    ?? $existing['lec_units']
+                    ?? ($existing['units'] ?? 0));
+
+                $labUnits = (int) ($item['lab_units']
+                    ?? $existing['lab_units']
+                    ?? 0);
+
                 return [
                     'category'   => $item['category'],
                     'name'       => $item['name'],
                     'amount'     => (float) $item['amount'],
-                    // Preserve subject metadata from original row, or null for misc lines
-                    'subject_id' => $existing['subject_id'] ?? null,
-                    'code'       => $existing['code']       ?? null,
-                    'units'      => $existing['units']      ?? 0,
+                    // Subject metadata — preserved from the original row
+                    'subject_id' => $item['subject_id'] ?? $existing['subject_id'] ?? null,
+                    'code'       => $item['code']       ?? $existing['code']       ?? null,
+                    // Unit data — critical for Show.vue buildSubjectPanel()
+                    // to display correct LEC/LAB columns after an edit.
+                    'lec_units'  => $lecUnits,
+                    'lab_units'  => $labUnits,
+                    'units'      => $existing['units'] ?? 0,
                 ];
             })->values()->toArray();
 

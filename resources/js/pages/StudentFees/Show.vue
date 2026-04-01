@@ -41,6 +41,8 @@ interface FeeBreakdownItem {
     category: string;
     name: string;
     code?: string;
+    // units stores lec_units for Tuition rows, lab_units for Laboratory rows.
+    // This matches exactly what StudentFeeController::store() writes into fee_breakdown.
     units?: number;
     amount: number;
     subject_id?: number;
@@ -68,9 +70,16 @@ interface Props {
     feeBreakdown: Array<{ category: string; total: number; items: number }>;
     backUrl: string;
     enrolledSubjectsByAssessment: Record<number, number[]>;
+    // Fee rates passed from the controller so the formula label stays in sync
+    // with config/fees.php without hardcoding values in the component.
+    tuitionPerUnit?: number;
+    labFeePerSubject?: number;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    tuitionPerUnit: 364.0,
+    labFeePerSubject: 1656.0,
+});
 
 // ─── Assessment selector ──────────────────────────────────────────────────────
 
@@ -159,17 +168,18 @@ const paidTermsCount = computed(() => allTermsSorted.value.filter((t) => t.statu
 
 // ─── Enhanced Fee Breakdown with Calculation Transparency ─────────────────────
 //
-// ENHANCEMENT: Provides detailed breakdown showing exactly how the total assessment
-// is calculated:
-//   Total Assessment = (Tuition by subject) + (Laboratory fees) + (Miscellaneous)
+// Total Assessment = (Tuition per subject) + (Laboratory fees) + (Miscellaneous)
 //
-// Each section can be expanded to show detailed item listings.
+// Data source: assessment.fee_breakdown[] stored by StudentFeeController::store().
+// Layout of fee_breakdown rows:
+//   category='Tuition'    → one row per subject, units = lec_units, amount = lec_units × rate
+//   category='Laboratory' → one row per lab subject, units = lab_units, amount = flat labFee
+//   category='Misc/Other' → one row per misc item, units = 0
 
-// Extracts all tuition line items (one per subject) from fee_breakdown
+// All Tuition-category rows from the selected assessment's fee_breakdown
 const tuitionItems = computed(() => {
     const selectedAssess = selectedAssessment.value as any;
     if (!selectedAssess) return [];
-
     const breakdown = selectedAssess.fee_breakdown ?? [];
     return breakdown
         .filter((item: any) => item.category === 'Tuition')
@@ -180,32 +190,31 @@ const tuitionItems = computed(() => {
         }));
 });
 
-// Total tuition (sum of all subject tuitions)
+// Sum of all tuition amounts
 const totalTuition = computed(() => {
     return Math.round(tuitionItems.value.reduce((sum: number, item: any) => sum + item.amount, 0) * 100) / 100;
 });
 
-// Extracts all laboratory fee items from fee_breakdown
+// All Laboratory-category rows from the selected assessment's fee_breakdown
 const labItems = computed(() => {
     const selectedAssess = selectedAssessment.value as any;
     if (!selectedAssess) return [];
-
     const breakdown = selectedAssess.fee_breakdown ?? [];
     return breakdown
         .filter((item: any) => item.category === 'Laboratory')
         .map((item: any) => ({
             ...item,
-            displayName: item.name?.replace('Laboratory Fee — ', '') || 'Laboratory',
+            displayName: item.name?.replace('Laboratory — ', '') || 'Laboratory',
             amount: parseFloat(String(item.amount)),
         }));
 });
 
-// Total lab fees (sum of all lab subject fees)
+// Sum of all laboratory amounts
 const totalLab = computed(() => {
     return Math.round(labItems.value.reduce((sum: number, item: any) => sum + item.amount, 0) * 100) / 100;
 });
 
-// Extracts miscellaneous and other items, organized by subcategory
+// Miscellaneous and Other items, classified into display groups
 interface MiscItemGroup {
     category: string;
     subcategory: string;
@@ -221,7 +230,6 @@ const miscellaneousItemsByGroup = computed((): MiscItemGroup[] => {
     const breakdown = selectedAssess.fee_breakdown ?? [];
     const miscItems = breakdown.filter((item: any) => item.category === 'Miscellaneous' || item.category === 'Other');
 
-    // Organize by logical subcategories
     const categories: Record<string, MiscItemGroup> = {
         academic: {
             category: 'Academic Services',
@@ -246,7 +254,6 @@ const miscellaneousItemsByGroup = computed((): MiscItemGroup[] => {
         },
     };
 
-    // Classify miscellaneous items based on name patterns
     const academicPatterns = ['registration', 'lms', 'library'];
     const studentPatterns = ['athletic', 'prisaa', 'publication', 'id', 'biccs', 'pccl', 'league', 'audio-visual', 'faculty development', 'guidance'];
     const supportPatterns = ['medical', 'insurance', 'cultural', 'maintenance'];
@@ -271,42 +278,60 @@ const miscellaneousItemsByGroup = computed((): MiscItemGroup[] => {
     return Object.values(categories).filter((cat) => cat.items.length > 0);
 });
 
-// Total miscellaneous fees
+// Sum of all miscellaneous amounts
 const totalMiscellaneous = computed(() => {
     return Math.round(miscellaneousItemsByGroup.value.reduce((sum, group) => sum + group.total, 0) * 100) / 100;
 });
 
-// Fee calculation summary showing the formula (e.g., "28.5 units × ₱364 + 5 labs × ₱1,656 + ₱6,956")
-const feeCalculationSummary = computed(() => {
-    const totalUnits = tuitionItems.value.reduce((sum: number, item: any) => sum + (item.units || 0), 0);
-    const labCount = labItems.value.length;
-    const tuitionPerUnit = config('fees.tuition_per_unit', 364.0);
-    const labPerSubject = config('fees.lab_fee_per_subject', 1656.0);
+// ─── Fee calculation formula summary ──────────────────────────────────────────
+//
+// Renders the human-readable formula shown in the Fee Breakdown card header, e.g.:
+//   "19 LEC units × ₱364.00 + 3 lab subjects × ₱1,656.00 + ₱6,956.00 misc"
+//
+// KEY CORRECTNESS RULES:
+//   1. Use LEC units only for the tuition formula — NOT total units (LEC + LAB).
+//      Tuition = lec_units × rate. Lab units are billed as a flat per-subject fee.
+//      Using totalUnits here would overstate the tuition figure in the label.
+//
+//   2. item.units on Tuition rows stores lec_units (set by store()'s fee_breakdown
+//      builder). Summing item.units across Tuition rows gives correct LEC unit total.
+//
+//   3. Lab count = number of Laboratory rows, not sum of lab_units.
+//      Billing is per-subject flat fee (lab_fee_per_subject), not per lab unit.
+//
+//   4. Rates come from props (passed by the controller from config/fees.php).
+//      This keeps the label in sync when rates change, without touching Vue code.
+const feeCalculationSummary = computed((): string => {
+    // lec_units per Tuition row — drives the tuition amount displayed on the right
+    const lecUnits = tuitionItems.value.reduce((sum: number, item: any) => sum + (item.units || 0), 0);
+    // lab subjects count — one flat fee per subject regardless of lab_units value
+    const labSubjectCount = labItems.value.length;
 
-    if (totalUnits <= 0) return '';
+    if (lecUnits <= 0) return '';
 
-    const parts = [];
-    if (totalUnits > 0) parts.push(`${totalUnits} unit${totalUnits !== 1 ? 's' : ''} × ₱${tuitionPerUnit.toFixed(2)}`);
-    if (labCount > 0) parts.push(`${labCount} lab${labCount !== 1 ? 's' : ''} × ₱${labPerSubject.toFixed(2)}`);
-    if (totalMiscellaneous.value > 0) parts.push(`₱${totalMiscellaneous.value.toFixed(2)} misc`);
+    const parts: string[] = [];
 
-    return parts.length > 0 ? parts.join(' + ') : '—';
+    // Tuition part: "19 LEC units × ₱364.00"
+    parts.push(`${lecUnits} LEC unit${lecUnits !== 1 ? 's' : ''} × ₱${props.tuitionPerUnit.toFixed(2)}`);
+
+    // Lab part: "3 lab subjects × ₱1,656.00"
+    if (labSubjectCount > 0) {
+        parts.push(`${labSubjectCount} lab subject${labSubjectCount !== 1 ? 's' : ''} × ₱${props.labFeePerSubject.toFixed(2)}`);
+    }
+
+    // Misc part: "₱6,956.00 misc"
+    if (totalMiscellaneous.value > 0) {
+        parts.push(`₱${totalMiscellaneous.value.toFixed(2)} misc`);
+    }
+
+    return parts.join(' + ');
 });
-
-// Helper function to read config values (since we're in a Vue component, not Laravel)
-function config(key: string, defaultValue: any = null): any {
-    const configMap: Record<string, any> = {
-        'fees.tuition_per_unit': 364.0,
-        'fees.lab_fee_per_subject': 1656.0,
-    };
-    return configMap[key] ?? defaultValue;
-}
 
 // ─── Transaction history ───────────────────────────────────────────────────────
 
 interface TxGroup {
     key: string;
-    assessmentId: number | null; // FIX #3: carry assessmentId so we can look up subjects
+    assessmentId: number | null;
     transactions: any[];
     totalCharges: number;
     totalPaid: number;
@@ -384,7 +409,6 @@ const currentAssessmentTermKey = computed<string | null>(() => {
 
 const enrolledSubjectsOpen = ref(false);
 const expandedSubjectTerms = ref<Set<number>>(new Set());
-// FIX #3: track which transaction-group subject panels are expanded
 const expandedTxSubjectPanels = ref<Set<string>>(new Set());
 
 function toggleSubjectTerm(assessmentId: number) {
@@ -404,11 +428,14 @@ function toggleTxSubjectPanel(key: string) {
 }
 
 /**
- * Shared helper — builds a subject panel object for any given assessment.
- * Used both by the Enrolled Subjects standalone accordion and by the
- * Transaction Ledger expandable rows (FIX #3).
- * 
- * ✅ FIX: Separate LEC and LAB units tracking
+ * Builds the subject panel data object for a given assessment.
+ *
+ * Reads fee_breakdown rows to reconstruct per-subject unit data:
+ *   - Tuition rows  → lecUnits  (item.units stores lec_units)
+ *   - Laboratory rows → labUnits (item.units stores lab_units)
+ *
+ * Used by both the standalone Enrolled Subjects accordion and the
+ * Transaction Ledger expandable subject sub-panels.
  */
 function buildSubjectPanel(a: Assessment) {
     const subjectRows = (a.fee_breakdown ?? []).filter((item) => item.category === 'Tuition' || item.category === 'Laboratory');
@@ -448,16 +475,16 @@ function buildSubjectPanel(a: Assessment) {
             };
         }
 
-        // ✅ Tuition row stores LEC units
         if (row.category === 'Tuition') {
+            // Tuition row: item.units = lec_units, amount = lec_units × rate
             subjectMap[sid].tuitionAmount = parseFloat(String(row.amount));
             subjectMap[sid].lecUnits = row.units ?? 0;
+            // Prefer the Tuition row name over any Laboratory-prefixed name
             if (!subjectMap[sid].name || subjectMap[sid].name.startsWith('Laboratory')) {
                 subjectMap[sid].name = row.name;
             }
-        } 
-        // ✅ Laboratory row stores LAB units
-        else if (row.category === 'Laboratory') {
+        } else if (row.category === 'Laboratory') {
+            // Laboratory row: item.units = lab_units, amount = flat labFee
             subjectMap[sid].labAmount = parseFloat(String(row.amount));
             subjectMap[sid].labUnits = row.units ?? 0;
             subjectMap[sid].hasLab = true;
@@ -465,14 +492,14 @@ function buildSubjectPanel(a: Assessment) {
     }
 
     const subjects = Object.values(subjectMap);
-    
-    // ✅ Calculate totals: sum LEC units, sum LAB units separately
+
+    // Totals: LEC and LAB summed separately, then combined
     const totalLecUnits = subjects.reduce((s, sub) => s + sub.lecUnits, 0);
     const totalLabUnits = subjects.reduce((s, sub) => s + sub.labUnits, 0);
-    const totalUnits = totalLecUnits + totalLabUnits;
-    
-    const totalTuition = subjects.reduce((s, sub) => s + sub.tuitionAmount, 0);
-    const totalLab = subjects.reduce((s, sub) => s + sub.labAmount, 0);
+    const totalUnits    = totalLecUnits + totalLabUnits;
+
+    const totalTuition  = subjects.reduce((s, sub) => s + sub.tuitionAmount, 0);
+    const totalLab      = subjects.reduce((s, sub) => s + sub.labAmount, 0);
     const enrolledCount = subjects.filter((sub) => sub.isEnrolled).length;
 
     return {
@@ -499,7 +526,7 @@ const enrolledSubjectTerms = computed(() =>
         .filter((panel) => panel.subjects.length > 0),
 );
 
-// FIX #3: Per-transaction-group subject panels indexed by group key
+// Per-transaction-group subject panels indexed by group key
 const txSubjectPanels = computed((): Record<string, ReturnType<typeof buildSubjectPanel> | null> => {
     const result: Record<string, ReturnType<typeof buildSubjectPanel> | null> = {};
     for (const group of transactionsByTerm.value) {
@@ -891,14 +918,6 @@ const getStudentStatusColor = (status: string) => {
             </Card>
 
             <!-- ── Fee Breakdown ── -->
-            <!--
-                ENHANCEMENT: Detailed Fee Breakdown showing calculation transparency.
-                Components:
-                1. Header: Shows calculation formula (units × rate + labs + misc)
-                2. Expandable Sections: Tuition detail, Lab detail, Miscellaneous detail
-                3. Verification: Ensures breakdown sum equals total assessment
-                4. Payment Status: Progress bar and term-by-term status
-            -->
             <Card>
                 <CardHeader>
                     <div class="flex items-start justify-between">
@@ -910,6 +929,11 @@ const getStudentStatusColor = (status: string) => {
                                     <strong>{{ selectedAssessment?.semester }}</strong>
                                     ({{ selectedAssessment?.school_year }})
                                 </span>
+                                <!--
+                                    Formula label: "19 LEC units × ₱364.00 + 3 lab subjects × ₱1,656.00 + ₱6,956.00 misc"
+                                    Uses LEC units only for the tuition factor — NOT total units (LEC+LAB).
+                                    Lab is billed as a flat per-subject fee, not per lab unit.
+                                -->
                                 <span
                                     v-if="feeCalculationSummary"
                                     class="inline-block w-fit rounded bg-indigo-50 px-2 py-1 font-mono text-xs text-indigo-600"
@@ -925,7 +949,7 @@ const getStudentStatusColor = (status: string) => {
                     </div>
                 </CardHeader>
                 <CardContent class="space-y-4">
-                    <!-- ── SECTION 1: Tuition Fees (Static) ── -->
+                    <!-- Tuition Fees -->
                     <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
                         <div>
                             <p class="font-semibold text-gray-900">Tuition Fees</p>
@@ -933,7 +957,7 @@ const getStudentStatusColor = (status: string) => {
                         <span class="text-lg font-bold text-indigo-600">{{ formatCurrency(totalTuition) }}</span>
                     </div>
 
-                    <!-- ── SECTION 2: Laboratory Fees (Static) ── -->
+                    <!-- Laboratory Fees -->
                     <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
                         <div>
                             <p class="font-semibold text-gray-900">Laboratory Fees</p>
@@ -941,7 +965,7 @@ const getStudentStatusColor = (status: string) => {
                         <span class="text-lg font-bold text-purple-600">{{ formatCurrency(totalLab) }}</span>
                     </div>
 
-                    <!-- ── SECTION 3: Miscellaneous Fees (Static) ── -->
+                    <!-- Miscellaneous Fees -->
                     <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
                         <div>
                             <p class="font-semibold text-gray-900">Miscellaneous Fees</p>
@@ -949,13 +973,13 @@ const getStudentStatusColor = (status: string) => {
                         <span class="text-lg font-bold text-amber-600">{{ formatCurrency(totalMiscellaneous) }}</span>
                     </div>
 
-                    <!-- ── TOTAL ASSESSMENT ── -->
+                    <!-- Total Assessment -->
                     <div class="flex items-center justify-between border-t-2 border-gray-200 px-1 pt-3">
                         <span class="text-lg font-bold text-gray-900">Total Assessment</span>
                         <span class="text-2xl font-extrabold text-indigo-600">{{ formatCurrency(totalAssessment) }}</span>
                     </div>
 
-                    <!-- ── Payment Progress ── -->
+                    <!-- Payment Progress -->
                     <div class="space-y-1 px-1">
                         <div class="flex justify-between text-xs text-gray-500">
                             <span>Payment Progress</span>
@@ -987,7 +1011,7 @@ const getStudentStatusColor = (status: string) => {
                         </div>
                     </div>
 
-                    <!-- ── Balance Card ── -->
+                    <!-- Balance Card -->
                     <div :class="['mt-2 flex items-center gap-4 rounded-xl border-2 p-4', balanceCardConfig.bg]">
                         <div :class="['rounded-xl p-3', balanceCardConfig.iconBg]">
                             <component :is="balanceCardConfig.icon" :class="['h-6 w-6', balanceCardConfig.iconColor]" />
@@ -1008,7 +1032,7 @@ const getStudentStatusColor = (status: string) => {
                         </div>
                     </div>
 
-                    <!-- ── Payment Terms ── -->
+                    <!-- Payment Terms -->
                     <div v-if="allTermsSorted.length > 0" class="space-y-2 pt-1">
                         <p class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Payment Terms</p>
                         <div class="grid grid-cols-1 gap-2 sm:grid-cols-5">
@@ -1119,8 +1143,11 @@ const getStudentStatusColor = (status: string) => {
                                 <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
                                     {{ termPanel.subjectCount }} subject{{ termPanel.subjectCount !== 1 ? 's' : '' }}
                                 </span>
+                                <!-- Show LEC + LAB breakdown in badge -->
                                 <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
-                                    {{ termPanel.totalUnits }} units
+                                    {{ termPanel.totalLecUnits }} LEC
+                                    <span v-if="termPanel.totalLabUnits > 0"> + {{ termPanel.totalLabUnits }} LAB</span>
+                                    = {{ termPanel.totalUnits }} units
                                 </span>
                                 <span
                                     v-if="termPanel.enrolledCount > 0"
@@ -1216,7 +1243,7 @@ const getStudentStatusColor = (status: string) => {
                                                             : 'bg-gray-50 text-gray-400',
                                                     ]"
                                                 >
-                                                    {{ subject.labUnits }}</span
+                                                    {{ subject.labUnits > 0 ? subject.labUnits : '—' }}</span
                                                 >
                                             </td>
                                             <td class="px-5 py-3 text-center">
@@ -1234,13 +1261,13 @@ const getStudentStatusColor = (status: string) => {
                                             <td colspan="3" class="px-5 py-3 text-gray-700">
                                                 Subtotal — {{ termPanel.subjectCount }} subject{{ termPanel.subjectCount !== 1 ? 's' : '' }}
                                             </td>
-                                            <td class="px-5 py-3 text-center text-gray-700">
+                                            <td class="px-5 py-3 text-center text-blue-700">
                                                 {{ termPanel.totalLecUnits }}
                                             </td>
-                                            <td class="px-5 py-3 text-center text-gray-700">
-                                                {{ termPanel.totalLabUnits }}
+                                            <td class="px-5 py-3 text-center text-purple-700">
+                                                {{ termPanel.totalLabUnits > 0 ? termPanel.totalLabUnits : '—' }}
                                             </td>
-                                            <td class="px-5 py-3 text-center text-indigo-700 font-semibold">
+                                            <td class="px-5 py-3 text-center font-semibold text-indigo-700">
                                                 {{ termPanel.totalUnits }}
                                             </td>
                                             <td class="px-5 py-3 text-right text-indigo-700">
@@ -1338,14 +1365,7 @@ const getStudentStatusColor = (status: string) => {
                 </CardContent>
             </Card>
 
-            <!-- ── Transaction History / Ledger ── -->
-            <!--
-                FIX #3: Each expandable transaction row now includes an
-                "Enrolled Subjects" sub-section. Subjects are scoped to the
-                assessment linked to that transaction group (matched via
-                school_year + semester), guaranteeing consistency with the
-                standalone Enrolled Subjects accordion above.
-            -->
+            <!-- ── Transaction Ledger ── -->
             <div>
                 <div class="mb-3 flex items-center justify-between px-1">
                     <div>
@@ -1360,7 +1380,7 @@ const getStudentStatusColor = (status: string) => {
                 </div>
 
                 <div v-for="group in transactionsByTerm" :key="group.key" class="mb-4 overflow-hidden rounded-xl border bg-white shadow-sm">
-                    <!-- Group header (click to expand/collapse) -->
+                    <!-- Group header -->
                     <div
                         class="flex cursor-pointer items-center justify-between p-5 transition-colors select-none hover:bg-gray-50"
                         @click="toggleTerm(group.key)"
@@ -1390,9 +1410,9 @@ const getStudentStatusColor = (status: string) => {
                         </div>
                     </div>
 
-                    <!-- Expanded content: transactions table + enrolled subjects -->
+                    <!-- Expanded content -->
                     <div v-if="expandedTerms[group.key]" class="border-t">
-                        <!-- ── Transactions table ── -->
+                        <!-- Transactions table -->
                         <div class="overflow-x-auto">
                             <table class="w-full border-collapse text-left">
                                 <thead>
@@ -1445,9 +1465,8 @@ const getStudentStatusColor = (status: string) => {
                             </table>
                         </div>
 
-                        <!-- ── Enrolled Subjects for this transaction group (FIX #3) ── -->
+                        <!-- Enrolled Subjects sub-panel for this transaction group -->
                         <div v-if="txSubjectPanels[group.key]" class="border-t border-gray-100">
-                            <!-- Sub-section toggle -->
                             <button
                                 type="button"
                                 class="flex w-full items-center justify-between bg-indigo-50 px-5 py-3 text-left transition-colors select-none hover:bg-indigo-100"
@@ -1460,7 +1479,11 @@ const getStudentStatusColor = (status: string) => {
                                         {{ txSubjectPanels[group.key]!.subjectCount }} subject{{
                                             txSubjectPanels[group.key]!.subjectCount !== 1 ? 's' : ''
                                         }}
-                                        · {{ txSubjectPanels[group.key]!.totalUnits }} units
+                                        · {{ txSubjectPanels[group.key]!.totalLecUnits }} LEC
+                                        <span v-if="txSubjectPanels[group.key]!.totalLabUnits > 0">
+                                            + {{ txSubjectPanels[group.key]!.totalLabUnits }} LAB
+                                        </span>
+                                        = {{ txSubjectPanels[group.key]!.totalUnits }} units
                                     </span>
                                 </div>
                                 <ChevronDown
@@ -1469,7 +1492,6 @@ const getStudentStatusColor = (status: string) => {
                                 />
                             </button>
 
-                            <!-- Subject table (collapsed by default) -->
                             <div v-if="expandedTxSubjectPanels.has(group.key)" class="overflow-x-auto bg-gray-50">
                                 <table class="min-w-full text-sm">
                                     <thead>
@@ -1528,7 +1550,7 @@ const getStudentStatusColor = (status: string) => {
                                                             : 'bg-gray-50 text-gray-400',
                                                     ]"
                                                 >
-                                                    {{ subject.labUnits }}
+                                                    {{ subject.labUnits > 0 ? subject.labUnits : '—' }}
                                                 </span>
                                             </td>
                                             <td class="px-5 py-3 text-center">
@@ -1546,13 +1568,13 @@ const getStudentStatusColor = (status: string) => {
                                             <td colspan="3" class="px-5 py-3 text-gray-700">
                                                 Subtotal — {{ txSubjectPanels[group.key]!.subjectCount }} subject{{ txSubjectPanels[group.key]!.subjectCount !== 1 ? 's' : '' }}
                                             </td>
-                                            <td class="px-5 py-3 text-center text-gray-700">
+                                            <td class="px-5 py-3 text-center text-blue-700">
                                                 {{ txSubjectPanels[group.key]!.totalLecUnits }}
                                             </td>
-                                            <td class="px-5 py-3 text-center text-gray-700">
-                                                {{ txSubjectPanels[group.key]!.totalLabUnits }}
+                                            <td class="px-5 py-3 text-center text-purple-700">
+                                                {{ txSubjectPanels[group.key]!.totalLabUnits > 0 ? txSubjectPanels[group.key]!.totalLabUnits : '—' }}
                                             </td>
-                                            <td class="px-5 py-3 text-center text-indigo-700 font-semibold">
+                                            <td class="px-5 py-3 text-center font-semibold text-indigo-700">
                                                 {{ txSubjectPanels[group.key]!.totalUnits }}
                                             </td>
                                             <td class="px-5 py-3 text-right text-indigo-700">
