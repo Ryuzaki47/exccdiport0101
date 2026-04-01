@@ -243,17 +243,22 @@ class WorkflowService
             );
         }
 
-        foreach ($approverIds as $approverId) {
-            WorkflowApproval::create([
-                'workflow_instance_id' => $instance->id,
-                'step_name'            => $step['name'],
-                'approver_id'          => $approverId,
-                'status'               => 'pending',
-            ]);
-            // NOTE: Approval notifications are sent AFTER the transaction commits
-            // by the notifyApproversForStep() method. This ensures that even if
-            // the mail server is unavailable, the approval records exist in the database.
-        }
+        // ✅ FIX: Create only ONE approval record per step (for the first available approver).
+        // All accounting/admin users can already view ALL payment_approval workflows
+        // per WorkflowApprovalController::index(), regardless of who the approver is.
+        // Creating one record per approver caused duplicate payment entries in the approvals list.
+        // This now correctly shows "1 payment = 1 approx approval record" instead of "1 payment = N records".
+        $primaryApproverId = reset($approverIds);
+
+        WorkflowApproval::create([
+            'workflow_instance_id' => $instance->id,
+            'step_name'            => $step['name'],
+            'approver_id'          => $primaryApproverId,
+            'status'               => 'pending',
+        ]);
+        // NOTE: Approval notifications are sent AFTER the transaction commits
+        // by the notifyApproversForStep() method. This ensures that even if
+        // the mail server is unavailable, the approval records exist in the database.
     }
 
     /**

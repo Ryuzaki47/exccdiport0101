@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDataFormatting } from '@/composables/useDataFormatting';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { CheckCircle2, RotateCcw, Search, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -81,6 +81,14 @@ const uniqueYears = computed(() => {
 
 const pendingCount = computed(() => props.approvals.data.filter((a) => a.status === 'pending').length);
 
+const approvedCount = computed(() => props.approvals.data.filter((a) => a.status === 'approved').length);
+
+const rejectedCount = computed(() => props.approvals.data.filter((a) => a.status === 'rejected').length);
+
+const filterStatus = ref<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
+const filterOptions = ['all', 'pending', 'approved', 'rejected'] as const;
+
 const termOptions = ['Upon Registration', 'Prelim', 'Midterm', 'Semi-Final', 'Final'];
 
 const formatDate = (date: string) => new Date(date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
@@ -128,6 +136,23 @@ const filteredApprovals = computed(() => {
     return result;
 });
 
+// Flatten approval data for easy template access
+const approvalMetadata = computed(() => {
+    const map = new Map<number, any>();
+    props.approvals.data.forEach((approval) => {
+        const w = approval.workflow_instance.workflowable;
+        map.set(approval.id, {
+            reference: w.reference,
+            student_name: getStudentName(approval),
+            account_id: w.user?.account_id ?? 'N/A',
+            term_name: w.meta?.term_name ?? w.type ?? 'N/A',
+            payment_method: w.payment_channel ?? 'N/A',
+            amount: w.amount,
+        });
+    });
+    return map;
+});
+
 // Push only non-empty filter values to the URL so the query string stays clean.
 const applyFilter = () => {
     const params: Record<string, string> = {};
@@ -151,11 +176,15 @@ const approve = (approvalId: number) => {
     });
 };
 
+const approvePayment = (approvalId: number) => approve(approvalId);
+
 const openRejectDialog = (approvalId: number) => {
     selectedApprovalId.value = approvalId;
     rejectForm.reset();
     showRejectDialog.value = true;
 };
+
+const rejectPayment = (approvalId: number) => openRejectDialog(approvalId);
 
 const submitRejection = () => {
     if (!selectedApprovalId.value) return;
@@ -223,7 +252,7 @@ const refreshApprovals = () => {
             <!-- Filter tabs -->
             <div class="flex gap-1 rounded-xl border border-border bg-muted/30 p-1 w-fit">
                 <button
-                    v-for="f in ['all', 'pending', 'approved', 'rejected']"
+                    v-for="f in filterOptions"
                     :key="f"
                     @click="filterStatus = f"
                     class="rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition-all"
@@ -252,30 +281,30 @@ const refreshApprovals = () => {
                     <tbody class="divide-y divide-border bg-card">
                         <tr v-for="approval in filteredApprovals" :key="approval.id" class="transition-colors hover:bg-muted/30">
                             <td class="px-5 py-3.5">
-                                <span class="font-mono text-xs text-blue-600">{{ approval.reference }}</span>
+                                <span class="font-mono text-xs text-blue-600">{{ approvalMetadata.get(approval.id)?.reference }}</span>
                             </td>
                             <td class="px-5 py-3.5">
                                 <div class="flex items-center gap-2.5">
                                     <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
-                                        {{ (approval.student_name || 'S').charAt(0) }}
+                                        {{ (approvalMetadata.get(approval.id)?.student_name || 'S').charAt(0) }}
                                     </div>
                                     <div>
-                                        <p class="text-sm font-medium text-foreground">{{ approval.student_name }}</p>
-                                        <p class="text-xs text-muted-foreground">{{ approval.account_id }}</p>
+                                        <p class="text-sm font-medium text-foreground">{{ approvalMetadata.get(approval.id)?.student_name }}</p>
+                                        <p class="text-xs text-muted-foreground">{{ approvalMetadata.get(approval.id)?.account_id }}</p>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-5 py-3.5 text-sm text-muted-foreground">{{ approval.term_name || 'N/A' }}</td>
+                            <td class="px-5 py-3.5 text-sm text-muted-foreground">{{ approvalMetadata.get(approval.id)?.term_name }}</td>
                             <td class="px-5 py-3.5">
-                                <span class="ccdi-badge-blue">{{ approval.payment_method || 'N/A' }}</span>
+                                <span class="ccdi-badge-blue">{{ approvalMetadata.get(approval.id)?.payment_method }}</span>
                             </td>
                             <td class="px-5 py-3.5 text-right">
-                                <span class="text-sm font-semibold text-emerald-600">₱{{ Number(approval.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</span>
+                                <span class="text-sm font-semibold text-emerald-600">₱{{ Number(approvalMetadata.get(approval.id)?.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</span>
                             </td>
                             <td class="px-5 py-3.5 text-sm text-muted-foreground">{{ formatDate(approval.created_at) }}</td>
                             <td class="px-5 py-3.5 text-center">
-                                <span :class="approval.status === 'awaiting_approval' ? 'ccdi-badge-yellow' : approval.status === 'approved' ? 'ccdi-badge-green' : 'ccdi-badge-red'">
-                                    {{ approval.status === 'awaiting_approval' ? 'Pending' : approval.status === 'approved' ? 'Approved' : 'Rejected' }}
+                                <span :class="approval.status === 'pending' ? 'ccdi-badge-yellow' : approval.status === 'approved' ? 'ccdi-badge-green' : 'ccdi-badge-red'">
+                                    {{ approval.status === 'pending' ? 'Pending' : approval.status === 'approved' ? 'Approved' : 'Rejected' }}
                                 </span>
                             </td>
                             <td class="px-5 py-3.5 text-right">
@@ -283,7 +312,7 @@ const refreshApprovals = () => {
                                     <Link :href="route('approvals.show', approval.id)" class="rounded-lg border border-border bg-card p-1.5 text-muted-foreground transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" title="View details">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                     </Link>
-                                    <template v-if="approval.status === 'awaiting_approval'">
+                                    <template v-if="approval.status === 'pending'">
                                         <button @click="approvePayment(approval.id)" class="rounded-lg border border-emerald-300 bg-emerald-50 p-1.5 text-emerald-700 transition-all hover:bg-emerald-100" title="Approve">
                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                                         </button>

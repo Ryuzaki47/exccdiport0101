@@ -11,6 +11,8 @@ class Subject extends Model
         'code',
         'name',
         'units',
+        'lec_units',
+        'lab_units',
         'price_per_unit',
         'year_level',
         'semester',
@@ -23,11 +25,22 @@ class Subject extends Model
 
     protected $casts = [
         'units' => 'integer',
+        'lec_units' => 'integer',
+        'lab_units' => 'integer',
         'price_per_unit' => 'decimal:2',
         'lab_fee' => 'decimal:2',
         'has_lab' => 'boolean',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * Get total units (LEC + LAB).
+     * Used for assessments to calculate total credit hours.
+     */
+    public function getTotalUnitsAttribute()
+    {
+        return ($this->lec_units ?? 0) + ($this->lab_units ?? 0);
+    }
 
     public function enrollments(): HasMany
     {

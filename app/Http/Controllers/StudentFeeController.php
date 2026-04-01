@@ -82,11 +82,16 @@ class StudentFeeController extends Controller
                         'id'             => $s->id,
                         'code'           => $s->code,
                         'name'           => $s->name,
-                        'units'          => $s->units,
+                        'course'         => $s->course,
+                        'lec_units'      => $s->lec_units ?? 0,
+                        'lab_units'      => $s->lab_units ?? 0,
+                        'total_units'    => ($s->lec_units ?? 0) + ($s->lab_units ?? 0),
                         'price_per_unit' => $rate,
                         'has_lab'        => (bool) $s->has_lab,
                         'lab_fee'        => $s->has_lab ? $labFee : 0,
-                        'total_cost'     => round($s->units * $rate + ($s->has_lab ? $labFee : 0), 2),
+                        'tuition_cost'   => round(($s->lec_units ?? 0) * $rate, 2),
+                        'lab_cost'       => $s->lab_units > 0 ? $labFee : 0,
+                        'total_cost'     => round(($s->lec_units ?? 0) * $rate + ($s->lab_units > 0 ? $labFee : 0), 2),
                         'year_level'     => $s->year_level,
                         'semester'       => $s->semester,
                     ])->values()->toArray())
@@ -405,9 +410,11 @@ class StudentFeeController extends Controller
 
             $yearNum = (int) explode('-', $base['school_year'])[0];
 
-            // ── Fee calculation ──────────────────────────────────────────────
-            $tuitionTotal = round($subjects->sum(fn ($s) => $s->units * $rate), 2);
-            $labTotal     = round($subjects->filter(fn ($s) => $s->has_lab)->count() * $labFee, 2);
+            // ── Fee calculation using LEC and LAB units separately ──────────
+            // Tuition = sum of (lecture_units × rate per unit)
+            // Lab = count of subjects with lab_units > 0 × lab_fee per subject
+            $tuitionTotal = round($subjects->sum(fn ($s) => ($s->lec_units ?? 0) * $rate), 2);
+            $labTotal     = round($subjects->filter(fn ($s) => ($s->lab_units ?? 0) > 0)->count() * $labFee, 2);
 
             // Fixed miscellaneous block — same every semester
             $miscItems = collect(config('fees.miscellaneous', []));
@@ -422,28 +429,34 @@ class StudentFeeController extends Controller
             // ── Build fee breakdown for storage ──────────────────────────────
             $feeBreakdown = [];
 
-            // Tuition lines — one per subject
+            // ✅ TUITION: Lecture units × rate per unit
+            // Store LEC units separately so frontend can display "LEC Units" column
             foreach ($subjects as $subject) {
-                $feeBreakdown[] = [
-                    'category'   => 'Tuition',
-                    'name'       => $subject->name,
-                    'code'       => $subject->code,
-                    'units'      => $subject->units,
-                    'amount'     => round($subject->units * $rate, 2),
-                    'subject_id' => $subject->id,
-                ];
+                if (($subject->lec_units ?? 0) > 0) {
+                    $feeBreakdown[] = [
+                        'category'   => 'Tuition',
+                        'name'       => $subject->name,
+                        'code'       => $subject->code,
+                        'units'      => $subject->lec_units ?? 0,
+                        'amount'     => round(($subject->lec_units ?? 0) * $rate, 2),
+                        'subject_id' => $subject->id,
+                    ];
+                }
             }
 
-            // Lab lines — one per lab subject
-            foreach ($subjects->filter(fn ($s) => $s->has_lab) as $subject) {
-                $feeBreakdown[] = [
-                    'category'   => 'Laboratory',
-                    'name'       => 'Laboratory Fee — ' . $subject->name,
-                    'code'       => $subject->code . '-LAB',
-                    'units'      => 0,
-                    'amount'     => $labFee,
-                    'subject_id' => $subject->id,
-                ];
+            // ✅ LABORATORY: Lab units (stored separately)
+            // One row per subject with lab unit(s)
+            foreach ($subjects as $subject) {
+                if (($subject->lab_units ?? 0) > 0) {
+                    $feeBreakdown[] = [
+                        'category'   => 'Laboratory',
+                        'name'       => 'Laboratory — ' . $subject->name,
+                        'code'       => $subject->code . '-LAB',
+                        'units'      => $subject->lab_units ?? 0,
+                        'amount'     => $labFee,
+                        'subject_id' => $subject->id,
+                    ];
+                }
             }
 
             // Fixed miscellaneous lines

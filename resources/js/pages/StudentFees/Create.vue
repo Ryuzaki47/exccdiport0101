@@ -39,11 +39,13 @@ interface SubjectItem {
     id: number;
     code: string;
     name: string;
-    units: number;
-    price_per_unit: number;
+    course: string;
+    lec_units: number;
+    lab_units: number;
+    total_units: number;
+    tuition_cost: number;
+    lab_cost: number;
     has_lab: boolean;
-    lab_fee: number;
-    total_cost: number;
     year_level: string;
     semester: string;
 }
@@ -299,15 +301,15 @@ watch(assessmentType, (newType) => {
 
 // ─── Fee calculation ──────────────────────────────────────────────────────────
 
-const tuitionTotal = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.units * props.tuitionPerUnit, 0));
+const tuitionTotal = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.tuition_cost, 0));
 
-const labTotal = computed(() => selectedSubjects.value.filter((s) => s.has_lab).length * props.labFeePerSubject);
+const labTotal = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.lab_cost, 0));
 
 const grandTotal = computed(() => tuitionTotal.value + labTotal.value + props.miscTotal);
 
-const totalUnits = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.units, 0));
+const totalUnits = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.total_units, 0));
 
-const labSubjectCount = computed(() => selectedSubjects.value.filter((s) => s.has_lab).length);
+const labSubjectCount = computed(() => selectedSubjects.value.filter((s) => s.lab_cost > 0).length);
 
 // ─── Student list filtering ───────────────────────────────────────────────────
 
@@ -851,9 +853,9 @@ function statusColor(status: string) {
                                                     </span>
                                                 </p>
                                                 <p class="text-xs text-gray-400">
-                                                    {{ s.units }} units × {{ formatCurrency(s.price_per_unit) }} =
-                                                    {{ formatCurrency(s.units * s.price_per_unit) }}
-                                                    <span v-if="s.has_lab" class="ml-1 text-purple-600">+ Lab {{ formatCurrency(s.lab_fee) }}</span>
+                                                    {{ s.lec_units }} LEC {{ s.lab_units > 0 ? '+ ' + s.lab_units + ' LAB' : '' }} units ·
+                                                    Tuition: {{ formatCurrency(s.tuition_cost) }}
+                                                    <span v-if="s.lab_cost > 0" class="ml-1 text-purple-600">· Lab {{ formatCurrency(s.lab_cost) }}</span>
                                                 </p>
                                             </div>
                                         </div>
@@ -861,7 +863,7 @@ function statusColor(status: string) {
                                             class="ml-4 flex-shrink-0 text-sm font-semibold"
                                             :class="isAlreadyEnrolled(s.id) ? 'text-gray-400' : 'text-blue-700'"
                                         >
-                                            {{ formatCurrency(s.total_cost) }}
+                            {{ formatCurrency(s.tuition_cost + s.lab_cost) }}
                                         </span>
                                     </div>
                                 </div>
@@ -980,13 +982,14 @@ function statusColor(status: string) {
                                                 </span>
                                             </span>
                                             <p class="text-xs text-gray-400">
-                                                {{ s.units }} units × {{ formatCurrency(s.price_per_unit) }}
-                                                <span v-if="s.has_lab" class="text-purple-600"> + Lab {{ formatCurrency(s.lab_fee) }}</span>
+                                                {{ s.lec_units }} LEC {{ s.lab_units > 0 ? '+ ' + s.lab_units + ' LAB' : '' }} units ·
+                                                Tuition: {{ formatCurrency(s.tuition_cost) }}
+                                                <span v-if="s.lab_cost > 0" class="text-purple-600"> · Lab {{ formatCurrency(s.lab_cost) }}</span>
                                             </p>
                                         </div>
                                     </div>
                                     <span class="text-sm font-semibold" :class="isAlreadyEnrolled(s.id) ? 'text-gray-400' : 'text-amber-700'">
-                                        {{ formatCurrency(s.total_cost) }}
+                                        {{ formatCurrency(s.tuition_cost + s.lab_cost) }}
                                     </span>
                                 </div>
                             </div>
@@ -1023,13 +1026,13 @@ function statusColor(status: string) {
                             <div>
                                 <p class="text-sm font-medium text-gray-900">{{ s.code }} — {{ s.name }}</p>
                                 <p class="text-xs text-gray-400">
-                                    {{ s.course }} · {{ s.year_level }} · {{ s.semester }} · {{ s.units }} units ×
-                                    {{ formatCurrency(s.price_per_unit) }}
-                                    <span v-if="s.has_lab" class="text-purple-600"> + Lab {{ formatCurrency(s.lab_fee) }}</span>
+                                    {{ s.course }} · {{ s.year_level }} · {{ s.semester }} · {{ s.lec_units }} LEC {{ s.lab_units > 0 ? '+ ' + s.lab_units + ' LAB' : '' }} units ·
+                                    Tuition {{ formatCurrency(s.tuition_cost) }}
+                                    <span v-if="s.lab_cost > 0" class="text-purple-600"> · Lab {{ formatCurrency(s.lab_cost) }}</span>
                                 </p>
                             </div>
                             <div class="flex items-center gap-4">
-                                <span class="font-semibold text-gray-900">{{ formatCurrency(s.total_cost) }}</span>
+                                <span class="font-semibold text-gray-900">{{ formatCurrency(s.tuition_cost + s.lab_cost) }}</span>
                                 <button type="button" class="text-gray-300 transition-colors hover:text-red-500" @click="removeSubject(s.id)">
                                     <Trash2 class="h-4 w-4" />
                                 </button>
@@ -1052,10 +1055,9 @@ function statusColor(status: string) {
                             <span class="text-gray-600">Tuition ({{ totalUnits }} units × {{ formatCurrency(tuitionPerUnit ?? 364) }})</span>
                             <span class="font-medium">{{ formatCurrency(tuitionTotal) }}</span>
                         </div>
-                        <div v-if="labSubjectCount > 0" class="flex justify-between">
+                        <div v-if="labTotal > 0" class="flex justify-between">
                             <span class="text-gray-600"
-                                >Laboratory ({{ labSubjectCount }} lab subject{{ labSubjectCount !== 1 ? 's' : '' }} ×
-                                {{ formatCurrency(labFeePerSubject ?? 1656) }})</span
+                                >Laboratory ({{ labSubjectCount }} subject{{ labSubjectCount !== 1 ? 's' : '' }} with labs)</span
                             >
                             <span class="font-medium text-purple-700">{{ formatCurrency(labTotal) }}</span>
                         </div>

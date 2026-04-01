@@ -407,6 +407,8 @@ function toggleTxSubjectPanel(key: string) {
  * Shared helper — builds a subject panel object for any given assessment.
  * Used both by the Enrolled Subjects standalone accordion and by the
  * Transaction Ledger expandable rows (FIX #3).
+ * 
+ * ✅ FIX: Separate LEC and LAB units tracking
  */
 function buildSubjectPanel(a: Assessment) {
     const subjectRows = (a.fee_breakdown ?? []).filter((item) => item.category === 'Tuition' || item.category === 'Laboratory');
@@ -417,7 +419,8 @@ function buildSubjectPanel(a: Assessment) {
             subject_id: number;
             code: string;
             name: string;
-            units: number;
+            lecUnits: number;
+            labUnits: number;
             tuitionAmount: number;
             labAmount: number;
             hasLab: boolean;
@@ -436,7 +439,8 @@ function buildSubjectPanel(a: Assessment) {
                 subject_id: sid,
                 code: row.code ?? '—',
                 name: row.name,
-                units: row.units ?? 0,
+                lecUnits: 0,
+                labUnits: 0,
                 tuitionAmount: 0,
                 labAmount: 0,
                 hasLab: false,
@@ -444,20 +448,29 @@ function buildSubjectPanel(a: Assessment) {
             };
         }
 
+        // ✅ Tuition row stores LEC units
         if (row.category === 'Tuition') {
             subjectMap[sid].tuitionAmount = parseFloat(String(row.amount));
-            subjectMap[sid].units = row.units ?? subjectMap[sid].units;
+            subjectMap[sid].lecUnits = row.units ?? 0;
             if (!subjectMap[sid].name || subjectMap[sid].name.startsWith('Laboratory')) {
                 subjectMap[sid].name = row.name;
             }
-        } else if (row.category === 'Laboratory') {
+        } 
+        // ✅ Laboratory row stores LAB units
+        else if (row.category === 'Laboratory') {
             subjectMap[sid].labAmount = parseFloat(String(row.amount));
+            subjectMap[sid].labUnits = row.units ?? 0;
             subjectMap[sid].hasLab = true;
         }
     }
 
     const subjects = Object.values(subjectMap);
-    const totalUnits = subjects.reduce((s, sub) => s + sub.units, 0);
+    
+    // ✅ Calculate totals: sum LEC units, sum LAB units separately
+    const totalLecUnits = subjects.reduce((s, sub) => s + sub.lecUnits, 0);
+    const totalLabUnits = subjects.reduce((s, sub) => s + sub.labUnits, 0);
+    const totalUnits = totalLecUnits + totalLabUnits;
+    
     const totalTuition = subjects.reduce((s, sub) => s + sub.tuitionAmount, 0);
     const totalLab = subjects.reduce((s, sub) => s + sub.labAmount, 0);
     const enrolledCount = subjects.filter((sub) => sub.isEnrolled).length;
@@ -467,12 +480,14 @@ function buildSubjectPanel(a: Assessment) {
         label: `${a.year_level} — ${a.semester}`,
         schoolYear: a.school_year,
         course: a.course ?? '—',
+        subjects,
+        subjectCount: subjects.length,
+        totalLecUnits,
+        totalLabUnits,
         totalUnits,
         totalTuition,
         totalLab,
-        subjectCount: subjects.length,
         enrolledCount,
-        subjects,
     };
 }
 
@@ -1146,10 +1161,10 @@ const getStudentStatusColor = (status: string) => {
                                             <th class="px-5 py-2.5 text-left">Status</th>
                                             <th class="px-5 py-2.5 text-left">Code</th>
                                             <th class="px-5 py-2.5 text-left">Subject Name</th>
-                                            <th class="px-5 py-2.5 text-center">Units</th>
-                                            <th class="px-5 py-2.5 text-right">Unit Cost</th>
-                                            <th class="px-5 py-2.5 text-right">Lab Fee</th>
-                                            <th class="px-5 py-2.5 text-right">Total</th>
+                                            <th class="px-5 py-2.5 text-center">LEC Units</th>
+                                            <th class="px-5 py-2.5 text-center">LAB Units</th>
+                                            <th class="px-5 py-2.5 text-center">Total Units</th>
+                                            <th class="px-5 py-2.5 text-right">Subtotal</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-100">
@@ -1189,21 +1204,25 @@ const getStudentStatusColor = (status: string) => {
                                             </td>
                                             <td class="px-5 py-3 text-center">
                                                 <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                                                    {{ subject.units }} unit{{ subject.units !== 1 ? 's' : '' }}
+                                                    {{ subject.lecUnits }}
                                                 </span>
                                             </td>
-                                            <td class="px-5 py-3 text-right">
-                                                <span class="text-xs text-gray-500">
-                                                    {{ subject.units }} ×
-                                                    {{ formatCurrency(subject.units > 0 ? subject.tuitionAmount / subject.units : 0) }}
-                                                </span>
-                                                <p class="font-medium text-gray-900">{{ formatCurrency(subject.tuitionAmount) }}</p>
+                                            <td class="px-5 py-3 text-center">
+                                                <span
+                                                    :class="[
+                                                        'rounded-full px-2 py-0.5 text-xs font-semibold',
+                                                        subject.labUnits > 0
+                                                            ? 'bg-purple-50 text-purple-700'
+                                                            : 'bg-gray-50 text-gray-400',
+                                                    ]"
+                                                >
+                                                    {{ subject.labUnits }}</span
+                                                >
                                             </td>
-                                            <td class="px-5 py-3 text-right">
-                                                <span v-if="subject.hasLab" class="font-medium text-purple-700">{{
-                                                    formatCurrency(subject.labAmount)
-                                                }}</span>
-                                                <span v-else class="text-xs text-gray-300">—</span>
+                                            <td class="px-5 py-3 text-center">
+                                                <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600">
+                                                    {{ subject.lecUnits + subject.labUnits }}
+                                                </span>
                                             </td>
                                             <td class="px-5 py-3 text-right font-semibold text-gray-900">
                                                 {{ formatCurrency(subject.tuitionAmount + subject.labAmount) }}
@@ -1213,13 +1232,16 @@ const getStudentStatusColor = (status: string) => {
                                     <tfoot>
                                         <tr class="border-t-2 border-gray-200 bg-gray-50 text-sm font-semibold">
                                             <td colspan="3" class="px-5 py-3 text-gray-700">
-                                                Subtotal — {{ termPanel.subjectCount }} subjects · {{ termPanel.totalUnits }} total units
+                                                Subtotal — {{ termPanel.subjectCount }} subject{{ termPanel.subjectCount !== 1 ? 's' : '' }}
                                             </td>
-                                            <td class="px-5 py-3 text-center text-gray-700">—</td>
-                                            <td class="px-5 py-3 text-right text-gray-900">{{ formatCurrency(termPanel.totalTuition) }}</td>
-                                            <td class="px-5 py-3 text-right text-purple-700">
-                                                <span v-if="termPanel.totalLab > 0">{{ formatCurrency(termPanel.totalLab) }}</span>
-                                                <span v-else class="text-xs font-normal text-gray-300">—</span>
+                                            <td class="px-5 py-3 text-center text-gray-700">
+                                                {{ termPanel.totalLecUnits }}
+                                            </td>
+                                            <td class="px-5 py-3 text-center text-gray-700">
+                                                {{ termPanel.totalLabUnits }}
+                                            </td>
+                                            <td class="px-5 py-3 text-center text-indigo-700 font-semibold">
+                                                {{ termPanel.totalUnits }}
                                             </td>
                                             <td class="px-5 py-3 text-right text-indigo-700">
                                                 {{ formatCurrency(termPanel.totalTuition + termPanel.totalLab) }}
@@ -1455,10 +1477,10 @@ const getStudentStatusColor = (status: string) => {
                                             <th class="px-5 py-2.5 text-left">Status</th>
                                             <th class="px-5 py-2.5 text-left">Code</th>
                                             <th class="px-5 py-2.5 text-left">Subject Name</th>
-                                            <th class="px-5 py-2.5 text-center">Units</th>
-                                            <th class="px-5 py-2.5 text-right">Tuition</th>
-                                            <th class="px-5 py-2.5 text-right">Lab Fee</th>
-                                            <th class="px-5 py-2.5 text-right">Total</th>
+                                            <th class="px-5 py-2.5 text-center">LEC Units</th>
+                                            <th class="px-5 py-2.5 text-center">LAB Units</th>
+                                            <th class="px-5 py-2.5 text-center">Total Units</th>
+                                            <th class="px-5 py-2.5 text-right">Subtotal</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-100">
@@ -1494,17 +1516,25 @@ const getStudentStatusColor = (status: string) => {
                                             </td>
                                             <td class="px-5 py-3 text-center">
                                                 <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                                                    {{ subject.units }}
+                                                    {{ subject.lecUnits }}
                                                 </span>
                                             </td>
-                                            <td class="px-5 py-3 text-right font-medium text-gray-900">
-                                                {{ formatCurrency(subject.tuitionAmount) }}
+                                            <td class="px-5 py-3 text-center">
+                                                <span
+                                                    :class="[
+                                                        'rounded-full px-2 py-0.5 text-xs font-semibold',
+                                                        subject.labUnits > 0
+                                                            ? 'bg-purple-50 text-purple-700'
+                                                            : 'bg-gray-50 text-gray-400',
+                                                    ]"
+                                                >
+                                                    {{ subject.labUnits }}
+                                                </span>
                                             </td>
-                                            <td class="px-5 py-3 text-right">
-                                                <span v-if="subject.hasLab" class="font-medium text-purple-700">{{
-                                                    formatCurrency(subject.labAmount)
-                                                }}</span>
-                                                <span v-else class="text-xs text-gray-300">—</span>
+                                            <td class="px-5 py-3 text-center">
+                                                <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600">
+                                                    {{ subject.lecUnits + subject.labUnits }}
+                                                </span>
                                             </td>
                                             <td class="px-5 py-3 text-right font-semibold text-gray-900">
                                                 {{ formatCurrency(subject.tuitionAmount + subject.labAmount) }}
@@ -1514,19 +1544,16 @@ const getStudentStatusColor = (status: string) => {
                                     <tfoot>
                                         <tr class="border-t-2 border-gray-200 bg-gray-50 text-sm font-semibold">
                                             <td colspan="3" class="px-5 py-3 text-gray-700">
-                                                Subtotal — {{ txSubjectPanels[group.key]!.subjectCount }} subjects
+                                                Subtotal — {{ txSubjectPanels[group.key]!.subjectCount }} subject{{ txSubjectPanels[group.key]!.subjectCount !== 1 ? 's' : '' }}
                                             </td>
-                                            <td class="px-5 py-3 text-center font-bold text-blue-700">
+                                            <td class="px-5 py-3 text-center text-gray-700">
+                                                {{ txSubjectPanels[group.key]!.totalLecUnits }}
+                                            </td>
+                                            <td class="px-5 py-3 text-center text-gray-700">
+                                                {{ txSubjectPanels[group.key]!.totalLabUnits }}
+                                            </td>
+                                            <td class="px-5 py-3 text-center text-indigo-700 font-semibold">
                                                 {{ txSubjectPanels[group.key]!.totalUnits }}
-                                            </td>
-                                            <td class="px-5 py-3 text-right text-gray-900">
-                                                {{ formatCurrency(txSubjectPanels[group.key]!.totalTuition) }}
-                                            </td>
-                                            <td class="px-5 py-3 text-right text-purple-700">
-                                                <span v-if="txSubjectPanels[group.key]!.totalLab > 0">{{
-                                                    formatCurrency(txSubjectPanels[group.key]!.totalLab)
-                                                }}</span>
-                                                <span v-else class="text-xs font-normal text-gray-300">—</span>
                                             </td>
                                             <td class="px-5 py-3 text-right text-indigo-700">
                                                 {{ formatCurrency(txSubjectPanels[group.key]!.totalTuition + txSubjectPanels[group.key]!.totalLab) }}
