@@ -553,7 +553,7 @@ class StudentFeeController extends Controller
 
             return redirect()
                 ->route('student-fees.show', $base['user_id'])
-                ->with('success', "{$typeLabel} assessment created — {$subjects->count()} subjects, {$subjects->sum('units')} units, total ₱" . number_format($grandTotal, 2) . ". 5 payment terms generated.");
+                ->with('success', "{$typeLabel} assessment created — {$subjects->count()} subjects, {$subjects->sum('lec_units')} LEC units, total ₱" . number_format($grandTotal, 2) . ". 5 payment terms generated.");
 
         } catch (\Exception $e) {
             DB::rollBack();

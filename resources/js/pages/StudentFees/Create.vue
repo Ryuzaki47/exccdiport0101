@@ -307,7 +307,17 @@ const labTotal = computed(() => selectedSubjects.value.reduce((sum, s) => sum + 
 
 const grandTotal = computed(() => tuitionTotal.value + labTotal.value + props.miscTotal);
 
+// Total units (LEC + LAB combined) — used in summary header and grand total banner.
 const totalUnits = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.total_units, 0));
+
+// ─── FIX #1: lecUnitsTotal — LEC-only unit count for the tuition breakdown label ──
+//
+// WHY: tuitionTotal is computed from s.tuition_cost, which is (lec_units × rate).
+// Lab units are NOT billed as tuition — they are billed as a flat lab_cost per subject.
+// Displaying "totalUnits × rate" in the breakdown label was factually wrong:
+//   e.g. 3 LEC + 1 LAB = 4 totalUnits, but tuition = 3 × ₱364 = ₱1,092 — not 4 × ₱364.
+// The label must show LEC units only so the formula matches the displayed amount.
+const lecUnitsTotal = computed(() => selectedSubjects.value.reduce((sum, s) => sum + s.lec_units, 0));
 
 const labSubjectCount = computed(() => selectedSubjects.value.filter((s) => s.lab_cost > 0).length);
 
@@ -1052,7 +1062,14 @@ function statusColor(status: string) {
                     </div>
                     <div class="space-y-2 px-5 py-4 text-sm">
                         <div class="flex justify-between">
-                            <span class="text-gray-600">Tuition ({{ totalUnits }} units × {{ formatCurrency(tuitionPerUnit ?? 364) }})</span>
+                            <!--
+                                FIX #1: Use lecUnitsTotal (LEC-only) instead of totalUnits (LEC+LAB combined).
+                                Tuition is charged per lecture unit only. Lab units have their own flat fee.
+                                The formula in this label must match the tuitionTotal value shown on the right:
+                                  lecUnitsTotal × tuitionPerUnit = tuitionTotal  ✓
+                                  totalUnits    × tuitionPerUnit ≠ tuitionTotal  ✗ (was wrong before this fix)
+                            -->
+                            <span class="text-gray-600">Tuition ({{ lecUnitsTotal }} LEC units × {{ formatCurrency(tuitionPerUnit ?? 364) }})</span>
                             <span class="font-medium">{{ formatCurrency(tuitionTotal) }}</span>
                         </div>
                         <div v-if="labTotal > 0" class="flex justify-between">

@@ -24,35 +24,54 @@ class Subject extends Model
     ];
 
     protected $casts = [
-        'units' => 'integer',
-        'lec_units' => 'integer',
-        'lab_units' => 'integer',
+        'units'          => 'integer',
+        'lec_units'      => 'integer',
+        'lab_units'      => 'integer',
         'price_per_unit' => 'decimal:2',
-        'lab_fee' => 'decimal:2',
-        'has_lab' => 'boolean',
-        'is_active' => 'boolean',
+        'lab_fee'        => 'decimal:2',
+        'has_lab'        => 'boolean',
+        'is_active'      => 'boolean',
     ];
 
     /**
-     * Get total units (LEC + LAB).
-     * Used for assessments to calculate total credit hours.
+     * Get total units (LEC + LAB combined).
+     * Used for assessments to calculate total credit hours displayed to the student.
      */
-    public function getTotalUnitsAttribute()
+    public function getTotalUnitsAttribute(): int
     {
         return ($this->lec_units ?? 0) + ($this->lab_units ?? 0);
+    }
+
+    /**
+     * Get the computed total cost for this subject.
+     *
+     * FIX #3: Was using the deprecated `units` column and `price_per_unit` from the
+     * subjects table. Both are unreliable since:
+     *   - `units` is no longer the billing source (replaced by lec_units / lab_units)
+     *   - `price_per_unit` on the subjects row is not kept in sync with config('fees.tuition_per_unit')
+     *
+     * Now matches the billing model used throughout the system:
+     *   - Tuition  = lec_units × config('fees.tuition_per_unit')      (per lecture unit)
+     *   - Lab      = lab_units > 0 ? config('fees.lab_fee_per_subject') : 0  (flat per subject)
+     *   - Total    = Tuition + Lab
+     *
+     * This accessor is not called by buildSubjectMap() (which computes inline),
+     * but is used in seeders, tests, and any future feature that calls $subject->total_cost.
+     */
+    public function getTotalCostAttribute(): float
+    {
+        $rate   = (float) config('fees.tuition_per_unit',    364.00);
+        $labFee = (float) config('fees.lab_fee_per_subject', 1656.00);
+
+        $tuition = ($this->lec_units ?? 0) * $rate;
+        $lab     = ($this->lab_units ?? 0) > 0 ? $labFee : 0.0;
+
+        return round($tuition + $lab, 2);
     }
 
     public function enrollments(): HasMany
     {
         return $this->hasMany(StudentEnrollment::class);
-    }
-
-    // Calculate total cost for this subject
-    public function getTotalCostAttribute()
-    {
-        $tuition = $this->units * $this->price_per_unit;
-        $lab = $this->has_lab ? $this->lab_fee : 0;
-        return $tuition + $lab;
     }
 
     // Scope for active subjects
