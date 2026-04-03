@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "php artisan migrate --force && php-fpm & nginx -g 'daemon off;'",
+    "startCommand": "php artisan migrate --force; php -S 0.0.0.0:8000 -t public/",
     "healthcheckPath": "/",
     "restartPolicyType": "ON_FAILURE"
   }
